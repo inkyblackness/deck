@@ -1,6 +1,3 @@
-[submodule "src/github.com/docopt/docopt.go"]
-	path = src/github.com/docopt/docopt.go
-	url = git://github.com/docopt/docopt.go
 [submodule "src/gopkg.in/check.v1"]
 	path = src/gopkg.in/check.v1
 	url = https://github.com/go-check/check.git
