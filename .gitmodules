@@ -19,3 +19,27 @@
 [submodule "src/github.com/emicklei/go-restful"]
 	path = src/github.com/emicklei/go-restful
 	url = https://github.com/emicklei/go-restful.git
+[submodule "src/github.com/inkyblackness/res"]
+	path = src/github.com/inkyblackness/res
+	url = https://github.com/inkyblackness/res
+[submodule "src/github.com/inkyblackness/chunkie"]
+	path = src/github.com/inkyblackness/chunkie
+	url = https://github.com/inkyblackness/chunkie
+[submodule "src/github.com/inkyblackness/construct"]
+	path = src/github.com/inkyblackness/construct
+	url = https://github.com/inkyblackness/construct
+[submodule "src/github.com/inkyblackness/hacker"]
+	path = src/github.com/inkyblackness/hacker
+	url = https://github.com/inkyblackness/hacker
+[submodule "src/github.com/inkyblackness/shocked-client"]
+	path = src/github.com/inkyblackness/shocked-client
+	url = https://github.com/inkyblackness/shocked-client
+[submodule "src/github.com/inkyblackness/shocked-core"]
+	path = src/github.com/inkyblackness/shocked-core
+	url = https://github.com/inkyblackness/shocked-core
+[submodule "src/github.com/inkyblackness/shocked-model"]
+	path = src/github.com/inkyblackness/shocked-model
+	url = https://github.com/inkyblackness/shocked-model
+[submodule "src/github.com/inkyblackness/shocked-server"]
+	path = src/github.com/inkyblackness/shocked-server
+	url = https://github.com/inkyblackness/shocked-server
