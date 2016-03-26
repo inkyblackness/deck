@@ -40,3 +40,6 @@
 [submodule "src/github.com/inkyblackness/shocked-server"]
 	path = src/github.com/inkyblackness/shocked-server
 	url = https://github.com/inkyblackness/shocked-server
+[submodule "src/github.com/docopt/docopt-go"]
+	path = src/github.com/docopt/docopt-go
+	url = git://github.com/docopt/docopt.go
