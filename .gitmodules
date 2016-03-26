@@ -1,3 +1,21 @@
 [submodule "src/github.com/docopt/docopt.go"]
 	path = src/github.com/docopt/docopt.go
 	url = git://github.com/docopt/docopt.go
+[submodule "src/gopkg.in/check.v1"]
+	path = src/gopkg.in/check.v1
+	url = https://github.com/go-check/check.git
+[submodule "src/github.com/youpy/go-riff"]
+	path = src/github.com/youpy/go-riff
+	url = https://github.com/youpy/go-riff
+[submodule "src/github.com/youpy/go-wav"]
+	path = src/github.com/youpy/go-wav
+	url = https://github.com/youpy/go-wav.git
+[submodule "src/github.com/shiena/ansicolor"]
+	path = src/github.com/shiena/ansicolor
+	url = https://github.com/shiena/ansicolor.git
+[submodule "src/github.com/fatih/color"]
+	path = src/github.com/fatih/color
+	url = https://github.com/fatih/color.git
+[submodule "src/github.com/emicklei/go-restful"]
+	path = src/github.com/emicklei/go-restful
+	url = https://github.com/emicklei/go-restful.git
