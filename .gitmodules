@@ -1,0 +1,3 @@
+[submodule "src/github.com/docopt/docopt.go"]
+	path = src/github.com/docopt/docopt.go
+	url = git://github.com/docopt/docopt.go
