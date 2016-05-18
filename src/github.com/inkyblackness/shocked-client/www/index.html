@@ -1,0 +1,77 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shocked - Client</title>
+  <link rel="stylesheet" type="text/css" href="reset.css" />
+  <link rel="stylesheet" type="text/css" href="rootLayout.css" />
+  <link rel="stylesheet" type="text/css" href="client.css" />
+</head>
+<body>
+<div class="rootContainer">
+
+  <div class="heightTaker">
+    <div class="main">
+
+      <div class="mainControls">
+        <div data-bind="template: { name: 'vm-' + type + '-template', data: $root }">
+        </div>
+      </div>
+
+      <div class="tileMap">
+        <canvas id="output" style="width: 100%; height: 100%; background: black;" />
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+
+<script type="text/html" id="vm-section-template">
+  <div data-bind="if: available">
+    <div data-bind="foreach: { data: nodes, as: 'node' }">
+      <div data-bind="template: { name: 'vm-' + node.type + '-template', data: node }"></div>
+    </div>
+  </div>
+</script>
+
+<script type="text/html" id="vm-sectionSelection-template">
+  <div class="sectionSelection">
+  <table style="width: 100%; border-bottom: 1px dashed lightgray;"><tbody><tr>
+    <td class="propertyLabel" data-bind="text: label"></td>
+    <td><select style="width: 100%" data-bind="options: values, optionsCaption: '', value: selected.data"></select></td>
+  </tr></tbody></table>
+  <div data-bind="if: sections[selected.data()]">
+    <div data-bind="template: { name: 'vm-' + sections[selected.data()].type + '-template', data: sections[selected.data()] }"></div>
+  </div>
+  </div>
+</script>
+
+<script type="text/html" id="vm-valueSelection-template">
+  <table style="width: 100%"><tbody><tr>
+    <td class="propertyLabel" data-bind="text: label"></td>
+    <td><select style="width: 100%" data-bind="options: values, optionsCaption: '', value: selected.data"></select></td>
+  </tr></tbody></table>
+</script>
+
+<script type="text/html" id="vm-string-template">
+  <table style="width: 100%"><tbody><tr>
+    <td class="propertyLabel" data-bind="text: label"></td>
+    <td><input style="width: 100%" data-bind="textInput: data, attr: { readonly: readonly }" /></td>
+  </tr></tbody></table>
+</script>
+
+<script type="text/html" id="vm-action-template">
+  <table style="width: 100%"><tbody><tr>
+    <td class="propertyLabel">&nbsp;</td>
+    <td><button style="width: 100%" data-bind="text: label, click: act" /></td>
+  </tr></tbody></table>
+</script>
+
+<script type="text/javascript" src="//code.jquery.com/jquery-2.1.4.min.js"></script>
+<!-- <script type="text/javascript" src="//knockoutjs.com/downloads/knockout-3.4.0.js"></script> -->
+<script type="text/javascript" src="main.js"></script>
+</html>

@@ -7,42 +7,53 @@ export GOPATH=$DECK_BASE
 
 echo Cleaning output directories...
 rm -rf bin
+rm -rf dist
 rm -rf pkg
-rm -rf inkyblackness-deck
-rm -rf inkyblackness-deck.*
+
+mkdir -p $DECK_BASE/dist/linux/inkyblackness-deck
+mkdir -p $DECK_BASE/dist/win/inkyblackness-deck
 
 
 echo Building executables...
 
-cd $DECK_BASE/src/github.com/inkyblackness/construct
-go test ./...
-go install
+function buildNative() {
+   local name=$1
 
-cd $DECK_BASE/src/github.com/inkyblackness/chunkie
-go test ./...
-go install
+   echo "Building " $name
+   go build -o $DECK_BASE/dist/linux/inkyblackness-deck/$name .
+   GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CXX=x86_64-w64-mingw32-g++ CC=x86_64-w64-mingw32-gcc go build -o $DECK_BASE/dist/win/inkyblackness-deck/$name.exe .
+}
 
-cd $DECK_BASE/src/github.com/inkyblackness/hacker
-go test ./...
-go install
+for name in "construct" "chunkie" "hacker" "shocked-server"
+do
+   cd $DECK_BASE/src/github.com/inkyblackness/$name
+   buildNative $name
+done
 
-cd $DECK_BASE/src/github.com/inkyblackness/shocked-server
-go test ./...
-go install
-
+cd $DECK_BASE/src/github.com/inkyblackness/shocked-client/app/shocked-client-console
+buildNative "shocked-client-console"
 
 echo Copying resources...
 
-mkdir -p $DECK_BASE/bin/client
-cp -R $DECK_BASE/src/github.com/inkyblackness/shocked-client/www/* $DECK_BASE/bin/client
+for os in "linux" "win"
+do
+   packageDir=$DECK_BASE/dist/$os/inkyblackness-deck
+   clientDir=$packageDir/client
 
-cp $DECK_BASE/LICENSE $DECK_BASE/bin
-cp -R $DECK_BASE/resources/* $DECK_BASE/bin
+   mkdir -p $clientDir
+   cp -R $DECK_BASE/src/github.com/inkyblackness/shocked-client/www/* $clientDir
+
+   cp $DECK_BASE/LICENSE $packageDir
+   cp -R $DECK_BASE/resources/* $packageDir
+done
 
 
-echo Creating package...
-cd $DECK_BASE
-mv $DECK_BASE/bin $DECK_BASE/inkyblackness-deck
-tar -cvzf $DECK_BASE/inkyblackness-deck.tgz ./inkyblackness-deck
+echo Creating packages...
+
+cd $DECK_BASE/dist/linux
+tar -cvzf $DECK_BASE/dist/inkyblackness-deck.linux64.tgz ./inkyblackness-deck
+
+cd $DECK_BASE/dist/win
+zip -r $DECK_BASE/dist/inkyblackness-deck.win64.zip ./inkyblackness-deck
 
 popd > /dev/null
