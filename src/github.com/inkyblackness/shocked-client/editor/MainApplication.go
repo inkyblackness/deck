@@ -403,9 +403,9 @@ func (app *MainApplication) onSelectedLevelChanged(levelIDString string) {
 func (app *MainApplication) activeLevel() (level *model.Level) {
 	activeLevelIDString := fmt.Sprintf("%d", app.activeLevelID)
 
-	for _, temp := range app.levels {
-		if temp.ID == activeLevelIDString {
-			level = &temp
+	for index := 0; index < len(app.levels); index++ {
+		if app.levels[index].ID == activeLevelIDString {
+			level = &app.levels[index]
 		}
 	}
 
