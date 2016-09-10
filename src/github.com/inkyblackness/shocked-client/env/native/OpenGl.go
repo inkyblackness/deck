@@ -231,6 +231,11 @@ func (native *OpenGl) Uniform1i(location int32, value int32) {
 	gl.Uniform1i(location, value)
 }
 
+// Uniform4fv implements the opengl.OpenGl interface.
+func (native *OpenGl) Uniform4fv(location int32, value *[4]float32) {
+	gl.Uniform4fv(location, 1, &value[0])
+}
+
 // UniformMatrix4fv implements the opengl.OpenGl interface.
 func (native *OpenGl) UniformMatrix4fv(location int32, transpose bool, value *[16]float32) {
 	count := int32(1)

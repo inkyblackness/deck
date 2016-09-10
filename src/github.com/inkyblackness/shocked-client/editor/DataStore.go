@@ -14,6 +14,12 @@ type DataStore interface {
 	// NewProject requests to create a new project with given ID.
 	NewProject(projectID string, onSuccess func(), onFailure FailureFunc)
 
+	// Font queries a specific font.
+	Font(projectID string, fontID int, onSuccess func(font *model.Font), onFailure FailureFunc)
+
+	// GameObjectIcon queries the icon bitmap of a game object.
+	GameObjectIcon(projectID string, class, subclass, objType int, onSuccess func(bmp *model.RawBitmap), onFailure FailureFunc)
+
 	// Palette queries a palette.
 	Palette(projectID string, paletteID string, onSuccess func(colors [256]model.Color), onFailure FailureFunc)
 	// Levels queries all levels of a project.
@@ -38,4 +44,8 @@ type DataStore interface {
 	// SetTile requests to update properties of a specific tile.
 	SetTile(projectID string, archiveID string, levelID int, x, y int, properties model.TileProperties,
 		onSuccess func(properties model.TileProperties), onFailure FailureFunc)
+
+	// LevelObjects requests all objects of the level.
+	LevelObjects(projectID string, archiveID string, levelID int,
+		onSuccess func(objects *model.LevelObjects), onFailure FailureFunc)
 }

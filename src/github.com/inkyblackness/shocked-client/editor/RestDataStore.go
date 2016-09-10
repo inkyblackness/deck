@@ -71,6 +71,27 @@ func (store *RestDataStore) Projects(onSuccess func(projects []string), onFailur
 	}, onFailure)
 }
 
+// Font implements the DataStore interface.
+func (store *RestDataStore) Font(projectID string, fontID int, onSuccess func(font *model.Font), onFailure FailureFunc) {
+	url := fmt.Sprintf("/projects/%s/fonts/%v", projectID, fontID)
+	var data model.Font
+
+	store.get(url, &data, func() {
+		onSuccess(&data)
+	}, onFailure)
+}
+
+// GameObjectIcon implements the DataStore interface.
+func (store *RestDataStore) GameObjectIcon(projectID string, class, subclass, objType int,
+	onSuccess func(bmp *model.RawBitmap), onFailure FailureFunc) {
+	url := fmt.Sprintf("/projects/%s/objects/%d/%d/%d/icon/raw", projectID, class, subclass, objType)
+	var data model.RawBitmap
+
+	store.get(url, &data, func() {
+		onSuccess(&data)
+	}, onFailure)
+}
+
 // Palette implements the DataStore interface.
 func (store *RestDataStore) Palette(projectID string, paletteID string,
 	onSuccess func(colors [256]model.Color), onFailure FailureFunc) {
@@ -165,5 +186,16 @@ func (store *RestDataStore) SetTile(projectID string, archiveID string, levelID 
 
 	store.put(url, &properties, &data, func() {
 		onSuccess(data.Properties)
+	}, onFailure)
+}
+
+// LevelObjects implements the DataStore interface.
+func (store *RestDataStore) LevelObjects(projectID string, archiveID string, levelID int,
+	onSuccess func(objects *model.LevelObjects), onFailure FailureFunc) {
+	url := fmt.Sprintf("/projects/%s/%s/levels/%d/objects", projectID, archiveID, levelID)
+	var data model.LevelObjects
+
+	store.get(url, &data, func() {
+		onSuccess(&data)
 	}, onFailure)
 }

@@ -68,7 +68,7 @@ Mouse events are handled like any other keybinding:
 	}
 
 IMPORTANT: Views can only be created, destroyed or updated in three ways: from
-layout funcions, from keybinding callbacks or via *Gui.Execute(). The reason
+layout functions, from keybinding callbacks or via *Gui.Execute(). The reason
 for this is that it allows gocui to be conccurent-safe. So, if you want to
 update your GUI from a goroutine, you must use *Gui.Execute(). For example:
 
@@ -104,6 +104,12 @@ DefaultEditor can be taken as example to create your own custom Editor:
 		// ...
 		}
 	}
+
+Colored text:
+
+Views allow to add colored text using ANSI colors. For example:
+
+	fmt.Fprintln(v, "\x1b[0;31mHello world")
 
 For more information, see the examples in folder "_examples/".
 */

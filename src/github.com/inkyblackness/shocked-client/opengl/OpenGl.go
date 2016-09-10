@@ -57,6 +57,7 @@ type OpenGl interface {
 	TexParameteri(target uint32, pname uint32, param int32)
 
 	Uniform1i(location int32, value int32)
+	Uniform4fv(location int32, value *[4]float32)
 	UniformMatrix4fv(location int32, transpose bool, value *[16]float32)
 	UseProgram(program uint32)
 

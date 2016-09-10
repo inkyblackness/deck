@@ -4,6 +4,7 @@ import (
 	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/data"
+	"github.com/inkyblackness/res/logic"
 	"github.com/inkyblackness/res/serial"
 )
 
@@ -105,7 +106,6 @@ func AddMasterObjectTables(consumer chunk.Consumer, levelBaseID res.ResourceID) 
 			master := data.DefaultLevelObjectEntry()
 
 			masters[index] = master
-			master.Next = uint16((index + 1) % masterCount)
 			master.Previous = uint16((masterCount + index - 1) % masterCount)
 		}
 
@@ -116,19 +116,10 @@ func AddMasterObjectTables(consumer chunk.Consumer, levelBaseID res.ResourceID) 
 		addTypedData(consumer, levelBaseID+8, chunk.BasicChunkType.WithCompression(), masterTable)
 	}
 	{
-		refCount := 1600
-		references := make([]*data.LevelObjectCrossReference, refCount)
-		for index := range references {
-			ref := data.DefaultLevelObjectCrossReference()
-			references[index] = ref
-			ref.NextObjectIndex = uint16((index + 1) % refCount)
-		}
+		crossrefList := logic.NewCrossReferenceList()
 
-		refTable := &data.Table{Entries: make([]interface{}, refCount)}
-		for i := range references {
-			refTable.Entries[i] = references[i]
-		}
-		addTypedData(consumer, levelBaseID+9, chunk.BasicChunkType.WithCompression(), refTable)
+		crossrefList.Clear()
+		addTypedData(consumer, levelBaseID+9, chunk.BasicChunkType.WithCompression(), crossrefList.Encode())
 	}
 }
 
@@ -146,18 +137,10 @@ type tempStruct struct {
 }
 
 func addLevelObjectTables(consumer chunk.Consumer, levelBaseID res.ResourceID, classID int, entrySize int, entryCount int) {
-	table := data.Table{Entries: make([]interface{}, entryCount)}
+	table := logic.NewLevelObjectClassTable(entrySize, entryCount)
+	table.AsChain().Initialize(entryCount - 1)
 
-	for i := range table.Entries {
-		table.Entries[i] = &tempStruct{
-			LevelObjectPrefix: data.LevelObjectPrefix{
-				Next:                  uint16((i + 1) % entryCount),
-				Previous:              uint16((entryCount + i - 1) % entryCount),
-				LevelObjectTableIndex: 0},
-			Extra: make([]byte, entrySize-data.LevelObjectPrefixSize)}
-	}
-	addData(consumer, levelBaseID+10+res.ResourceID(classID), table)
-	//AddStaticChunk(consumer, levelBaseID+10+res.ResourceID(classID), make([]byte, entrySize*entryCount))
+	addData(consumer, levelBaseID+10+res.ResourceID(classID), table.Encode())
 	AddStaticChunk(consumer, levelBaseID+25+res.ResourceID(classID), make([]byte, entrySize))
 }
 

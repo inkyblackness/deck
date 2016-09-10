@@ -72,6 +72,14 @@ func NewWorkspaceResource(container *restful.Container, workspace *core.Workspac
 		Param(service2.PathParameter("palette-id", "identifier of the palette").DataType("string")).
 		Writes(model.Palette{}))
 
+	service2.Route(service2.GET("{project-id}/fonts/{font-id}").To(resource.getFont).
+		// docs
+		Doc("get font").
+		Operation("getFont").
+		Param(service2.PathParameter("project-id", "identifier of the project").DataType("string")).
+		Param(service2.PathParameter("font-id", "identifier of the font").DataType("int")).
+		Writes(model.Font{}))
+
 	service2.Route(service2.GET("{project-id}/textures").To(resource.getTextures).
 		// docs
 		Doc("get textures").
@@ -132,6 +140,16 @@ func NewWorkspaceResource(container *restful.Container, workspace *core.Workspac
 		Param(service2.PathParameter("subclass", "identifier of the class").DataType("int")).
 		Param(service2.PathParameter("type", "identifier of the class").DataType("int")).
 		Writes(model.GameObject{}))
+
+	service2.Route(service2.GET("{project-id}/objects/{class}/{subclass}/{type}/icon/raw").To(resource.getObjectIconAsRaw).
+		// docs
+		Doc("get object icon as raw bitmap").
+		Operation("getObjectIconAsRaw").
+		Param(service2.PathParameter("project-id", "identifier of the project").DataType("string")).
+		Param(service2.PathParameter("class", "identifier of the class").DataType("int")).
+		Param(service2.PathParameter("subclass", "identifier of the class").DataType("int")).
+		Param(service2.PathParameter("type", "identifier of the class").DataType("int")).
+		Writes(model.RawBitmap{}))
 
 	service2.Route(service2.GET("{project-id}/archive/levels").To(resource.getLevels).
 		// docs
@@ -201,6 +219,15 @@ func NewWorkspaceResource(container *restful.Container, workspace *core.Workspac
 		Param(service2.PathParameter("project-id", "identifier of the project").DataType("string")).
 		Param(service2.PathParameter("level-id", "identifier of the level").DataType("int")).
 		Writes(model.LevelObjects{}))
+
+	service2.Route(service2.POST("{project-id}/archive/levels/{level-id}/objects").To(resource.createLevelObject).
+		// docs
+		Doc("create a new level object").
+		Operation("createLevelObject").
+		Param(service2.PathParameter("project-id", "identifier of the project").DataType("string")).
+		Param(service2.PathParameter("level-id", "identifier of the level").DataType("int")).
+		Reads(model.LevelObjectTemplate{}).
+		Writes(0))
 
 	container.Add(service2)
 
@@ -292,6 +319,29 @@ func (resource *WorkspaceResource) encodePalette(out *[256]model.Color, palette 
 		outColor.Red = int(r >> 8)
 		outColor.Green = int(g >> 8)
 		outColor.Blue = int(b >> 8)
+	}
+}
+
+// GET /projects/{project-id}/fonts/{font-id}
+func (resource *WorkspaceResource) getFont(request *restful.Request, response *restful.Response) {
+	projectID := request.PathParameter("project-id")
+	project, err := resource.ws.Project(projectID)
+
+	if err == nil {
+		fontID, _ := strconv.ParseInt(request.PathParameter("font-id"), 10, 16)
+		var entity *model.Font
+
+		entity, err = project.Fonts().Font(res.ResourceID(fontID))
+		if err == nil {
+			response.WriteEntity(*entity)
+		} else {
+			response.AddHeader("Content-Type", "text/plain")
+			response.WriteErrorString(http.StatusBadRequest, err.Error())
+		}
+	} else {
+		response.AddHeader("Content-Type", "text/plain")
+		response.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
 	}
 }
 
@@ -420,7 +470,7 @@ func (resource *WorkspaceResource) getTextureImageAsRaw(request *restful.Request
 		for row := 0; row < entity.Height; row++ {
 			pixel = append(pixel, bmp.Row(row)...)
 		}
-		entity.Pixel = base64.StdEncoding.EncodeToString(pixel)
+		entity.Pixels = base64.StdEncoding.EncodeToString(pixel)
 
 		response.WriteEntity(entity)
 	} else {
@@ -674,6 +724,40 @@ func (resource *WorkspaceResource) getLevelObjects(request *restful.Request, res
 	}
 }
 
+// GET /projects/{project-id}/archive/levels/{level-id}/objects
+func (resource *WorkspaceResource) createLevelObject(request *restful.Request, response *restful.Response) {
+	projectID := request.PathParameter("project-id")
+	project, err := resource.ws.Project(projectID)
+
+	if err == nil {
+		levelID, _ := strconv.ParseInt(request.PathParameter("level-id"), 10, 16)
+		level := project.Archive().Level(int(levelID))
+
+		entityTemplate := new(model.LevelObjectTemplate)
+		err = request.ReadEntity(entityTemplate)
+
+		if err != nil {
+			response.AddHeader("Content-Type", "text/plain")
+			response.WriteErrorString(http.StatusBadRequest, err.Error())
+			return
+		}
+		var entity int
+
+		entity, err = level.AddObject(entityTemplate)
+		if err == nil {
+			response.WriteHeader(http.StatusCreated)
+			response.WriteEntity(entity)
+		} else {
+			response.AddHeader("Content-Type", "text/plain")
+			response.WriteErrorString(http.StatusBadRequest, err.Error())
+		}
+	} else {
+		response.AddHeader("Content-Type", "text/plain")
+		response.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
+	}
+}
+
 // GET /projects/{project-id}/objects/{class}/{subclass}/{type}
 func (resource *WorkspaceResource) getGameObject(request *restful.Request, response *restful.Response) {
 	projectID := request.PathParameter("project-id")
@@ -700,4 +784,34 @@ func (resource *WorkspaceResource) objectEntity(project *core.Project, objID res
 	entity.Properties = project.GameObjects().Properties(objID)
 
 	return
+}
+
+// GET /projects/{project-id}/objects/{class}/{subclass}/{type}/icon/raw
+func (resource *WorkspaceResource) getObjectIconAsRaw(request *restful.Request, response *restful.Response) {
+	projectID := request.PathParameter("project-id")
+	project, err := resource.ws.Project(projectID)
+
+	if err == nil {
+		classID, _ := strconv.ParseInt(request.PathParameter("class"), 10, 8)
+		subclassID, _ := strconv.ParseInt(request.PathParameter("subclass"), 10, 8)
+		typeID, _ := strconv.ParseInt(request.PathParameter("type"), 10, 8)
+		objID := res.MakeObjectID(res.ObjectClass(classID), res.ObjectSubclass(subclassID), res.ObjectType(typeID))
+		bmp := project.GameObjects().Icon(objID)
+		var entity model.RawBitmap
+
+		entity.Width = int(bmp.ImageWidth())
+		entity.Height = int(bmp.ImageHeight())
+		var pixel []byte
+
+		for row := 0; row < entity.Height; row++ {
+			pixel = append(pixel, bmp.Row(row)...)
+		}
+		entity.Pixels = base64.StdEncoding.EncodeToString(pixel)
+
+		response.WriteEntity(entity)
+	} else {
+		response.AddHeader("Content-Type", "text/plain")
+		response.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
+	}
 }

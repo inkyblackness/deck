@@ -303,6 +303,13 @@ func (debugging *debuggingOpenGl) Uniform1i(location int32, value int32) {
 	debugging.recordExit("Uniform1i")
 }
 
+// Uniform4fv implements the opengl.OpenGl interface.
+func (debugging *debuggingOpenGl) Uniform4fv(location int32, value *[4]float32) {
+	debugging.recordEntry("Uniform4fv", location, value)
+	debugging.gl.Uniform4fv(location, value)
+	debugging.recordExit("Uniform4fv")
+}
+
 // UniformMatrix4fv implements the OpenGl interface.
 func (debugging *debuggingOpenGl) UniformMatrix4fv(location int32, transpose bool, value *[16]float32) {
 	debugging.recordEntry("UniformMatrix4fv", location, transpose, value)

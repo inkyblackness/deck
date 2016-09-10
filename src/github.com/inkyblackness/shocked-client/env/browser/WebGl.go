@@ -275,6 +275,11 @@ func (web *WebGl) Uniform1i(location int32, value int32) {
 	web.gl.Uniform1i(web.uniforms.get(uint32(location)), int(value))
 }
 
+// Uniform4fv implements the opengl.OpenGl interface.
+func (web *WebGl) Uniform4fv(location int32, value *[4]float32) {
+	web.gl.Uniform4f(web.uniforms.get(uint32(location)), value[0], value[1], value[2], value[3])
+}
+
 // UniformMatrix4fv implements the opengl.OpenGl interface.
 func (web *WebGl) UniformMatrix4fv(location int32, transpose bool, value *[16]float32) {
 	web.gl.UniformMatrix4fv(web.uniforms.get(uint32(location)), transpose, (*value)[:])

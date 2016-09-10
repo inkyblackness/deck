@@ -29,9 +29,9 @@ type GameState struct {
 
 	Unknown009D [0x483]byte
 
-	HackerX     TileCoordinate
+	HackerX     MapCoordinate
 	Unknown0522 [2]byte
-	HackerY     TileCoordinate
+	HackerY     MapCoordinate
 }
 
 // DefaultGameState returns a GameState instance with initialized default values.

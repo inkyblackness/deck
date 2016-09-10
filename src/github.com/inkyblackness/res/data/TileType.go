@@ -10,25 +10,25 @@ type TileType byte
 // floor vertex higher than the other three.
 const (
 	Solid TileType = 0x00
-	Open           = 0x01
+	Open  TileType = 0x01
 
-	DiagonalOpenSouthEast = 0x02
-	DiagonalOpenSouthWest = 0x03
-	DiagonalOpenNorthWest = 0x04
-	DiagonalOpenNorthEast = 0x05
+	DiagonalOpenSouthEast TileType = 0x02
+	DiagonalOpenSouthWest TileType = 0x03
+	DiagonalOpenNorthWest TileType = 0x04
+	DiagonalOpenNorthEast TileType = 0x05
 
-	SlopeSouthToNorth = 0x06
-	SlopeWestToEast   = 0x07
-	SlopeNorthToSouth = 0x08
-	SlopeEastToWest   = 0x09
+	SlopeSouthToNorth TileType = 0x06
+	SlopeWestToEast   TileType = 0x07
+	SlopeNorthToSouth TileType = 0x08
+	SlopeEastToWest   TileType = 0x09
 
-	ValleySouthEastToNorthWest = 0x0A
-	ValleySouthWestToNorthEast = 0x0B
-	ValleyNorthWestToSouthEast = 0x0C
-	ValleyNorthEastToSouthWest = 0x0D
+	ValleySouthEastToNorthWest TileType = 0x0A
+	ValleySouthWestToNorthEast TileType = 0x0B
+	ValleyNorthWestToSouthEast TileType = 0x0C
+	ValleyNorthEastToSouthWest TileType = 0x0D
 
-	RidgeNorthWestToSouthEast = 0x0E
-	RidgeNorthEastToSouthWest = 0x0F
-	RidgeSouthEastToNorthWest = 0x10
-	RidgeSouthWestToNorthEast = 0x11
+	RidgeNorthWestToSouthEast TileType = 0x0E
+	RidgeNorthEastToSouthWest TileType = 0x0F
+	RidgeSouthEastToNorthWest TileType = 0x10
+	RidgeSouthWestToNorthEast TileType = 0x11
 )

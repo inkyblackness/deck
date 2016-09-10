@@ -51,6 +51,10 @@ type Gui struct {
 	// If Mouse is true then mouse events will be enabled.
 	Mouse bool
 
+	// If InputEsc is true, when ESC sequence is in the buffer and it doesn't
+	// match any known sequence, ESC means KeyEsc.
+	InputEsc bool
+
 	// Editor allows to define the editor that manages the edition mode,
 	// including keybindings or cursor behaviour. DefaultEditor is used by
 	// default.
@@ -217,16 +221,42 @@ func (g *Gui) CurrentView() *View {
 func (g *Gui) SetKeybinding(viewname string, key interface{}, mod Modifier, h KeybindingHandler) error {
 	var kb *keybinding
 
-	switch k := key.(type) {
-	case Key:
-		kb = newKeybinding(viewname, k, 0, mod, h)
-	case rune:
-		kb = newKeybinding(viewname, 0, k, mod, h)
-	default:
-		return errors.New("unknown type")
+	k, ch, err := getKey(key)
+	if err != nil {
+		return err
 	}
+	kb = newKeybinding(viewname, k, ch, mod, h)
 	g.keybindings = append(g.keybindings, kb)
 	return nil
+}
+
+// DeleteKeybinding deletes a keybinding.
+func (g *Gui) DeleteKeybinding(viewname string, key interface{}, mod Modifier) error {
+	k, ch, err := getKey(key)
+	if err != nil {
+		return err
+	}
+
+	for i, kb := range g.keybindings {
+		if kb.viewName == viewname && kb.ch == ch && kb.key == k && kb.mod == mod {
+			g.keybindings = append(g.keybindings[:i], g.keybindings[i+1:]...)
+			return nil
+		}
+	}
+	return errors.New("keybinding not found")
+}
+
+// getKey takes an empty interface with a key and returns the corresponding
+// typed Key or rune.
+func getKey(key interface{}) (Key, rune, error) {
+	switch t := key.(type) {
+	case Key:
+		return t, 0, nil
+	case rune:
+		return 0, t, nil
+	default:
+		return 0, 0, errors.New("unknown type")
+	}
 }
 
 // Execute executes the given handler. This function can be called safely from
@@ -257,6 +287,9 @@ func (g *Gui) MainLoop() error {
 	}()
 
 	inputMode := termbox.InputAlt
+	if g.InputEsc {
+		inputMode = termbox.InputEsc
+	}
 	if g.Mouse {
 		inputMode |= termbox.InputMouse
 	}

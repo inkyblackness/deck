@@ -20,3 +20,33 @@ func (prefix *LevelObjectPrefix) String() (result string) {
 
 	return
 }
+
+// NextIndex returns the index of the next object.
+func (prefix *LevelObjectPrefix) NextIndex() LevelObjectChainIndex {
+	return LevelObjectChainIndex(prefix.Next)
+}
+
+// SetNextIndex sets the index of the next object.
+func (prefix *LevelObjectPrefix) SetNextIndex(index LevelObjectChainIndex) {
+	prefix.Next = uint16(index)
+}
+
+// PreviousIndex returns the index of the previous object.
+func (prefix *LevelObjectPrefix) PreviousIndex() LevelObjectChainIndex {
+	return LevelObjectChainIndex(prefix.Previous)
+}
+
+// SetPreviousIndex sets the index of the previous object.
+func (prefix *LevelObjectPrefix) SetPreviousIndex(index LevelObjectChainIndex) {
+	prefix.Previous = uint16(index)
+}
+
+// ReferenceIndex returns the index of a referenced object.
+func (prefix *LevelObjectPrefix) ReferenceIndex() LevelObjectChainIndex {
+	return LevelObjectChainIndex(prefix.LevelObjectTableIndex)
+}
+
+// SetReferenceIndex sets the index of a referenced object.
+func (prefix *LevelObjectPrefix) SetReferenceIndex(index LevelObjectChainIndex) {
+	prefix.LevelObjectTableIndex = uint16(index)
+}

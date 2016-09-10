@@ -18,6 +18,7 @@ func NewByteStore() *ByteStore {
 	return NewByteStoreFromData(make([]byte, 0, bufferCapacityIncrement), func([]byte) {})
 }
 
+// NewByteStoreFromData returns a new ByteStore instance wrapping the provided data.
 func NewByteStoreFromData(data []byte, onClose func([]byte)) *ByteStore {
 	store := &ByteStore{
 		data:    data,
@@ -48,7 +49,7 @@ func (store *ByteStore) Seek(offset int64, whence int) (int64, error) {
 		store.offset = len(store.data) + int(offset)
 	}
 
-	return offset, nil
+	return int64(store.offset), nil
 }
 
 // Read implements the Reader interface
@@ -77,6 +78,7 @@ func (store *ByteStore) Write(p []byte) (n int, err error) {
 	return size, nil
 }
 
+// Close implements the Closer interface.
 func (store *ByteStore) Close() error {
 	store.onClose(store.data)
 	return nil

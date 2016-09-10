@@ -39,29 +39,42 @@ type MainApplication struct {
 
 	view *camera.LimitedCamera
 
-	levels         []model.Level
-	activeLevelID  int
-	paletteTexture *graphics.PaletteTexture
-	levelTextures  []int
-	textureData    []model.Texture
-	textureStore   *editormodel.BufferedTextureStore
-	tileMap        *editormodel.TileMap
+	gameObjectIcons         map[editormodel.ObjectID]*graphics.BitmapTexture
+	gameObjectIconRetriever map[editormodel.ObjectID]graphics.BitmapRetriever
+
+	levels           []model.Level
+	activeLevelID    int
+	paletteTexture   *graphics.PaletteTexture
+	levelTextures    []int
+	textureData      []model.Texture
+	gameTextureStore *editormodel.BufferedTextureStore
+	tileMap          *editormodel.TileMap
+	levelObjects     map[int]*editormodel.LevelObject
+
+	defaultFont graphics.TextRenderer
+	defaultIcon *graphics.BitmapTexture
 
 	gridRenderable           *display.GridRenderable
 	tileTextureMapRenderable *display.TileTextureMapRenderable
 	tileGridMapRenderable    *display.TileGridMapRenderable
 	tileSelectionRenderable  *display.TileSelectionRenderable
+
+	simpleBitmapRenderable *display.SimpleBitmapRenderable
+	highlighter            *display.BasicHighlighter
 }
 
 // NewMainApplication returns a new instance of MainApplication.
 func NewMainApplication(store DataStore) *MainApplication {
 	camLimit := (TilesPerMapSide - 1) * TileBaseLength
 	app := &MainApplication{
-		lastElapsedTick:  time.Now(),
-		store:            store,
-		viewModel:        NewViewModel(),
-		mouseMoveCapture: func() {},
-		view:             camera.NewLimited(ZoomLevelMin, ZoomLevelMax, 0, camLimit)}
+		lastElapsedTick:         time.Now(),
+		store:                   store,
+		viewModel:               NewViewModel(),
+		mouseMoveCapture:        func() {},
+		view:                    camera.NewLimited(ZoomLevelMin, ZoomLevelMax, 0, camLimit),
+		gameObjectIcons:         make(map[editormodel.ObjectID]*graphics.BitmapTexture),
+		gameObjectIconRetriever: make(map[editormodel.ObjectID]graphics.BitmapRetriever),
+		levelObjects:            make(map[int]*editormodel.LevelObject)}
 
 	app.viewModel.OnSelectedProjectChanged(app.onSelectedProjectChanged)
 	app.viewModel.CreateProject().Subscribe(app.onCreateProject)
@@ -93,7 +106,7 @@ func NewMainApplication(store DataStore) *MainApplication {
 	app.viewModel.LevelTextureID().Selected().Subscribe(app.onLevelTextureIDChanged)
 
 	app.activeLevelID = -1
-	app.textureStore = editormodel.NewBufferedTextureStore(app.loadTexture)
+	app.gameTextureStore = editormodel.NewBufferedTextureStore(app.loadGameTexture)
 	app.tileMap = editormodel.NewTileMap(TilesPerMapSide, TilesPerMapSide)
 
 	app.queryProjectsAndSelect("(inplace)")
@@ -164,6 +177,8 @@ func (app *MainApplication) Init(glWindow env.OpenGlWindow) {
 			callback(coord)
 		})
 	})
+
+	app.highlighter = display.NewBasicHighlighter(app.gl, [4]float32{1.0, 1.0, 1.0, 0.4})
 }
 
 func (app *MainApplication) simpleStoreFailure(info string) FailureFunc {
@@ -202,6 +217,17 @@ func (app *MainApplication) render() {
 	app.tileSelectionRenderable.Render(context)
 	if app.tileGridMapRenderable != nil {
 		app.tileGridMapRenderable.Render(context)
+	}
+
+	areaList := make([]display.Area, 0, len(app.levelObjects))
+	iconList := make([]display.PlacedIcon, 0, len(app.levelObjects))
+	for _, obj := range app.levelObjects {
+		areaList = append(areaList, obj)
+		iconList = append(iconList, obj)
+	}
+	app.highlighter.Render(context, areaList)
+	if app.simpleBitmapRenderable != nil {
+		app.simpleBitmapRenderable.Render(context, iconList)
 	}
 }
 
@@ -321,11 +347,22 @@ func (app *MainApplication) onSelectedProjectChanged(projectID string) {
 		app.paletteTexture.Dispose()
 		app.paletteTexture = nil
 	}
+	app.gameObjectIconRetriever = make(map[editormodel.ObjectID]graphics.BitmapRetriever)
+	for _, texture := range app.gameObjectIcons {
+		texture.Dispose()
+	}
+	app.gameObjectIcons = make(map[editormodel.ObjectID]*graphics.BitmapTexture)
 	app.textureData = nil
-	app.textureStore.Reset()
+	app.gameTextureStore.Reset()
 	app.levels = nil
 
 	if projectID != "" {
+		app.store.Font(projectID, 0x025B, func(font *model.Font) {
+			app.defaultFont = graphics.NewBitmapTextRenderer(*font)
+			bmp := app.defaultFont.Render("?")
+			app.defaultIcon = graphics.NewBitmapTexture(app.gl, bmp.Width, bmp.Height, bmp.Pixels)
+		}, app.simpleStoreFailure("Font"))
+
 		app.store.Palette(projectID, "game", func(colors [256]model.Color) {
 			colorProvider := func(index int) (byte, byte, byte, byte) {
 				entry := &colors[app.animatedPaletteIndex(index)]
@@ -333,6 +370,8 @@ func (app *MainApplication) onSelectedProjectChanged(projectID string) {
 			}
 			app.paletteTexture = graphics.NewPaletteTexture(app.gl, colorProvider)
 			app.tileGridMapRenderable = display.NewTileGridMapRenderable(app.gl)
+
+			app.simpleBitmapRenderable = display.NewSimpleBitmapRenderable(app.gl, app.paletteTexture)
 		}, app.simpleStoreFailure("Palette"))
 
 		app.store.Textures(projectID, func(textures []model.Texture) {
@@ -393,6 +432,9 @@ func (app *MainApplication) onSelectedLevelChanged(levelIDString string) {
 
 		app.store.LevelTextures(projectID, "archive", app.activeLevelID,
 			app.onStoreLevelTexturesChanged, app.simpleStoreFailure("LevelTextures"))
+
+		app.store.LevelObjects(projectID, "archive", app.activeLevelID,
+			app.onStoreLevelObjectsChanged, app.simpleStoreFailure("LevelObjects"))
 	}
 
 	app.updateViewModel(func() {
@@ -429,18 +471,19 @@ func (app *MainApplication) onStoreLevelTexturesChanged(textureIDs []int) {
 	})
 }
 
-func (app *MainApplication) loadTexture(id int) {
+func (app *MainApplication) loadGameTexture(id editormodel.TextureKey) {
 	projectID := app.viewModel.SelectedProject()
+	gameTextureKey := id.(editormodel.GameTextureKey)
 
-	app.store.TextureBitmap(projectID, id, "large", func(bmp *model.RawBitmap) {
-		pixelData, _ := base64.StdEncoding.DecodeString(bmp.Pixel)
-		app.textureStore.SetTexture(id, graphics.NewBitmapTexture(app.gl, bmp.Width, bmp.Height, pixelData))
+	app.store.TextureBitmap(projectID, gameTextureKey.ID(), "large", func(bmp *model.RawBitmap) {
+		pixelData, _ := base64.StdEncoding.DecodeString(bmp.Pixels)
+		app.gameTextureStore.SetTexture(id, graphics.NewBitmapTexture(app.gl, bmp.Width, bmp.Height, pixelData))
 	}, app.simpleStoreFailure("TextureBitmap"))
 }
 
 func (app *MainApplication) levelTexture(index int) (texture graphics.Texture) {
 	if index >= 0 && index < len(app.levelTextures) {
-		texture = app.textureStore.Texture(app.levelTextures[index])
+		texture = app.gameTextureStore.Texture(editormodel.GameTextureKeyFor(app.levelTextures[index]))
 	}
 
 	return
@@ -696,4 +739,32 @@ func (app *MainApplication) onLevelTextureIDChanged(newValueString string) {
 				app.onStoreLevelTexturesChanged, app.simpleStoreFailure("SetLevelTextures"))
 		}
 	}
+}
+
+func (app *MainApplication) onStoreLevelObjectsChanged(levelObjects *model.LevelObjects) {
+	app.levelObjects = make(map[int]*editormodel.LevelObject)
+	for i := 0; i < len(levelObjects.Table); i++ {
+		data := &levelObjects.Table[i]
+		id := editormodel.MakeObjectID(data.Class, data.Subclass, data.Type)
+		levelObject := editormodel.NewLevelObject(data, app.iconRetriever(id))
+		app.levelObjects[levelObject.Index()] = levelObject
+	}
+}
+
+func (app *MainApplication) iconRetriever(id editormodel.ObjectID) graphics.BitmapRetriever {
+	if app.gameObjectIconRetriever[id] == nil {
+		projectID := app.viewModel.SelectedProject()
+
+		app.gameObjectIconRetriever[id] = func() *graphics.BitmapTexture { return app.defaultIcon }
+
+		app.store.GameObjectIcon(projectID, id.Class(), id.Subclass(), id.Type(),
+			func(raw *model.RawBitmap) {
+				bmp := graphics.BitmapFromRaw(*raw)
+				bitmap := graphics.NewBitmapTexture(app.gl, bmp.Width, bmp.Height, bmp.Pixels)
+				app.gameObjectIcons[id] = bitmap
+				app.gameObjectIconRetriever[id] = func() *graphics.BitmapTexture { return bitmap }
+			}, app.simpleStoreFailure("GameObjectIcon"))
+	}
+
+	return func() *graphics.BitmapTexture { return app.gameObjectIconRetriever[id]() }
 }

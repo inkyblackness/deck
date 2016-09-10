@@ -5,6 +5,7 @@ import (
 	"github.com/inkyblackness/shocked-core/release"
 )
 
+// Project represents one editor project, including access to all the resources.
 type Project struct {
 	name   string
 	source release.Release
@@ -12,6 +13,7 @@ type Project struct {
 
 	library io.StoreLibrary
 
+	fonts       *Fonts
 	textures    *Textures
 	palettes    *Palettes
 	gameObjects *GameObjects
@@ -21,6 +23,7 @@ type Project struct {
 // NewProject creates a new project based on given release container.
 func NewProject(name string, source release.Release, sink release.Release) (project *Project, err error) {
 	library := io.NewReleaseStoreLibrary(source, sink, 5000)
+	var fonts *Fonts
 	var textures *Textures
 	var palettes *Palettes
 	var archive *Archive
@@ -37,6 +40,9 @@ func NewProject(name string, source release.Release, sink release.Release) (proj
 	if err == nil {
 		gameObjects, err = NewGameObjects(library)
 	}
+	if err == nil {
+		fonts, err = NewFonts(library)
+	}
 
 	if err == nil {
 		project = &Project{
@@ -44,6 +50,7 @@ func NewProject(name string, source release.Release, sink release.Release) (proj
 			source:      source,
 			sink:        sink,
 			library:     library,
+			fonts:       fonts,
 			textures:    textures,
 			palettes:    palettes,
 			gameObjects: gameObjects,
@@ -56,6 +63,11 @@ func NewProject(name string, source release.Release, sink release.Release) (proj
 // Name returns the name of the project.
 func (project *Project) Name() string {
 	return project.name
+}
+
+// Fonts returns the wrapper for fonts.
+func (project *Project) Fonts() *Fonts {
+	return project.fonts
 }
 
 // Textures returns the wrapper for textures.

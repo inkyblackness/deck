@@ -9,6 +9,7 @@ import (
 	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/data"
+	"github.com/inkyblackness/res/logic"
 
 	model "github.com/inkyblackness/shocked-model"
 )
@@ -67,6 +68,7 @@ func slopeControl(modelControl model.SlopeControl) (dataControl data.SlopeContro
 	return
 }
 
+// Level is a structure holding level specific information.
 type Level struct {
 	id    int
 	store chunk.Store
@@ -74,52 +76,58 @@ type Level struct {
 	mutex sync.Mutex
 
 	tileMapStore chunk.BlockStore
-	tileMap      []data.TileMapEntry
+	tileMap      *logic.TileMap
 
 	objectListStore chunk.BlockStore
 	objectList      []data.LevelObjectEntry
+	objectChain     *logic.LevelObjectChain
+
+	crossrefListStore chunk.BlockStore
+	crossrefList      *logic.CrossReferenceList
 }
 
+// NewLevel returns a new instance of a Level structure.
 func NewLevel(store chunk.Store, id int) *Level {
-	return &Level{id: id, store: store}
-}
+	baseStoreID := 4000 + id*100
+	level := &Level{
+		id:    id,
+		store: store,
 
-func (level *Level) bufferTileData() []data.TileMapEntry {
-	if level.tileMap == nil {
-		level.tileMap = make([]data.TileMapEntry, 64*64)
+		tileMapStore: store.Get(res.ResourceID(baseStoreID + 5)),
+		tileMap:      nil,
 
-		level.tileMapStore = level.store.Get(res.ResourceID(4000 + level.id*100 + 5))
-		blockData := level.tileMapStore.BlockData(0)
-		reader := bytes.NewReader(blockData)
-		binary.Read(reader, binary.LittleEndian, &level.tileMap)
-	}
+		objectListStore: store.Get(res.ResourceID(baseStoreID + 8)),
 
-	return level.tileMap
-}
+		crossrefListStore: store.Get(res.ResourceID(baseStoreID + 9))}
 
-func (level *Level) onTileDataChanged() {
-	buf := bytes.NewBuffer(nil)
+	level.tileMap = logic.DecodeTileMap(level.tileMapStore.BlockData(0), 64, 64)
+	level.crossrefList = logic.DecodeCrossReferenceList(level.crossrefListStore.BlockData(0))
 
-	binary.Write(buf, binary.LittleEndian, &level.tileMap)
-	level.tileMapStore.SetBlockData(0, buf.Bytes())
-}
-
-func (level *Level) bufferObjectList() []data.LevelObjectEntry {
-	if level.objectList == nil {
-		level.objectListStore = level.store.Get(res.ResourceID(4000 + level.id*100 + 8))
+	{
 		blockData := level.objectListStore.BlockData(0)
 		level.objectList = make([]data.LevelObjectEntry, len(blockData)/data.LevelObjectEntrySize)
 		reader := bytes.NewReader(blockData)
 		binary.Read(reader, binary.LittleEndian, &level.objectList)
+
+		level.objectChain = logic.NewLevelObjectChain(&level.objectList[0],
+			func(index data.LevelObjectChainIndex) logic.LevelObjectChainLink {
+				return &level.objectList[index]
+			})
 	}
 
-	return level.objectList
+	return level
 }
 
+func (level *Level) onTileDataChanged() {
+	level.tileMapStore.SetBlockData(0, level.tileMap.Encode())
+}
+
+// ID returns the identifier of the level.
 func (level *Level) ID() int {
 	return level.id
 }
 
+// Properties returns the properties of the level.
 func (level *Level) Properties() (result model.LevelProperties) {
 	blockData := level.store.Get(res.ResourceID(4000 + level.id*100 + 4)).BlockData(0)
 	reader := bytes.NewReader(blockData)
@@ -132,6 +140,7 @@ func (level *Level) Properties() (result model.LevelProperties) {
 	return
 }
 
+// Textures returns the texture identifier used in this level.
 func (level *Level) Textures() (result []int) {
 	blockData := level.store.Get(res.ResourceID(4000 + level.id*100 + 7)).BlockData(0)
 	reader := bytes.NewReader(blockData)
@@ -145,6 +154,7 @@ func (level *Level) Textures() (result []int) {
 	return
 }
 
+// SetTextures sets the texture identifier for this level.
 func (level *Level) SetTextures(newIds []int) {
 	blockStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 7))
 	var ids [54]uint16
@@ -171,14 +181,14 @@ func bytesToIntArray(bs []byte) []int {
 	return result
 }
 
+// Objects returns an array of all used objects.
 func (level *Level) Objects() []model.LevelObject {
 	level.mutex.Lock()
 	defer level.mutex.Unlock()
 
 	var result []model.LevelObject
-	entries := level.bufferObjectList()
 
-	for index, rawEntry := range entries {
+	for index, rawEntry := range level.objectList {
 		if rawEntry.IsInUse() {
 			entry := model.LevelObject{
 				Identifiable: model.Identifiable{ID: fmt.Sprintf("%d", index)},
@@ -193,7 +203,6 @@ func (level *Level) Objects() []model.LevelObject {
 			entry.BaseProperties.Z = int(rawEntry.Z)
 
 			entry.Hacking.Unknown0013 = bytesToIntArray(rawEntry.Unknown0013[:])
-			entry.Hacking.Unknown0015 = bytesToIntArray(rawEntry.Unknown0015[:])
 			entry.Hacking.Unknown0017 = bytesToIntArray(rawEntry.Unknown0017[:])
 
 			meta := data.LevelObjectClassMetaEntry(rawEntry.Class)
@@ -214,13 +223,96 @@ func (level *Level) Objects() []model.LevelObject {
 	return result
 }
 
+// AddObject adds a new object at given tile.
+func (level *Level) AddObject(template *model.LevelObjectTemplate) (createdIndex int, err error) {
+	level.mutex.Lock()
+	defer level.mutex.Unlock()
+
+	objID := res.MakeObjectID(res.ObjectClass(template.Class),
+		res.ObjectSubclass(template.Subclass), res.ObjectType(template.Type))
+
+	classMeta := data.LevelObjectClassMetaEntry(objID.Class)
+	classStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 10 + int(objID.Class)))
+	classTable := logic.DecodeLevelObjectClassTable(classStore.BlockData(0), classMeta.EntrySize)
+	classChain := classTable.AsChain()
+	classIndex, classErr := classChain.AcquireLink()
+
+	if classErr != nil {
+		err = classErr
+		return
+	}
+	classEntry := classTable.Entry(classIndex)
+	classEntryData := classEntry.Data()
+	for index := 0; index < len(classEntryData); index++ {
+		classEntryData[index] = 0x00
+	}
+
+	objectIndex, objectErr := level.objectChain.AcquireLink()
+	if objectErr != nil {
+		classChain.ReleaseLink(classIndex)
+		err = objectErr
+		return
+	}
+	createdIndex = int(objectIndex)
+
+	locations := []logic.TileLocation{logic.AtTile(uint16(template.TileX), uint16(template.TileY))}
+
+	crossrefIndex, crossrefErr := level.crossrefList.AddObjectToMap(uint16(objectIndex), level.tileMap, locations)
+	if crossrefErr != nil {
+		classChain.ReleaseLink(classIndex)
+		level.objectChain.ReleaseLink(objectIndex)
+		err = crossrefErr
+		return
+	}
+	crossrefEntry := level.crossrefList.Entry(crossrefIndex)
+
+	objectEntry := &level.objectList[objectIndex]
+	objectEntry.InUse = 1
+	objectEntry.Class = objID.Class
+	objectEntry.Subclass = objID.Subclass
+	objectEntry.Type = objID.Type
+	objectEntry.X = data.MapCoordinateOf(byte(template.TileX), byte(template.FineX))
+	objectEntry.Y = data.MapCoordinateOf(byte(template.TileY), byte(template.FineY))
+	objectEntry.Z = byte(template.Z)
+	objectEntry.Rot1 = 0
+	objectEntry.Rot2 = 0
+	objectEntry.Rot3 = 0
+	objectEntry.Hitpoints = 1
+
+	objectEntry.CrossReferenceTableIndex = uint16(crossrefIndex)
+	crossrefEntry.LevelObjectTableIndex = uint16(objectIndex)
+
+	objectEntry.ClassTableIndex = uint16(classIndex)
+	classEntry.LevelObjectTableIndex = uint16(objectIndex)
+
+	classStore.SetBlockData(0, classTable.Encode())
+
+	objWriter := bytes.NewBuffer(nil)
+	binary.Write(objWriter, binary.LittleEndian, level.objectList)
+	level.objectListStore.SetBlockData(0, objWriter.Bytes())
+
+	level.crossrefListStore.SetBlockData(0, level.crossrefList.Encode())
+	level.onTileDataChanged()
+
+	return
+}
+
+func (level *Level) readTable(levelBlockID int, value interface{}) {
+	blockData := level.store.Get(res.ResourceID(4000 + level.id*100 + levelBlockID)).BlockData(0)
+	reader := bytes.NewReader(blockData)
+
+	binary.Read(reader, binary.LittleEndian, value)
+}
+
 func (level *Level) isTileTypeValley(tileType data.TileType) bool {
 	return tileType == data.ValleyNorthEastToSouthWest || tileType == data.ValleyNorthWestToSouthEast ||
 		tileType == data.ValleySouthEastToNorthWest || tileType == data.ValleySouthWestToNorthEast
 }
 
+// Direction describes a flag field.
 type Direction int
 
+//
 const (
 	DirNone  = Direction(0)
 	DirNorth = Direction(1)
@@ -361,8 +453,7 @@ func (level *Level) getTileType(x, y int) data.TileType {
 	tileType := data.Solid
 
 	if (x >= 0) && (x < 64) && (y >= 0) && (y < 64) {
-		entries := level.bufferTileData()
-		entry := entries[y*64+x]
+		entry := level.tileMap.Entry(logic.AtTile(uint16(x), uint16(y)))
 		tileType = entry.Type
 	}
 
@@ -376,12 +467,11 @@ func (level *Level) calculateWallHeight(thisTile *data.TileMapEntry, thisDir Dir
 		otherType := level.getTileType(otherX, otherY)
 
 		if (solidDirections[otherType] & otherDir) == 0 {
-			entries := level.bufferTileData()
-			otherTile := entries[otherY*64+otherX]
+			otherTile := level.tileMap.Entry(logic.AtTile(uint16(otherX), uint16(otherY)))
 			thisCeilingHeight := level.calculatedCeilingHeight(thisTile, thisDir)
-			otherCeilingHeight := level.calculatedCeilingHeight(&otherTile, otherDir)
+			otherCeilingHeight := level.calculatedCeilingHeight(otherTile, otherDir)
 			thisFloorHeight := level.calculatedFloorHeight(thisTile, thisDir)
-			otherFloorHeight := level.calculatedFloorHeight(&otherTile, otherDir)
+			otherFloorHeight := level.calculatedFloorHeight(otherTile, otherDir)
 
 			if (thisCeilingHeight < otherCeilingHeight) ||
 				((thisCeilingHeight == otherCeilingHeight) && thisFloorHeight < otherFloorHeight) {
@@ -411,13 +501,12 @@ func (level *Level) calculateWallHeight(thisTile *data.TileMapEntry, thisDir Dir
 	return calculatedHeight
 }
 
+// TileProperties returns the properties of a specific tile.
 func (level *Level) TileProperties(x, y int) (result model.TileProperties) {
 	level.mutex.Lock()
 	defer level.mutex.Unlock()
 
-	entries := level.bufferTileData()
-
-	entry := entries[y*64+x]
+	entry := level.tileMap.Entry(logic.AtTile(uint16(x), uint16(y)))
 	result.Type = new(model.TileType)
 	*result.Type = tileTypes[entry.Type]
 	result.SlopeHeight = new(model.HeightUnit)
@@ -431,10 +520,10 @@ func (level *Level) TileProperties(x, y int) (result model.TileProperties) {
 
 	{
 		result.CalculatedWallHeights = new(model.CalculatedWallHeights)
-		result.CalculatedWallHeights.North = level.calculateWallHeight(&entry, DirNorth, x, y+1, DirSouth)
-		result.CalculatedWallHeights.East = level.calculateWallHeight(&entry, DirEast, x+1, y, DirWest)
-		result.CalculatedWallHeights.South = level.calculateWallHeight(&entry, DirSouth, x, y-1, DirNorth)
-		result.CalculatedWallHeights.West = level.calculateWallHeight(&entry, DirWest, x-1, y, DirEast)
+		result.CalculatedWallHeights.North = level.calculateWallHeight(entry, DirNorth, x, y+1, DirSouth)
+		result.CalculatedWallHeights.East = level.calculateWallHeight(entry, DirEast, x+1, y, DirWest)
+		result.CalculatedWallHeights.South = level.calculateWallHeight(entry, DirSouth, x, y-1, DirNorth)
+		result.CalculatedWallHeights.West = level.calculateWallHeight(entry, DirWest, x-1, y, DirEast)
 	}
 
 	{
@@ -463,13 +552,12 @@ func (level *Level) TileProperties(x, y int) (result model.TileProperties) {
 	return
 }
 
+// SetTileProperties sets the properties of a specific tile.
 func (level *Level) SetTileProperties(x, y int, properties model.TileProperties) {
 	level.mutex.Lock()
 	defer level.mutex.Unlock()
 
-	entries := level.bufferTileData()
-
-	entry := &entries[y*64+x]
+	entry := level.tileMap.Entry(logic.AtTile(uint16(x), uint16(y)))
 	flags := uint32(entry.Flags)
 	if properties.Type != nil {
 		entry.Type = tileType(*properties.Type)
