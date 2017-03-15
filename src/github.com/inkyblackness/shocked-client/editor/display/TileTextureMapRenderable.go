@@ -5,8 +5,7 @@ import (
 	"math"
 	"os"
 
-	mgl32 "github.com/go-gl/mathgl/mgl32"
-	mgl "github.com/go-gl/mathgl/mgl64"
+	mgl "github.com/go-gl/mathgl/mgl32"
 
 	"github.com/inkyblackness/shocked-model"
 
@@ -51,20 +50,20 @@ var mapTileFragmentShaderSource = `
 
 // TextureQuery is a getter function to retrieve the texture for the given
 // level texture index.
-type TextureQuery func(index int) graphics.Texture
+type TextureQuery func(index int) *graphics.BitmapTexture
 
 // TileTextureMapRenderable is a renderable for textures.
 type TileTextureMapRenderable struct {
-	gl opengl.OpenGl
+	context *graphics.RenderContext
 
 	program                 uint32
-	vertexArrayObject       uint32
+	vao                     *opengl.VertexArrayObject
 	vertexPositionBuffer    uint32
 	vertexPositionAttrib    int32
-	modelMatrixUniform      int32
-	viewMatrixUniform       int32
-	projectionMatrixUniform int32
-	uvMatrixUniform         int32
+	modelMatrixUniform      opengl.Matrix4Uniform
+	viewMatrixUniform       opengl.Matrix4Uniform
+	projectionMatrixUniform opengl.Matrix4Uniform
+	uvMatrixUniform         opengl.Matrix4Uniform
 
 	paletteUniform int32
 	bitmapUniform  int32
@@ -76,21 +75,23 @@ type TileTextureMapRenderable struct {
 	lastTileType model.TileType
 }
 
-var uvRotations map[int]*mgl32.Mat4
+var uvRotations map[int]*mgl.Mat4
 
 func init() {
-	uvRotations = make(map[int]*mgl32.Mat4)
+	uvRotations = make(map[int]*mgl.Mat4)
 	for i := 0; i < 4; i++ {
-		matrix := mgl32.Translate3D(0.5, 0.5, 0.0).
-			Mul4(mgl32.HomogRotate3DZ(float32(math.Pi * float32(i) / 2.0))).
-			Mul4(mgl32.Translate3D(-0.5, -0.5, 0.0))
+		matrix := mgl.Translate3D(0.5, 0.5, 0.0).
+			Mul4(mgl.HomogRotate3DZ(float32(math.Pi * float32(i) / 2.0))).
+			Mul4(mgl.Translate3D(-0.5, -0.5, 0.0)).
+			Mul4(mgl.Scale3D(1.0, -1.0, 1.0))
 		uvRotations[i] = &matrix
 	}
 }
 
-// NewTileTextureMapRenderable returns a new instance of a renderable for tile maps
-func NewTileTextureMapRenderable(gl opengl.OpenGl, paletteTexture graphics.Texture,
+// NewTileTextureMapRenderable returns a new instance of a renderable for tile map textures.
+func NewTileTextureMapRenderable(context *graphics.RenderContext, paletteTexture graphics.Texture,
 	textureQuery TextureQuery) *TileTextureMapRenderable {
+	gl := context.OpenGl()
 	vertexShader, err1 := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, mapTileVertexShaderSource)
 	defer gl.DeleteShader(vertexShader)
 	fragmentShader, err2 := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, mapTileFragmentShaderSource)
@@ -105,38 +106,31 @@ func NewTileTextureMapRenderable(gl opengl.OpenGl, paletteTexture graphics.Textu
 	}
 
 	renderable := &TileTextureMapRenderable{
-		gl:                      gl,
-		program:                 program,
-		vertexArrayObject:       gl.GenVertexArrays(1)[0],
+		context: context,
+		program: program,
+
+		vao:                     opengl.NewVertexArrayObject(gl, program),
 		vertexPositionBuffer:    gl.GenBuffers(1)[0],
 		vertexPositionAttrib:    gl.GetAttribLocation(program, "vertexPosition"),
-		modelMatrixUniform:      gl.GetUniformLocation(program, "modelMatrix"),
-		viewMatrixUniform:       gl.GetUniformLocation(program, "viewMatrix"),
-		projectionMatrixUniform: gl.GetUniformLocation(program, "projectionMatrix"),
-		uvMatrixUniform:         gl.GetUniformLocation(program, "uvMatrix"),
+		modelMatrixUniform:      opengl.Matrix4Uniform(gl.GetUniformLocation(program, "modelMatrix")),
+		viewMatrixUniform:       opengl.Matrix4Uniform(gl.GetUniformLocation(program, "viewMatrix")),
+		projectionMatrixUniform: opengl.Matrix4Uniform(gl.GetUniformLocation(program, "projectionMatrix")),
+		uvMatrixUniform:         opengl.Matrix4Uniform(gl.GetUniformLocation(program, "uvMatrix")),
 		paletteUniform:          gl.GetUniformLocation(program, "palette"),
 		bitmapUniform:           gl.GetUniformLocation(program, "bitmap"),
 		paletteTexture:          paletteTexture,
 		textureQuery:            textureQuery,
-		tiles:                   make([][]*model.TileProperties, 64),
+		tiles:                   make([][]*model.TileProperties, int(tilesPerMapSide)),
 		lastTileType:            model.Solid}
 
-	for i := 0; i < 64; i++ {
-		renderable.tiles[i] = make([]*model.TileProperties, 64)
+	for i := 0; i < len(renderable.tiles); i++ {
+		renderable.tiles[i] = make([]*model.TileProperties, int(tilesPerMapSide))
 	}
-
-	renderable.withShader(func() {
+	renderable.vao.WithSetter(func(gl opengl.OpenGl) {
+		gl.EnableVertexAttribArray(uint32(renderable.vertexPositionAttrib))
 		gl.BindBuffer(opengl.ARRAY_BUFFER, renderable.vertexPositionBuffer)
-		limit := float32(1.0)
-		var vertices = []float32{
-			0.0, 0.0, 0.0,
-			limit, 0.0, 0.0,
-			limit, limit, 0.0,
-
-			limit, limit, 0.0,
-			0.0, limit, 0.0,
-			0.0, 0.0, 0.0}
-		gl.BufferData(opengl.ARRAY_BUFFER, len(vertices)*4, vertices, opengl.STATIC_DRAW)
+		gl.VertexAttribOffset(uint32(renderable.vertexPositionAttrib), 3, opengl.FLOAT, false, 0, 0)
+		gl.BindBuffer(opengl.ARRAY_BUFFER, 0)
 	})
 
 	return renderable
@@ -144,9 +138,11 @@ func NewTileTextureMapRenderable(gl opengl.OpenGl, paletteTexture graphics.Textu
 
 // Dispose releases any internal resources
 func (renderable *TileTextureMapRenderable) Dispose() {
-	renderable.gl.DeleteProgram(renderable.program)
-	renderable.gl.DeleteBuffers([]uint32{renderable.vertexPositionBuffer})
-	renderable.gl.DeleteVertexArrays([]uint32{renderable.vertexArrayObject})
+	gl := renderable.context.OpenGl()
+
+	renderable.vao.Dispose()
+	gl.DeleteProgram(renderable.program)
+	gl.DeleteBuffers([]uint32{renderable.vertexPositionBuffer})
 }
 
 // SetTile sets the properties for the specified tile coordinate.
@@ -164,15 +160,12 @@ func (renderable *TileTextureMapRenderable) Clear() {
 }
 
 // Render renders
-func (renderable *TileTextureMapRenderable) Render(context *RenderContext) {
-	gl := renderable.gl
+func (renderable *TileTextureMapRenderable) Render() {
+	gl := renderable.context.OpenGl()
 
-	renderable.withShader(func() {
-		renderable.setMatrix32(renderable.viewMatrixUniform, context.ViewMatrix())
-		renderable.setMatrix32(renderable.projectionMatrixUniform, context.ProjectionMatrix())
-
-		gl.BindBuffer(opengl.ARRAY_BUFFER, renderable.vertexPositionBuffer)
-		gl.VertexAttribOffset(uint32(renderable.vertexPositionAttrib), 3, opengl.FLOAT, false, 0, 0)
+	renderable.vao.OnShader(func() {
+		renderable.viewMatrixUniform.Set(gl, renderable.context.ViewMatrix())
+		renderable.projectionMatrixUniform.Set(gl, renderable.context.ProjectionMatrix())
 
 		textureUnit := int32(0)
 		gl.ActiveTexture(opengl.TEXTURE0 + uint32(textureUnit))
@@ -182,18 +175,18 @@ func (renderable *TileTextureMapRenderable) Render(context *RenderContext) {
 		textureUnit = 1
 		gl.ActiveTexture(opengl.TEXTURE0 + uint32(textureUnit))
 
-		scaling := mgl.Scale3D(32.0, 32.0, 1.0)
+		scaling := mgl.Scale3D(fineCoordinatesPerTileSide, fineCoordinatesPerTileSide, 1.0)
 		for y, row := range renderable.tiles {
 			for x, tile := range row {
 				if tile != nil && *tile.Type != model.Solid && tile.RealWorld != nil {
 					texture := renderable.textureQuery(*tile.RealWorld.FloorTexture)
 					if texture != nil {
-						modelMatrix := mgl.Translate3D(float64(x)*32.0, float64(y)*32.0, 0.0).
+						modelMatrix := mgl.Translate3D(float32(x)*fineCoordinatesPerTileSide, float32(y)*fineCoordinatesPerTileSide, 0.0).
 							Mul4(scaling)
 
 						uvMatrix := uvRotations[*tile.RealWorld.FloorTextureRotations]
-						renderable.setMatrix32(renderable.uvMatrixUniform, uvMatrix)
-						renderable.setMatrix64(renderable.modelMatrixUniform, &modelMatrix)
+						renderable.uvMatrixUniform.Set(gl, uvMatrix)
+						renderable.modelMatrixUniform.Set(gl, &modelMatrix)
 						verticeCount := renderable.ensureTileType(*tile.Type)
 						gl.BindTexture(opengl.TEXTURE_2D, texture.Handle())
 						gl.Uniform1i(renderable.bitmapUniform, textureUnit)
@@ -218,30 +211,30 @@ func (renderable *TileTextureMapRenderable) ensureTileType(tileType model.TileTy
 		verticeCount = 3
 	}
 	if renderable.lastTileType != displayedType {
-		gl := renderable.gl
+		gl := renderable.context.OpenGl()
 		var vertices []float32
 		limit := float32(1.0)
 
 		if displayedType == model.DiagonalOpenNorthEast {
 			vertices = []float32{
-				0.0, 0.0, 0.0,
-				limit, 0.0, 0.0,
-				limit, limit, 0.0}
+				0.0, limit, 0.0,
+				limit, limit, 0.0,
+				limit, 0.0, 0.0}
 		} else if displayedType == model.DiagonalOpenNorthWest {
 			vertices = []float32{
-				0.0, 0.0, 0.0,
-				limit, 0.0, 0.0,
-				0.0, limit, 0.0}
+				0.0, limit, 0.0,
+				limit, limit, 0.0,
+				0.0, 0.0, 0.0}
 		} else if displayedType == model.DiagonalOpenSouthEast {
 			vertices = []float32{
-				limit, 0.0, 0.0,
 				limit, limit, 0.0,
-				0.0, limit, 0.0}
+				limit, 0.0, 0.0,
+				0.0, 0.0, 0.0}
 		} else if displayedType == model.DiagonalOpenSouthWest {
 			vertices = []float32{
-				0.0, 0.0, 0.0,
-				limit, limit, 0.0,
-				0.0, limit, 0.0}
+				0.0, limit, 0.0,
+				limit, 0.0, 0.0,
+				0.0, 0.0, 0.0}
 		} else if displayedType == model.Open {
 			vertices = []float32{
 				0.0, 0.0, 0.0,
@@ -254,39 +247,10 @@ func (renderable *TileTextureMapRenderable) ensureTileType(tileType model.TileTy
 		}
 		gl.BindBuffer(opengl.ARRAY_BUFFER, renderable.vertexPositionBuffer)
 		gl.BufferData(opengl.ARRAY_BUFFER, len(vertices)*4, vertices, opengl.STATIC_DRAW)
+		gl.BindBuffer(opengl.ARRAY_BUFFER, 0)
 
 		renderable.lastTileType = displayedType
 	}
 
 	return
-}
-
-func (renderable *TileTextureMapRenderable) withShader(task func()) {
-	gl := renderable.gl
-
-	gl.UseProgram(renderable.program)
-	gl.BindVertexArray(renderable.vertexArrayObject)
-	gl.EnableVertexAttribArray(uint32(renderable.vertexPositionAttrib))
-
-	defer func() {
-		gl.EnableVertexAttribArray(0)
-		gl.BindVertexArray(0)
-		gl.UseProgram(0)
-	}()
-
-	task()
-}
-
-func (renderable *TileTextureMapRenderable) setMatrix32(uniform int32, matrix *mgl32.Mat4) {
-	matrixArray := ([16]float32)(*matrix)
-	renderable.gl.UniformMatrix4fv(uniform, false, &matrixArray)
-}
-
-func (renderable *TileTextureMapRenderable) setMatrix64(uniform int32, matrix *mgl.Mat4) {
-	var matrixArray [16]float32
-
-	for index, value := range matrix {
-		matrixArray[index] = float32(value)
-	}
-	renderable.gl.UniformMatrix4fv(uniform, false, &matrixArray)
 }

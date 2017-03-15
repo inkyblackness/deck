@@ -202,9 +202,6 @@ func (level *Level) Objects() []model.LevelObject {
 			entry.BaseProperties.FineY = int(rawEntry.Y & 0xFF)
 			entry.BaseProperties.Z = int(rawEntry.Z)
 
-			entry.Hacking.Unknown0013 = bytesToIntArray(rawEntry.Unknown0013[:])
-			entry.Hacking.Unknown0017 = bytesToIntArray(rawEntry.Unknown0017[:])
-
 			meta := data.LevelObjectClassMetaEntry(rawEntry.Class)
 			classStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 10 + entry.Class))
 			blockData := classStore.BlockData(0)
@@ -213,7 +210,7 @@ func (level *Level) Objects() []model.LevelObject {
 				fmt.Printf("!!!!! class %d meta says %d bytes size, can't reach index %d in blockData %d",
 					int(entry.Class), meta.EntrySize, rawEntry.ClassTableIndex, len(blockData))
 			} else {
-				entry.Hacking.ClassData = bytesToIntArray(blockData[startOffset+data.LevelObjectPrefixSize : startOffset+meta.EntrySize])
+				entry.ClassData = bytesToIntArray(blockData[startOffset+data.LevelObjectPrefixSize : startOffset+meta.EntrySize])
 			}
 
 			result = append(result, entry)

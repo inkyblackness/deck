@@ -27,6 +27,7 @@ type OpenGl interface {
 	DeleteShader(shader uint32)
 	DeleteTextures(textures []uint32)
 	DeleteVertexArrays(arrays []uint32)
+	Disable(cap uint32)
 
 	DrawArrays(mode uint32, first int32, count int32)
 

@@ -111,6 +111,11 @@ func (native *OpenGl) DeleteVertexArrays(arrays []uint32) {
 	gl.DeleteVertexArrays(int32(len(arrays)), (*uint32)(&arrays[0]))
 }
 
+// Disable implements the opengl.OpenGl interface.
+func (native *OpenGl) Disable(cap uint32) {
+	gl.Disable(cap)
+}
+
 // DrawArrays implements the opengl.OpenGl interface.
 func (native *OpenGl) DrawArrays(mode uint32, first int32, count int32) {
 	gl.DrawArrays(mode, first, count)

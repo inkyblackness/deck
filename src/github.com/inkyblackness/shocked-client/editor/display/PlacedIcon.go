@@ -7,5 +7,5 @@ import (
 // PlacedIcon is an icon bitmap with a location.
 type PlacedIcon interface {
 	Center() (x, y float32)
-	Icon() *graphics.BitmapTexture
+	Texture() *graphics.BitmapTexture
 }

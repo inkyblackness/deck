@@ -6,6 +6,7 @@ import (
 
 	mgl "github.com/go-gl/mathgl/mgl32"
 
+	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/opengl"
 )
 
@@ -40,20 +41,21 @@ var basicHighlighterFragmentShaderSource = `
 
 // BasicHighlighter draws a simple highlighting of a rectangular area.
 type BasicHighlighter struct {
-	gl opengl.OpenGl
+	context *graphics.RenderContext
 
 	program                 uint32
-	vertexArrayObject       uint32
+	vao                     *opengl.VertexArrayObject
 	vertexPositionBuffer    uint32
 	vertexPositionAttrib    int32
-	modelMatrixUniform      int32
-	viewMatrixUniform       int32
-	projectionMatrixUniform int32
-	inColorUniform          int32
+	modelMatrixUniform      opengl.Matrix4Uniform
+	viewMatrixUniform       opengl.Matrix4Uniform
+	projectionMatrixUniform opengl.Matrix4Uniform
+	inColorUniform          opengl.Vector4Uniform
 }
 
 // NewBasicHighlighter returns a new instance of BasicHighlighter.
-func NewBasicHighlighter(gl opengl.OpenGl, color [4]float32) *BasicHighlighter {
+func NewBasicHighlighter(context *graphics.RenderContext) *BasicHighlighter {
+	gl := context.OpenGl()
 	vertexShader, err1 := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, basicHighlighterVertexShaderSource)
 	defer gl.DeleteShader(vertexShader)
 	fragmentShader, err2 := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, basicHighlighterFragmentShaderSource)
@@ -68,17 +70,18 @@ func NewBasicHighlighter(gl opengl.OpenGl, color [4]float32) *BasicHighlighter {
 	}
 
 	highlighter := &BasicHighlighter{
-		gl:                      gl,
-		program:                 program,
-		vertexArrayObject:       gl.GenVertexArrays(1)[0],
+		context: context,
+		program: program,
+
+		vao:                     opengl.NewVertexArrayObject(gl, program),
 		vertexPositionBuffer:    gl.GenBuffers(1)[0],
 		vertexPositionAttrib:    gl.GetAttribLocation(program, "vertexPosition"),
-		modelMatrixUniform:      gl.GetUniformLocation(program, "modelMatrix"),
-		viewMatrixUniform:       gl.GetUniformLocation(program, "viewMatrix"),
-		projectionMatrixUniform: gl.GetUniformLocation(program, "projectionMatrix"),
-		inColorUniform:          gl.GetUniformLocation(program, "inColor")}
+		modelMatrixUniform:      opengl.Matrix4Uniform(gl.GetUniformLocation(program, "modelMatrix")),
+		viewMatrixUniform:       opengl.Matrix4Uniform(gl.GetUniformLocation(program, "viewMatrix")),
+		projectionMatrixUniform: opengl.Matrix4Uniform(gl.GetUniformLocation(program, "projectionMatrix")),
+		inColorUniform:          opengl.Vector4Uniform(gl.GetUniformLocation(program, "inColor"))}
 
-	highlighter.withShader(func() {
+	{
 		gl.BindBuffer(opengl.ARRAY_BUFFER, highlighter.vertexPositionBuffer)
 		half := float32(0.5)
 		var vertices = []float32{
@@ -90,8 +93,14 @@ func NewBasicHighlighter(gl opengl.OpenGl, color [4]float32) *BasicHighlighter {
 			-half, half, 0.0,
 			-half, -half, 0.0}
 		gl.BufferData(opengl.ARRAY_BUFFER, len(vertices)*4, vertices, opengl.STATIC_DRAW)
+		gl.BindBuffer(opengl.ARRAY_BUFFER, 0)
+	}
 
-		gl.Uniform4fv(highlighter.inColorUniform, &color)
+	highlighter.vao.OnShader(func() {
+		gl.EnableVertexAttribArray(uint32(highlighter.vertexPositionAttrib))
+		gl.BindBuffer(opengl.ARRAY_BUFFER, highlighter.vertexPositionBuffer)
+		gl.VertexAttribOffset(uint32(highlighter.vertexPositionAttrib), 3, opengl.FLOAT, false, 0, 0)
+		gl.BindBuffer(opengl.ARRAY_BUFFER, 0)
 	})
 
 	return highlighter
@@ -99,23 +108,21 @@ func NewBasicHighlighter(gl opengl.OpenGl, color [4]float32) *BasicHighlighter {
 
 // Dispose releases all resources.
 func (highlighter *BasicHighlighter) Dispose() {
-	gl := highlighter.gl
+	gl := highlighter.context.OpenGl()
 
+	highlighter.vao.Dispose()
 	gl.DeleteBuffers([]uint32{highlighter.vertexPositionBuffer})
-	gl.DeleteVertexArrays([]uint32{highlighter.vertexArrayObject})
 	gl.DeleteShader(highlighter.program)
 }
 
-// Render renders the highlight.
-func (highlighter *BasicHighlighter) Render(context *RenderContext, areas []Area) {
-	gl := highlighter.gl
+// Render renders the highlights.
+func (highlighter *BasicHighlighter) Render(areas []Area, color graphics.Color) {
+	gl := highlighter.context.OpenGl()
 
-	highlighter.withShader(func() {
-		highlighter.setMatrix(highlighter.viewMatrixUniform, context.ViewMatrix())
-		highlighter.setMatrix(highlighter.projectionMatrixUniform, context.ProjectionMatrix())
-
-		gl.BindBuffer(opengl.ARRAY_BUFFER, highlighter.vertexPositionBuffer)
-		gl.VertexAttribOffset(uint32(highlighter.vertexPositionAttrib), 3, opengl.FLOAT, false, 0, 0)
+	highlighter.vao.OnShader(func() {
+		highlighter.viewMatrixUniform.Set(gl, highlighter.context.ViewMatrix())
+		highlighter.projectionMatrixUniform.Set(gl, highlighter.context.ProjectionMatrix())
+		highlighter.inColorUniform.Set(gl, color.AsVector())
 
 		for _, area := range areas {
 			x, y := area.Center()
@@ -124,29 +131,9 @@ func (highlighter *BasicHighlighter) Render(context *RenderContext, areas []Area
 				Mul4(mgl.Translate3D(x, y, 0.0)).
 				Mul4(mgl.Scale3D(width, height, 1.0))
 
-			highlighter.setMatrix(highlighter.modelMatrixUniform, &modelMatrix)
+			highlighter.modelMatrixUniform.Set(gl, &modelMatrix)
+
 			gl.DrawArrays(opengl.TRIANGLES, 0, 6)
 		}
 	})
-}
-
-func (highlighter *BasicHighlighter) withShader(task func()) {
-	gl := highlighter.gl
-
-	gl.UseProgram(highlighter.program)
-	gl.BindVertexArray(highlighter.vertexArrayObject)
-	gl.EnableVertexAttribArray(uint32(highlighter.vertexPositionAttrib))
-
-	defer func() {
-		gl.EnableVertexAttribArray(0)
-		gl.BindVertexArray(0)
-		gl.UseProgram(0)
-	}()
-
-	task()
-}
-
-func (highlighter *BasicHighlighter) setMatrix(uniform int32, matrix *mgl.Mat4) {
-	matrixArray := ([16]float32)(*matrix)
-	highlighter.gl.UniformMatrix4fv(uniform, false, &matrixArray)
 }

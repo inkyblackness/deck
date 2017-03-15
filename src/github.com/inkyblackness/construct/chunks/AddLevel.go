@@ -9,36 +9,36 @@ import (
 )
 
 // AddLevel adds one level to the consumer
-func AddLevel(consumer chunk.Consumer, levelID int, solid bool) {
+func AddLevel(consumer chunk.Consumer, levelID int, solid bool, isCyberspace bool) {
 	levelBaseID := res.ResourceID(4000 + 100*levelID)
 
 	AddStaticChunk(consumer, levelBaseID+2, []byte{0x0B, 0x00, 0x00, 0x00})
 	AddStaticChunk(consumer, levelBaseID+3, []byte{0x1B, 0x00, 0x00, 0x00})
 
-	AddBasicLevelInformation(consumer, levelBaseID)
+	AddBasicLevelInformation(consumer, levelBaseID, isCyberspace)
 	AddMap(consumer, levelBaseID, solid, levelID == 1)
-	AddStaticChunk(consumer, levelBaseID+6, make([]byte, 8))
+	AddLevelTimer(consumer, levelBaseID)
 	AddLevelTextures(consumer, levelBaseID)
 	AddMasterObjectTables(consumer, levelBaseID)
 	AddLevelObjects(consumer, levelBaseID)
 
 	AddStaticChunk(consumer, levelBaseID+40, []byte{0x0D, 0x00, 0x00, 0x00})
 	AddStaticChunk(consumer, levelBaseID+41, []byte{0x00})
-	AddStaticChunk(consumer, levelBaseID+42, make([]byte, 0x1C))
+	AddTypedStaticChunk(consumer, levelBaseID+42, chunk.BasicChunkType.WithCompression(), make([]byte, 0x1C))
 
 	AddSurveillanceChunk(consumer, levelBaseID)
 	AddLevelVariables(consumer, levelBaseID)
 	AddMapNotes(consumer, levelBaseID)
 
 	AddStaticChunk(consumer, levelBaseID+48, make([]byte, 0x30))
-	AddStaticChunk(consumer, levelBaseID+49, make([]byte, 0x01C0))
+	AddTypedStaticChunk(consumer, levelBaseID+49, chunk.BasicChunkType.WithCompression(), make([]byte, 0x01C0))
 	AddStaticChunk(consumer, levelBaseID+50, make([]byte, 2))
 
 	AddLoopConfiguration(consumer, levelBaseID)
 
 	// CD-Release only content
 	AddStaticChunk(consumer, levelBaseID+52, make([]byte, 2))
-	AddStaticChunk(consumer, levelBaseID+53, make([]byte, 0x40))
+	AddTypedStaticChunk(consumer, levelBaseID+53, chunk.BasicChunkType.WithCompression(), make([]byte, 0x40))
 }
 
 func addData(consumer chunk.Consumer, chunkID res.ResourceID, data interface{}) {
@@ -55,10 +55,18 @@ func addTypedData(consumer chunk.Consumer, chunkID res.ResourceID, typeID chunk.
 }
 
 // AddBasicLevelInformation adds the basic level info block
-func AddBasicLevelInformation(consumer chunk.Consumer, levelBaseID res.ResourceID) {
+func AddBasicLevelInformation(consumer chunk.Consumer, levelBaseID res.ResourceID, isCyberspace bool) {
 	info := data.DefaultLevelInformation()
 
+	if isCyberspace {
+		info.CyberspaceFlag = 1
+	}
 	addTypedData(consumer, levelBaseID+4, chunk.BasicChunkType.WithCompression(), info)
+}
+
+// AddLevelTimer adds the basic timer list structure
+func AddLevelTimer(consumer chunk.Consumer, levelBaseID res.ResourceID) {
+	AddStaticChunk(consumer, levelBaseID+6, make([]byte, data.TimerEntrySize))
 }
 
 // AddMap adds a map
@@ -125,9 +133,9 @@ func AddMasterObjectTables(consumer chunk.Consumer, levelBaseID res.ResourceID) 
 
 // AddLevelObjects adds level object tables
 func AddLevelObjects(consumer chunk.Consumer, levelBaseID res.ResourceID) {
-	for class := 0; class < 15; class++ {
-		meta := data.LevelObjectClassMetaEntry(res.ObjectClass(class))
-		addLevelObjectTables(consumer, levelBaseID, class, meta.EntrySize, meta.EntryCount)
+	for classID := 0; classID < 15; classID++ {
+		meta := data.LevelObjectClassMetaEntry(res.ObjectClass(classID))
+		addLevelObjectTables(consumer, levelBaseID, classID, meta.EntrySize, meta.EntryCount)
 	}
 }
 
@@ -137,11 +145,17 @@ type tempStruct struct {
 }
 
 func addLevelObjectTables(consumer chunk.Consumer, levelBaseID res.ResourceID, classID int, entrySize int, entryCount int) {
+	requiresCompressed := classID != 0 && classID != 1 && classID != 4 && classID != 5 && classID != 6
+	chunkType := chunk.BasicChunkType
 	table := logic.NewLevelObjectClassTable(entrySize, entryCount)
 	table.AsChain().Initialize(entryCount - 1)
 
-	addData(consumer, levelBaseID+10+res.ResourceID(classID), table.Encode())
-	AddStaticChunk(consumer, levelBaseID+25+res.ResourceID(classID), make([]byte, entrySize))
+	if requiresCompressed {
+		chunkType = chunkType.WithCompression()
+	}
+
+	addTypedData(consumer, levelBaseID+10+res.ResourceID(classID), chunkType, table.Encode())
+	AddTypedStaticChunk(consumer, levelBaseID+25+res.ResourceID(classID), chunkType, make([]byte, entrySize))
 }
 
 // AddSurveillanceChunk adds a chunk for surveillance information
@@ -159,11 +173,11 @@ func AddLevelVariables(consumer chunk.Consumer, levelBaseID res.ResourceID) {
 
 // AddMapNotes prepares empty map notes chunks
 func AddMapNotes(consumer chunk.Consumer, levelBaseID res.ResourceID) {
-	AddStaticChunk(consumer, levelBaseID+46, make([]byte, 0x0800))
+	AddTypedStaticChunk(consumer, levelBaseID+46, chunk.BasicChunkType.WithCompression(), make([]byte, 0x0800))
 	AddStaticChunk(consumer, levelBaseID+47, make([]byte, 4))
 }
 
 // AddLoopConfiguration adds an empty loop configuration chunk
 func AddLoopConfiguration(consumer chunk.Consumer, levelBaseID res.ResourceID) {
-	AddStaticChunk(consumer, levelBaseID+51, make([]byte, 0x03C0))
+	AddTypedStaticChunk(consumer, levelBaseID+51, chunk.BasicChunkType.WithCompression(), make([]byte, 0x03C0))
 }

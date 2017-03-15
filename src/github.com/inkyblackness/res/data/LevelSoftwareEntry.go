@@ -1,9 +1,5 @@
 package data
 
-import (
-	"fmt"
-)
-
 // LevelSoftwareEntrySize specifies the byte count of a serialized LevelSoftwareEntry.
 const LevelSoftwareEntrySize int = LevelObjectPrefixSize + 3
 
@@ -14,9 +10,7 @@ const LevelSoftwareEntryCount int = 16
 type LevelSoftwareEntry struct {
 	LevelObjectPrefix
 
-	ProgramVersion byte
-	LogChunkOffset byte
-	Unknown        [1]byte
+	Data [3]byte
 }
 
 // NewLevelSoftwareEntry returns a new LevelSoftwareEntry instance.
@@ -26,8 +20,6 @@ func NewLevelSoftwareEntry() *LevelSoftwareEntry {
 
 func (entry *LevelSoftwareEntry) String() (result string) {
 	result += entry.LevelObjectPrefix.String()
-	result += fmt.Sprintf("Program Version: %d\n", entry.ProgramVersion)
-	result += fmt.Sprintf("Log Chunk Offset: %d\n", entry.LogChunkOffset)
 
 	return
 }

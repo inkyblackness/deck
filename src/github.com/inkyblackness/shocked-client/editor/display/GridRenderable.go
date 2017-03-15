@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/go-gl/mathgl/mgl32"
-
+	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/opengl"
 )
 
@@ -49,10 +48,10 @@ var gridFragmentShaderSource = `
   }
 
   void main(void) {
-    float alphaX = nearGrid(32.0, originalPosition.x);
-    float alphaY = nearGrid(32.0, originalPosition.y);
-    bool beyondX = (originalPosition.x / 32.0) >= 64.0;
-    bool beyondY = (originalPosition.y / 32.0) >= 64.0;
+    float alphaX = nearGrid(256.0, originalPosition.x);
+    float alphaY = nearGrid(256.0, originalPosition.y);
+    bool beyondX = (originalPosition.x / 256.0) >= 64.0 || (originalPosition.x < 0.0);
+    bool beyondY = (originalPosition.y / 256.0) >= 64.0 || (originalPosition.y < 0.0);
     float alpha = 0.0;
 
     if (!beyondX && !beyondY) {
@@ -73,18 +72,19 @@ var gridFragmentShaderSource = `
 
 // GridRenderable renders a grid with transparent holes.
 type GridRenderable struct {
-	gl opengl.OpenGl
+	context *graphics.RenderContext
 
 	program                 uint32
-	vertexArrayObject       uint32
+	vao                     *opengl.VertexArrayObject
 	vertexPositionBuffer    uint32
 	vertexPositionAttrib    int32
-	viewMatrixUniform       int32
-	projectionMatrixUniform int32
+	viewMatrixUniform       opengl.Matrix4Uniform
+	projectionMatrixUniform opengl.Matrix4Uniform
 }
 
 // NewGridRenderable returns a new instance of GridRenderable.
-func NewGridRenderable(gl opengl.OpenGl) *GridRenderable {
+func NewGridRenderable(context *graphics.RenderContext) *GridRenderable {
+	gl := context.OpenGl()
 	vertexShader, err1 := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, gridVertexShaderSource)
 	defer gl.DeleteShader(vertexShader)
 	fragmentShader, err2 := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, gridFragmentShaderSource)
@@ -99,18 +99,18 @@ func NewGridRenderable(gl opengl.OpenGl) *GridRenderable {
 	}
 
 	renderable := &GridRenderable{
-		gl:                      gl,
+		context:                 context,
 		program:                 program,
-		vertexArrayObject:       gl.GenVertexArrays(1)[0],
+		vao:                     opengl.NewVertexArrayObject(gl, program),
 		vertexPositionBuffer:    gl.GenBuffers(1)[0],
 		vertexPositionAttrib:    gl.GetAttribLocation(program, "vertexPosition"),
-		viewMatrixUniform:       gl.GetUniformLocation(program, "viewMatrix"),
-		projectionMatrixUniform: gl.GetUniformLocation(program, "projectionMatrix")}
+		viewMatrixUniform:       opengl.Matrix4Uniform(gl.GetUniformLocation(program, "viewMatrix")),
+		projectionMatrixUniform: opengl.Matrix4Uniform(gl.GetUniformLocation(program, "projectionMatrix"))}
 
-	renderable.withShader(func() {
+	{
 		gl.BindBuffer(opengl.ARRAY_BUFFER, renderable.vertexPositionBuffer)
-		half := float32(16.0)
-		limit := float32(32.0*64.0 + half)
+		half := fineCoordinatesPerTileSide / float32(2.0)
+		limit := float32(fineCoordinatesPerTileSide*tilesPerMapSide + half)
 		var vertices = []float32{
 			-half, -half, 0.0,
 			limit, -half, 0.0,
@@ -120,43 +120,26 @@ func NewGridRenderable(gl opengl.OpenGl) *GridRenderable {
 			-half, limit, 0.0,
 			-half, -half, 0.0}
 		gl.BufferData(opengl.ARRAY_BUFFER, len(vertices)*4, vertices, opengl.STATIC_DRAW)
+		gl.BindBuffer(opengl.ARRAY_BUFFER, 0)
+	}
+	renderable.vao.WithSetter(func(gl opengl.OpenGl) {
+		gl.EnableVertexAttribArray(uint32(renderable.vertexPositionAttrib))
+		gl.BindBuffer(opengl.ARRAY_BUFFER, renderable.vertexPositionBuffer)
+		gl.VertexAttribOffset(uint32(renderable.vertexPositionAttrib), 3, opengl.FLOAT, false, 0, 0)
+		gl.BindBuffer(opengl.ARRAY_BUFFER, 0)
 	})
 
 	return renderable
 }
 
 // Render renders
-func (renderable *GridRenderable) Render(context *RenderContext) {
-	gl := renderable.gl
+func (renderable *GridRenderable) Render() {
+	gl := renderable.context.OpenGl()
 
-	renderable.withShader(func() {
-		renderable.setMatrix(renderable.viewMatrixUniform, context.ViewMatrix())
-		renderable.setMatrix(renderable.projectionMatrixUniform, context.ProjectionMatrix())
-
-		gl.BindBuffer(opengl.ARRAY_BUFFER, renderable.vertexPositionBuffer)
-		gl.VertexAttribOffset(uint32(renderable.vertexPositionAttrib), 3, opengl.FLOAT, false, 0, 0)
+	renderable.vao.OnShader(func() {
+		renderable.viewMatrixUniform.Set(gl, renderable.context.ViewMatrix())
+		renderable.projectionMatrixUniform.Set(gl, renderable.context.ProjectionMatrix())
 
 		gl.DrawArrays(opengl.TRIANGLES, 0, 6)
 	})
-}
-
-func (renderable *GridRenderable) withShader(task func()) {
-	gl := renderable.gl
-
-	gl.UseProgram(renderable.program)
-	gl.BindVertexArray(renderable.vertexArrayObject)
-	gl.EnableVertexAttribArray(uint32(renderable.vertexPositionAttrib))
-
-	defer func() {
-		gl.EnableVertexAttribArray(0)
-		gl.BindVertexArray(0)
-		gl.UseProgram(0)
-	}()
-
-	task()
-}
-
-func (renderable *GridRenderable) setMatrix(uniform int32, matrix *mgl32.Mat4) {
-	matrixArray := ([16]float32)(*matrix)
-	renderable.gl.UniformMatrix4fv(uniform, false, &matrixArray)
 }

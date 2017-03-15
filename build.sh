@@ -24,24 +24,17 @@ function buildNative() {
    GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CXX=x86_64-w64-mingw32-g++ CC=x86_64-w64-mingw32-gcc go build -o $DECK_BASE/dist/win/inkyblackness-deck/$name.exe .
 }
 
-for name in "construct" "chunkie" "hacker" "shocked-server"
+for name in "construct" "chunkie" "hacker" "shocked-client"
 do
    cd $DECK_BASE/src/github.com/inkyblackness/$name
    buildNative $name
 done
-
-cd $DECK_BASE/src/github.com/inkyblackness/shocked-client/app/shocked-client-console
-buildNative "shocked-client-console"
 
 echo Copying resources...
 
 for os in "linux" "win"
 do
    packageDir=$DECK_BASE/dist/$os/inkyblackness-deck
-   clientDir=$packageDir/client
-
-   mkdir -p $clientDir
-   cp -R $DECK_BASE/src/github.com/inkyblackness/shocked-client/www/* $clientDir
 
    cp $DECK_BASE/LICENSE $packageDir
    cp -R $DECK_BASE/resources/* $packageDir

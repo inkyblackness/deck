@@ -152,6 +152,13 @@ func (debugging *debuggingOpenGl) DeleteVertexArrays(arrays []uint32) {
 	debugging.recordExit("DeleteVertexArrays")
 }
 
+// Disable implements the OpenGl interface.
+func (debugging *debuggingOpenGl) Disable(cap uint32) {
+	debugging.recordEntry("Disable", cap)
+	debugging.gl.Disable(cap)
+	debugging.recordExit("Disable")
+}
+
 // DrawArrays implements the OpenGl interface.
 func (debugging *debuggingOpenGl) DrawArrays(mode uint32, first int32, count int32) {
 	debugging.recordEntry("DrawArrays", first, count)

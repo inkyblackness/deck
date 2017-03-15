@@ -8,8 +8,9 @@ import (
 
 // LimitedCamera is a camera implementation with ranged controls for zooming and moving.
 type LimitedCamera struct {
-	minZoom, maxZoom float32
-	minPos, maxPos   float32
+	viewportWidth, viewportHeight float32
+	minZoom, maxZoom              float32
+	minPos, maxPos                float32
 
 	requestedZoomLevel       float32
 	viewOffsetX, viewOffsetY float32
@@ -20,18 +21,28 @@ type LimitedCamera struct {
 // NewLimited returns a new instance of a LimitedCamera.
 func NewLimited(minZoom, maxZoom float32, minPos, maxPos float32) *LimitedCamera {
 	cam := &LimitedCamera{
-		minZoom:    minZoom,
-		maxZoom:    maxZoom,
-		minPos:     minPos,
-		maxPos:     maxPos,
-		viewMatrix: mgl.Ident4()}
+		viewportWidth:  1.0,
+		viewportHeight: 1.0,
+		minZoom:        minZoom,
+		maxZoom:        maxZoom,
+		minPos:         minPos,
+		maxPos:         maxPos,
+		viewMatrix:     mgl.Ident4()}
 
 	return cam
 }
 
+// SetViewportSize notifies the camera how big the view is.
+func (cam *LimitedCamera) SetViewportSize(width, height float32) {
+	if (cam.viewportWidth != width) || (cam.viewportHeight != height) {
+		cam.viewportWidth, cam.viewportHeight = width, height
+		cam.updateViewMatrix()
+	}
+}
+
 // ViewMatrix implements the Viewer interface.
-func (cam *LimitedCamera) ViewMatrix() mgl.Mat4 {
-	return cam.viewMatrix
+func (cam *LimitedCamera) ViewMatrix() *mgl.Mat4 {
+	return &cam.viewMatrix
 }
 
 // MoveBy adjusts the requested view offset by given delta values in world coordinates.
@@ -58,7 +69,7 @@ func (cam *LimitedCamera) ZoomAt(levelDelta float32, x, y float32) {
 
 	newPixel := cam.viewMatrix.Mul4x1(focusPoint)
 	scaleFactor := cam.scaleFactor()
-	cam.MoveBy(-(newPixel[0]-oldPixel[0])/scaleFactor, -(newPixel[1]-oldPixel[1])/scaleFactor)
+	cam.MoveBy(-(newPixel[0]-oldPixel[0])/scaleFactor, +(newPixel[1]-oldPixel[1])/scaleFactor)
 }
 
 func (cam *LimitedCamera) limitValue(value float32, min, max float32) float32 {
@@ -81,6 +92,7 @@ func (cam *LimitedCamera) scaleFactor() float32 {
 func (cam *LimitedCamera) updateViewMatrix() {
 	scaleFactor := cam.scaleFactor()
 	cam.viewMatrix = mgl.Ident4().
-		Mul4(mgl.Scale3D(scaleFactor, scaleFactor, 1.0)).
+		Mul4(mgl.Translate3D(cam.viewportWidth/2.0, cam.viewportHeight/2.0, 0)).
+		Mul4(mgl.Scale3D(scaleFactor, -scaleFactor, 1.0)).
 		Mul4(mgl.Translate3D(cam.viewOffsetX, cam.viewOffsetY, 0))
 }

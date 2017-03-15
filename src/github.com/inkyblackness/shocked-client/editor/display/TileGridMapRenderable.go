@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	mgl "github.com/go-gl/mathgl/mgl32"
-
 	"github.com/inkyblackness/shocked-model"
 
+	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/opengl"
 )
 
@@ -37,22 +36,23 @@ var mapTileGridFragmentShaderSource = `
   }
 `
 
-// TileGridMapRenderable is a renderable for textures.
+// TileGridMapRenderable is a renderable for the tile grid.
 type TileGridMapRenderable struct {
-	gl opengl.OpenGl
+	context *graphics.RenderContext
 
 	program                 uint32
-	vertexArrayObject       uint32
+	vao                     *opengl.VertexArrayObject
 	vertexPositionBuffer    uint32
 	vertexPositionAttrib    int32
-	viewMatrixUniform       int32
-	projectionMatrixUniform int32
+	viewMatrixUniform       opengl.Matrix4Uniform
+	projectionMatrixUniform opengl.Matrix4Uniform
 
 	tiles [][]*model.TileProperties
 }
 
-// NewTileGridMapRenderable returns a new instance of a renderable for tile grid maps
-func NewTileGridMapRenderable(gl opengl.OpenGl) *TileGridMapRenderable {
+// NewTileGridMapRenderable returns a new instance of a renderable for tile grids.
+func NewTileGridMapRenderable(context *graphics.RenderContext) *TileGridMapRenderable {
+	gl := context.OpenGl()
 	vertexShader, err1 := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, mapTileGridVertexShaderSource)
 	defer gl.DeleteShader(vertexShader)
 	fragmentShader, err2 := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, mapTileGridFragmentShaderSource)
@@ -67,27 +67,36 @@ func NewTileGridMapRenderable(gl opengl.OpenGl) *TileGridMapRenderable {
 	}
 
 	renderable := &TileGridMapRenderable{
-		gl:                      gl,
+		context:                 context,
 		program:                 program,
-		vertexArrayObject:       gl.GenVertexArrays(1)[0],
+		vao:                     opengl.NewVertexArrayObject(gl, program),
 		vertexPositionBuffer:    gl.GenBuffers(1)[0],
 		vertexPositionAttrib:    gl.GetAttribLocation(program, "vertexPosition"),
-		viewMatrixUniform:       gl.GetUniformLocation(program, "viewMatrix"),
-		projectionMatrixUniform: gl.GetUniformLocation(program, "projectionMatrix"),
-		tiles: make([][]*model.TileProperties, 64)}
+		viewMatrixUniform:       opengl.Matrix4Uniform(gl.GetUniformLocation(program, "viewMatrix")),
+		projectionMatrixUniform: opengl.Matrix4Uniform(gl.GetUniformLocation(program, "projectionMatrix")),
 
-	for i := 0; i < 64; i++ {
-		renderable.tiles[i] = make([]*model.TileProperties, 64)
+		tiles: make([][]*model.TileProperties, int(tilesPerMapSide))}
+
+	for i := 0; i < len(renderable.tiles); i++ {
+		renderable.tiles[i] = make([]*model.TileProperties, int(tilesPerMapSide))
 	}
+
+	renderable.vao.WithSetter(func(gl opengl.OpenGl) {
+		gl.EnableVertexAttribArray(uint32(renderable.vertexPositionAttrib))
+		gl.BindBuffer(opengl.ARRAY_BUFFER, renderable.vertexPositionBuffer)
+		gl.VertexAttribOffset(uint32(renderable.vertexPositionAttrib), 3, opengl.FLOAT, false, 0, 0)
+		gl.BindBuffer(opengl.ARRAY_BUFFER, 0)
+	})
 
 	return renderable
 }
 
 // Dispose releases any internal resources
 func (renderable *TileGridMapRenderable) Dispose() {
-	renderable.gl.DeleteProgram(renderable.program)
-	renderable.gl.DeleteBuffers([]uint32{renderable.vertexPositionBuffer})
-	renderable.gl.DeleteVertexArrays([]uint32{renderable.vertexArrayObject})
+	gl := renderable.context.OpenGl()
+	gl.DeleteProgram(renderable.program)
+	gl.DeleteBuffers([]uint32{renderable.vertexPositionBuffer})
+	renderable.vao.Dispose()
 }
 
 // SetTile sets the properties for the specified tile coordinate.
@@ -105,23 +114,21 @@ func (renderable *TileGridMapRenderable) Clear() {
 }
 
 // Render renders
-func (renderable *TileGridMapRenderable) Render(context *RenderContext) {
-	gl := renderable.gl
+func (renderable *TileGridMapRenderable) Render() {
+	gl := renderable.context.OpenGl()
 
-	renderable.withShader(func() {
-		renderable.setMatrix32(renderable.viewMatrixUniform, context.ViewMatrix())
-		renderable.setMatrix32(renderable.projectionMatrixUniform, context.ProjectionMatrix())
+	renderable.vao.OnShader(func() {
+		renderable.viewMatrixUniform.Set(gl, renderable.context.ViewMatrix())
+		renderable.projectionMatrixUniform.Set(gl, renderable.context.ProjectionMatrix())
 
 		gl.BindBuffer(opengl.ARRAY_BUFFER, renderable.vertexPositionBuffer)
-		gl.VertexAttribOffset(uint32(renderable.vertexPositionAttrib), 3, opengl.FLOAT, false, 0, 0)
-
 		for y, row := range renderable.tiles {
 			for x, tile := range row {
 				if tile != nil {
-					left := float32(x) * 32.0
-					right := left + 32.0
-					top := float32(y) * 32.0
-					bottom := top + 32.0
+					left := float32(x) * fineCoordinatesPerTileSide
+					right := left + fineCoordinatesPerTileSide
+					bottom := float32(y) * fineCoordinatesPerTileSide
+					top := bottom + fineCoordinatesPerTileSide
 
 					vertices := make([]float32, 0, 6*2*3)
 
@@ -151,26 +158,6 @@ func (renderable *TileGridMapRenderable) Render(context *RenderContext) {
 				}
 			}
 		}
+		gl.BindBuffer(opengl.ARRAY_BUFFER, 0)
 	})
-}
-
-func (renderable *TileGridMapRenderable) withShader(task func()) {
-	gl := renderable.gl
-
-	gl.UseProgram(renderable.program)
-	gl.BindVertexArray(renderable.vertexArrayObject)
-	gl.EnableVertexAttribArray(uint32(renderable.vertexPositionAttrib))
-
-	defer func() {
-		gl.EnableVertexAttribArray(0)
-		gl.BindVertexArray(0)
-		gl.UseProgram(0)
-	}()
-
-	task()
-}
-
-func (renderable *TileGridMapRenderable) setMatrix32(uniform int32, matrix *mgl.Mat4) {
-	matrixArray := ([16]float32)(*matrix)
-	renderable.gl.UniformMatrix4fv(uniform, false, &matrixArray)
 }

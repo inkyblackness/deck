@@ -1,5 +1,6 @@
 package model
 
+// LevelObject describes one object of the level.
 type LevelObject struct {
 	Identifiable
 
@@ -9,15 +10,7 @@ type LevelObject struct {
 
 	BaseProperties LevelObjectBaseProperties `json:"properties"`
 
-	Hacking LevelObjectHacking
+	ClassData []int `json:"classData"`
 
 	Links []Link `json:"links"`
-}
-
-type LevelObjectHacking struct {
-	Unknown0013 []int
-	Unknown0015 []int
-	Unknown0017 []int
-
-	ClassData []int
 }
