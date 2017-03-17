@@ -1,31 +1,35 @@
 package graphics
 
 import (
+	"fmt"
+
 	mgl "github.com/go-gl/mathgl/mgl32"
 
 	"github.com/inkyblackness/shocked-client/opengl"
 )
 
 var fillRectVertexShaderSource = `
-  attribute vec2 vertexPosition;
+#version 150
+precision mediump float;
 
-  uniform mat4 projectionMatrix;
+attribute vec2 vertexPosition;
 
-  void main(void) {
-    gl_Position = projectionMatrix * vec4(vertexPosition, 0.0, 1.0);
-  }
+uniform mat4 projectionMatrix;
+
+void main(void) {
+	gl_Position = projectionMatrix * vec4(vertexPosition, 0.0, 1.0);
+}
 `
 
 var fillRectFragmentShaderSource = `
-  #ifdef GL_ES
-    precision mediump float;
-  #endif
+#version 150
+precision mediump float;
 
-  uniform vec4 color;
+uniform vec4 color;
 
-  void main(void) {
-    gl_FragColor = color;
-  }
+void main(void) {
+	gl_FragColor = color;
+}
 `
 
 // RectangleRenderer renders rectangular shapes.
@@ -43,12 +47,11 @@ type RectangleRenderer struct {
 
 // NewRectangleRenderer returns a new instance of an RectangleRenderer type.
 func NewRectangleRenderer(gl opengl.OpenGl, projectionMatrix *mgl.Mat4) *RectangleRenderer {
-	vertexShader, _ := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, fillRectVertexShaderSource)
-	defer gl.DeleteShader(vertexShader)
-	fragmentShader, _ := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, fillRectFragmentShaderSource)
-	defer gl.DeleteShader(fragmentShader)
-	program, _ := opengl.LinkNewProgram(gl, vertexShader, fragmentShader)
+	program, programErr := opengl.LinkNewStandardProgram(gl, fillRectVertexShaderSource, fillRectFragmentShaderSource)
 
+	if programErr != nil {
+		panic(fmt.Errorf("BitmapTextureRenderer shader failed: %v", programErr))
+	}
 	renderer := &RectangleRenderer{
 		gl:               gl,
 		projectionMatrix: projectionMatrix,

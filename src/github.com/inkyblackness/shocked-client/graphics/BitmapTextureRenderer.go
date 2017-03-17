@@ -1,49 +1,53 @@
 package graphics
 
 import (
+	"fmt"
+
 	mgl "github.com/go-gl/mathgl/mgl32"
 
 	"github.com/inkyblackness/shocked-client/opengl"
 )
 
 var bitmapTextureVertexShaderSource = `
-  attribute vec2 vertexPosition;
-  attribute vec2 uvPosition;
+#version 150
+precision mediump float;
 
-  uniform mat4 modelMatrix;
-  uniform mat4 viewMatrix;
-  uniform mat4 projectionMatrix;
+attribute vec2 vertexPosition;
+attribute vec2 uvPosition;
 
-  varying vec2 uv;
+uniform mat4 modelMatrix;
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
 
-  void main(void) {
-    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 0.0, 1.0);
+varying vec2 uv;
 
-    uv = uvPosition;
-  }
+void main(void) {
+   gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 0.0, 1.0);
+
+   uv = uvPosition;
+}
 `
 
 var bitmapTextureFragmentShaderSource = `
-  #ifdef GL_ES
-    precision mediump float;
-  #endif
+#version 150
+precision mediump float;
 
-  uniform sampler2D palette;
-  uniform sampler2D bitmap;
+uniform sampler2D palette;
+uniform sampler2D bitmap;
 
-  varying vec2 uv;
+varying vec2 uv;
 
-  void main(void) {
-    vec4 pixel = texture2D(bitmap, uv);
+void main(void) {
+   vec4 pixel = texture2D(bitmap, uv);
 
-    if (pixel.a > 0.0) {
+   if (pixel.a > 0.0) {
       vec4 color = texture2D(palette, vec2(pixel.a, 0.5));
 
       gl_FragColor = color;
-    } else {
+   } else {
       discard;
-    }
-  }
+   }
+}
 `
 
 // BitmapTextureRenderer renders bitmapped textures based on a palette.
@@ -68,12 +72,11 @@ type BitmapTextureRenderer struct {
 // NewBitmapTextureRenderer returns a new instance of a texture renderer for bitmaps.
 func NewBitmapTextureRenderer(renderContext *RenderContext, paletteTexture Texture) *BitmapTextureRenderer {
 	gl := renderContext.OpenGl()
-	vertexShader, _ := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, bitmapTextureVertexShaderSource)
-	defer gl.DeleteShader(vertexShader)
-	fragmentShader, _ := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, bitmapTextureFragmentShaderSource)
-	defer gl.DeleteShader(fragmentShader)
-	program, _ := opengl.LinkNewProgram(gl, vertexShader, fragmentShader)
+	program, programErr := opengl.LinkNewStandardProgram(gl, bitmapTextureVertexShaderSource, bitmapTextureFragmentShaderSource)
 
+	if programErr != nil {
+		panic(fmt.Errorf("BitmapTextureRenderer shader failed: %v", programErr))
+	}
 	renderer := &BitmapTextureRenderer{
 		renderContext: renderContext,
 		program:       program,

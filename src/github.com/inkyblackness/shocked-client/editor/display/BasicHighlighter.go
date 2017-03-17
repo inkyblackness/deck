@@ -2,7 +2,6 @@ package display
 
 import (
 	"fmt"
-	"os"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
 
@@ -11,32 +10,34 @@ import (
 )
 
 var basicHighlighterVertexShaderSource = `
-  attribute vec3 vertexPosition;
+#version 150
+precision mediump float;
 
-  uniform mat4 modelMatrix;
-  uniform mat4 viewMatrix;
-  uniform mat4 projectionMatrix;
-  uniform vec4 inColor;
+attribute vec3 vertexPosition;
 
-  varying vec4 color;
+uniform mat4 modelMatrix;
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
+uniform vec4 inColor;
 
-  void main(void) {
-    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 1.0);
+varying vec4 color;
 
-    color = inColor;
-  }
+void main(void) {
+	gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 1.0);
+
+	color = inColor;
+}
 `
 
 var basicHighlighterFragmentShaderSource = `
-  #ifdef GL_ES
-    precision mediump float;
-  #endif
+#version 150
+precision mediump float;
 
-  varying vec4 color;
+varying vec4 color;
 
-  void main(void) {
-    gl_FragColor = color;
-  }
+void main(void) {
+	gl_FragColor = color;
+}
 `
 
 // BasicHighlighter draws a simple highlighting of a rectangular area.
@@ -56,19 +57,11 @@ type BasicHighlighter struct {
 // NewBasicHighlighter returns a new instance of BasicHighlighter.
 func NewBasicHighlighter(context *graphics.RenderContext) *BasicHighlighter {
 	gl := context.OpenGl()
-	vertexShader, err1 := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, basicHighlighterVertexShaderSource)
-	defer gl.DeleteShader(vertexShader)
-	fragmentShader, err2 := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, basicHighlighterFragmentShaderSource)
-	defer gl.DeleteShader(fragmentShader)
-	program, _ := opengl.LinkNewProgram(gl, vertexShader, fragmentShader)
+	program, programErr := opengl.LinkNewStandardProgram(gl, basicHighlighterVertexShaderSource, basicHighlighterFragmentShaderSource)
 
-	if err1 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 1:\n", err1)
+	if programErr != nil {
+		panic(fmt.Errorf("BasicHighlighter shader failed: %v", programErr))
 	}
-	if err2 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 2:\n", err2)
-	}
-
 	highlighter := &BasicHighlighter{
 		context: context,
 		program: program,

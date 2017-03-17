@@ -2,72 +2,73 @@ package display
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/opengl"
 )
 
 var gridVertexShaderSource = `
-  attribute vec3 vertexPosition;
+#version 150
+precision mediump float;
 
-  uniform mat4 viewMatrix;
-  uniform mat4 projectionMatrix;
+attribute vec3 vertexPosition;
 
-  varying vec4 color;
-  varying vec3 originalPosition;
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
 
-  void main(void) {
-    gl_Position = projectionMatrix * viewMatrix * vec4(vertexPosition, 1.0);
+varying vec4 color;
+varying vec3 originalPosition;
 
-    color = vec4(0.0, 0.1, 0.0, 0.6);
-    originalPosition = vertexPosition;
-  }
+void main(void) {
+   gl_Position = projectionMatrix * viewMatrix * vec4(vertexPosition, 1.0);
+
+   color = vec4(0.0, 0.1, 0.0, 0.6);
+   originalPosition = vertexPosition;
+}
 `
 
 var gridFragmentShaderSource = `
-  #ifdef GL_ES
-    precision mediump float;
-  #endif
+#version 150
+precision mediump float;
 
-  varying vec4 color;
-  varying vec3 originalPosition;
+varying vec4 color;
+varying vec3 originalPosition;
 
-  float modulo(float x, float y) {
-    return x - y * floor(x/y);
-  }
+float modulo(float x, float y) {
+   return x - y * floor(x/y);
+}
 
-  float nearGrid(float stepSize, float value) {
-    float remainder = modulo(value - (stepSize / 2.0), stepSize) * 2.0;
+float nearGrid(float stepSize, float value) {
+   float remainder = modulo(value - (stepSize / 2.0), stepSize) * 2.0;
 
-    if (remainder >= stepSize) {
+   if (remainder >= stepSize) {
       remainder = (stepSize * 2.0) - remainder;
-    }
+   }
 
-    return remainder / stepSize;
-  }
+   return remainder / stepSize;
+}
 
-  void main(void) {
-    float alphaX = nearGrid(256.0, originalPosition.x);
-    float alphaY = nearGrid(256.0, originalPosition.y);
-    bool beyondX = (originalPosition.x / 256.0) >= 64.0 || (originalPosition.x < 0.0);
-    bool beyondY = (originalPosition.y / 256.0) >= 64.0 || (originalPosition.y < 0.0);
-    float alpha = 0.0;
+void main(void) {
+   float alphaX = nearGrid(256.0, originalPosition.x);
+   float alphaY = nearGrid(256.0, originalPosition.y);
+   bool beyondX = (originalPosition.x / 256.0) >= 64.0 || (originalPosition.x < 0.0);
+   bool beyondY = (originalPosition.y / 256.0) >= 64.0 || (originalPosition.y < 0.0);
+   float alpha = 0.0;
 
-    if (!beyondX && !beyondY) {
-       alpha = max(alphaX, alphaY);
-    } else if (beyondX && !beyondY) {
-       alpha = alphaX;
-    } else if (beyondY && !beyondX) {
-       alpha = alphaY;
-    } else {
-       alpha = min(alphaX, alphaY);
-    }
+   if (!beyondX && !beyondY) {
+      alpha = max(alphaX, alphaY);
+   } else if (beyondX && !beyondY) {
+      alpha = alphaX;
+   } else if (beyondY && !beyondX) {
+      alpha = alphaY;
+   } else {
+      alpha = min(alphaX, alphaY);
+   }
 
-    alpha = pow(2.0, 10.0 * (alpha - 1.0));
+   alpha = pow(2.0, 10.0 * (alpha - 1.0));
 
-    gl_FragColor = vec4(color.rgb, color.a * alpha);
-  }
+   gl_FragColor = vec4(color.rgb, color.a * alpha);
+}
 `
 
 // GridRenderable renders a grid with transparent holes.
@@ -85,19 +86,11 @@ type GridRenderable struct {
 // NewGridRenderable returns a new instance of GridRenderable.
 func NewGridRenderable(context *graphics.RenderContext) *GridRenderable {
 	gl := context.OpenGl()
-	vertexShader, err1 := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, gridVertexShaderSource)
-	defer gl.DeleteShader(vertexShader)
-	fragmentShader, err2 := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, gridFragmentShaderSource)
-	defer gl.DeleteShader(fragmentShader)
-	program, _ := opengl.LinkNewProgram(gl, vertexShader, fragmentShader)
+	program, programErr := opengl.LinkNewStandardProgram(gl, gridVertexShaderSource, gridFragmentShaderSource)
 
-	if err1 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 1:\n", err1)
+	if programErr != nil {
+		panic(fmt.Errorf("GridRenderable shader failed: %v", programErr))
 	}
-	if err2 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 2:\n", err2)
-	}
-
 	renderable := &GridRenderable{
 		context:                 context,
 		program:                 program,

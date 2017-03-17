@@ -3,7 +3,6 @@ package display
 import (
 	"fmt"
 	"math"
-	"os"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
 
@@ -14,38 +13,40 @@ import (
 )
 
 var mapTileVertexShaderSource = `
-  attribute vec3 vertexPosition;
+#version 150
+precision mediump float;
 
-  uniform mat4 modelMatrix;
-  uniform mat4 viewMatrix;
-  uniform mat4 projectionMatrix;
-  uniform mat4 uvMatrix;
+attribute vec3 vertexPosition;
 
-  varying vec2 uv;
+uniform mat4 modelMatrix;
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
+uniform mat4 uvMatrix;
 
-  void main(void) {
-    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 1.0);
+varying vec2 uv;
 
-    uv = (uvMatrix * vec4(vertexPosition, 1.0)).xy;
-  }
+void main(void) {
+	gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 1.0);
+
+	uv = (uvMatrix * vec4(vertexPosition, 1.0)).xy;
+}
 `
 
 var mapTileFragmentShaderSource = `
-  #ifdef GL_ES
-    precision mediump float;
-  #endif
+#version 150
+precision mediump float;
 
-  uniform sampler2D palette;
-  uniform sampler2D bitmap;
+uniform sampler2D palette;
+uniform sampler2D bitmap;
 
-  varying vec2 uv;
+varying vec2 uv;
 
-  void main(void) {
-    vec4 pixel = texture2D(bitmap, uv);
-    vec4 color = texture2D(palette, vec2(pixel.a, 0.5));
+void main(void) {
+	vec4 pixel = texture2D(bitmap, uv);
+	vec4 color = texture2D(palette, vec2(pixel.a, 0.5));
 
-    gl_FragColor = color;
-  }
+	gl_FragColor = color;
+}
 `
 
 // TextureQuery is a getter function to retrieve the texture for the given
@@ -92,19 +93,11 @@ func init() {
 func NewTileTextureMapRenderable(context *graphics.RenderContext, paletteTexture graphics.Texture,
 	textureQuery TextureQuery) *TileTextureMapRenderable {
 	gl := context.OpenGl()
-	vertexShader, err1 := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, mapTileVertexShaderSource)
-	defer gl.DeleteShader(vertexShader)
-	fragmentShader, err2 := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, mapTileFragmentShaderSource)
-	defer gl.DeleteShader(fragmentShader)
-	program, _ := opengl.LinkNewProgram(gl, vertexShader, fragmentShader)
+	program, programErr := opengl.LinkNewStandardProgram(gl, mapTileVertexShaderSource, mapTileFragmentShaderSource)
 
-	if err1 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 1:\n", err1)
+	if programErr != nil {
+		panic(fmt.Errorf("TileTextureMapRenderable shader failed: %v", programErr))
 	}
-	if err2 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 2:\n", err2)
-	}
-
 	renderable := &TileTextureMapRenderable{
 		context: context,
 		program: program,

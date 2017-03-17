@@ -2,7 +2,6 @@ package display
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/inkyblackness/shocked-model"
 
@@ -11,29 +10,31 @@ import (
 )
 
 var mapTileGridVertexShaderSource = `
-  attribute vec3 vertexPosition;
+#version 150
+precision mediump float;
 
-  uniform mat4 viewMatrix;
-  uniform mat4 projectionMatrix;
+attribute vec3 vertexPosition;
 
-  varying float height;
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
 
-  void main(void) {
-    gl_Position = projectionMatrix * viewMatrix * vec4(vertexPosition.xy, 0.0, 1.0);
-    height = vertexPosition.z;
-  }
+varying float height;
+
+void main(void) {
+	gl_Position = projectionMatrix * viewMatrix * vec4(vertexPosition.xy, 0.0, 1.0);
+	height = vertexPosition.z;
+}
 `
 
 var mapTileGridFragmentShaderSource = `
-  #ifdef GL_ES
-    precision mediump float;
-  #endif
+#version 150
+precision mediump float;
 
-  varying float height;
+varying float height;
 
-  void main(void) {
-    gl_FragColor = vec4(0.0, 0.8, 0.0, height);
-  }
+void main(void) {
+	gl_FragColor = vec4(0.0, 0.8, 0.0, height);
+}
 `
 
 // TileGridMapRenderable is a renderable for the tile grid.
@@ -53,19 +54,11 @@ type TileGridMapRenderable struct {
 // NewTileGridMapRenderable returns a new instance of a renderable for tile grids.
 func NewTileGridMapRenderable(context *graphics.RenderContext) *TileGridMapRenderable {
 	gl := context.OpenGl()
-	vertexShader, err1 := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, mapTileGridVertexShaderSource)
-	defer gl.DeleteShader(vertexShader)
-	fragmentShader, err2 := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, mapTileGridFragmentShaderSource)
-	defer gl.DeleteShader(fragmentShader)
-	program, _ := opengl.LinkNewProgram(gl, vertexShader, fragmentShader)
+	program, programErr := opengl.LinkNewStandardProgram(gl, mapTileGridVertexShaderSource, mapTileGridFragmentShaderSource)
 
-	if err1 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 1:\n", err1)
+	if programErr != nil {
+		panic(fmt.Errorf("TileGridMapRenderable shader failed: %v", programErr))
 	}
-	if err2 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 2:\n", err2)
-	}
-
 	renderable := &TileGridMapRenderable{
 		context:                 context,
 		program:                 program,

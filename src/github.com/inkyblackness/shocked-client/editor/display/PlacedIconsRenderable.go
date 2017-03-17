@@ -2,7 +2,6 @@ package display
 
 import (
 	"fmt"
-	"os"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
 
@@ -11,42 +10,44 @@ import (
 )
 
 var placedIconsVertexShaderSource = `
-  attribute vec3 vertexPosition;
-  attribute vec3 uvPosition;
+#version 150
+precision mediump float;
 
-  uniform mat4 modelMatrix;
-  uniform mat4 viewMatrix;
-  uniform mat4 projectionMatrix;
+attribute vec3 vertexPosition;
+attribute vec3 uvPosition;
 
-  varying vec2 uv;
+uniform mat4 modelMatrix;
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
 
-  void main(void) {
-    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 1.0);
+varying vec2 uv;
 
-    uv = uvPosition.xy;
-  }
+void main(void) {
+	gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 1.0);
+
+	uv = uvPosition.xy;
+}
 `
 
 var placedIconsFragmentShaderSource = `
-  #ifdef GL_ES
-    precision mediump float;
-  #endif
+#version 150
+precision mediump float;
 
-  uniform sampler2D palette;
-  uniform sampler2D bitmap;
+uniform sampler2D palette;
+uniform sampler2D bitmap;
 
-  varying vec2 uv;
+varying vec2 uv;
 
-  void main(void) {
-    vec4 pixel = texture2D(bitmap, uv);
-    vec4 color = texture2D(palette, vec2(pixel.a, 0.5));
+void main(void) {
+	vec4 pixel = texture2D(bitmap, uv);
+	vec4 color = texture2D(palette, vec2(pixel.a, 0.5));
 
-    if (pixel.a > 0.0) {
-      gl_FragColor = color;
-    } else {
-    	discard;
-    }
-  }
+	if (pixel.a > 0.0) {
+		gl_FragColor = color;
+	} else {
+		discard;
+	}
+}
 `
 
 // PlacedIconsRenderable is a renderable for simple bitmaps.
@@ -72,19 +73,11 @@ type PlacedIconsRenderable struct {
 // NewPlacedIconsRenderable returns a new instance of a simple bitmap renderable
 func NewPlacedIconsRenderable(context *graphics.RenderContext, paletteTexture graphics.Texture) *PlacedIconsRenderable {
 	gl := context.OpenGl()
-	vertexShader, err1 := opengl.CompileNewShader(gl, opengl.VERTEX_SHADER, placedIconsVertexShaderSource)
-	defer gl.DeleteShader(vertexShader)
-	fragmentShader, err2 := opengl.CompileNewShader(gl, opengl.FRAGMENT_SHADER, placedIconsFragmentShaderSource)
-	defer gl.DeleteShader(fragmentShader)
-	program, _ := opengl.LinkNewProgram(gl, vertexShader, fragmentShader)
+	program, programErr := opengl.LinkNewStandardProgram(gl, placedIconsVertexShaderSource, placedIconsFragmentShaderSource)
 
-	if err1 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 1:\n", err1)
+	if programErr != nil {
+		panic(fmt.Errorf("PlacedIconsRenderable shader failed: %v", programErr))
 	}
-	if err2 != nil {
-		fmt.Fprintf(os.Stderr, "Failed to compile shader 2:\n", err2)
-	}
-
 	renderable := &PlacedIconsRenderable{
 		context: context,
 		program: program,
