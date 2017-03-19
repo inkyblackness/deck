@@ -12,7 +12,7 @@ var fillRectVertexShaderSource = `
 #version 150
 precision mediump float;
 
-attribute vec2 vertexPosition;
+in vec2 vertexPosition;
 
 uniform mat4 projectionMatrix;
 
@@ -26,9 +26,10 @@ var fillRectFragmentShaderSource = `
 precision mediump float;
 
 uniform vec4 color;
+out vec4 fragColor;
 
 void main(void) {
-	gl_FragColor = color;
+	fragColor = color;
 }
 `
 

@@ -13,19 +13,14 @@ var basicHighlighterVertexShaderSource = `
 #version 150
 precision mediump float;
 
-attribute vec3 vertexPosition;
+in vec3 vertexPosition;
 
 uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
-uniform vec4 inColor;
-
-varying vec4 color;
 
 void main(void) {
 	gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 1.0);
-
-	color = inColor;
 }
 `
 
@@ -33,10 +28,11 @@ var basicHighlighterFragmentShaderSource = `
 #version 150
 precision mediump float;
 
-varying vec4 color;
+uniform vec4 inColor;
+out vec4 fragColor;
 
 void main(void) {
-	gl_FragColor = color;
+	fragColor = inColor;
 }
 `
 

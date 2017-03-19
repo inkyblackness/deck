@@ -15,9 +15,9 @@ func usage() string {
 	return Title + `
 
 Usage:
-   shocked-client-console --path=<datadir>...
-   shocked-client-console -h | --help
-   shocked-client-console --version
+   shocked-client --path=<datadir>...
+   shocked-client -h | --help
+   shocked-client --version
 
 Options:
    -h --help             Show this screen.

@@ -11,18 +11,18 @@ var gridVertexShaderSource = `
 #version 150
 precision mediump float;
 
-attribute vec3 vertexPosition;
+in vec3 vertexPosition;
 
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 
-varying vec4 color;
-varying vec3 originalPosition;
+out vec4 gridColor;
+out vec3 originalPosition;
 
 void main(void) {
    gl_Position = projectionMatrix * viewMatrix * vec4(vertexPosition, 1.0);
 
-   color = vec4(0.0, 0.1, 0.0, 0.6);
+   gridColor = vec4(0.0, 0.1, 0.0, 0.6);
    originalPosition = vertexPosition;
 }
 `
@@ -31,8 +31,10 @@ var gridFragmentShaderSource = `
 #version 150
 precision mediump float;
 
-varying vec4 color;
-varying vec3 originalPosition;
+in vec4 gridColor;
+in vec3 originalPosition;
+
+out vec4 fragColor;
 
 float modulo(float x, float y) {
    return x - y * floor(x/y);
@@ -67,7 +69,7 @@ void main(void) {
 
    alpha = pow(2.0, 10.0 * (alpha - 1.0));
 
-   gl_FragColor = vec4(color.rgb, color.a * alpha);
+   fragColor = vec4(gridColor.rgb, gridColor.a * alpha);
 }
 `
 

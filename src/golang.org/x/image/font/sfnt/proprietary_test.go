@@ -19,14 +19,14 @@ End User License Agreement (EULA) and a CAB format decoder. These tests assume
 that such fonts have already been installed. You may need to specify the
 directories for these fonts:
 
-go test golang.org/x/image/font/sfnt -args -proprietary -adobeDir=/foo/bar/aFonts -microsoftDir=/foo/bar/mFonts
+go test golang.org/x/image/font/sfnt -args -proprietary -adobeDir=$HOME/fonts/adobe -appleDir=$HOME/fonts/apple -microsoftDir=$HOME/fonts/microsoft
 
 To only run those tests for the Microsoft fonts:
 
-go test golang.org/x/image/font/sfnt -test.run=ProprietaryMicrosoft -args -proprietary
+go test golang.org/x/image/font/sfnt -test.run=ProprietaryMicrosoft -args -proprietary etc
 */
 
-// TODO: add Apple system fonts? Google fonts (Droid? Noto?)? Emoji fonts?
+// TODO: add Google fonts (Droid? Noto?)? Emoji fonts?
 
 // TODO: enable Apple/Microsoft tests by default on Darwin/Windows?
 
@@ -35,6 +35,8 @@ import (
 	"flag"
 	"io/ioutil"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"golang.org/x/image/font"
@@ -58,6 +60,16 @@ var (
 		// $HOME/adobe-fonts, and pass that as the -adobeDir flag here.
 		"",
 		"directory name for the Adobe proprietary fonts",
+	)
+
+	appleDir = flag.String(
+		"appleDir",
+		// This needs to be set explicitly. These fonts come with macOS, which
+		// is widely available but not freely available.
+		//
+		// On a Mac, set this to "/System/Library/Fonts/".
+		"",
+		"directory name for the Apple proprietary fonts",
 	)
 
 	microsoftDir = flag.String(
@@ -87,8 +99,32 @@ func TestProprietaryAdobeSourceSansProTTF(t *testing.T) {
 	testProprietary(t, "adobe", "SourceSansPro-Regular.ttf", 1800, 54)
 }
 
+func TestProprietaryAppleAppleSymbols(t *testing.T) {
+	testProprietary(t, "apple", "Apple Symbols.ttf", 4600, -1)
+}
+
+func TestProprietaryAppleGeezaPro0(t *testing.T) {
+	testProprietary(t, "apple", "GeezaPro.ttc?0", 1700, -1)
+}
+
+func TestProprietaryAppleGeezaPro1(t *testing.T) {
+	testProprietary(t, "apple", "GeezaPro.ttc?1", 1700, -1)
+}
+
+func TestProprietaryAppleHiragino0(t *testing.T) {
+	testProprietary(t, "apple", "ヒラギノ角ゴシック W0.ttc?0", 9000, 6)
+}
+
+func TestProprietaryAppleHiragino1(t *testing.T) {
+	testProprietary(t, "apple", "ヒラギノ角ゴシック W0.ttc?1", 9000, 6)
+}
+
 func TestProprietaryMicrosoftArial(t *testing.T) {
-	testProprietary(t, "microsoft", "Arial.ttf", 1200, 599)
+	testProprietary(t, "microsoft", "Arial.ttf", 1200, -1)
+}
+
+func TestProprietaryMicrosoftArialAsACollection(t *testing.T) {
+	testProprietary(t, "microsoft", "Arial.ttf?0", 1200, -1)
 }
 
 func TestProprietaryMicrosoftComicSansMS(t *testing.T) {
@@ -96,7 +132,7 @@ func TestProprietaryMicrosoftComicSansMS(t *testing.T) {
 }
 
 func TestProprietaryMicrosoftTimesNewRoman(t *testing.T) {
-	testProprietary(t, "microsoft", "Times_New_Roman.ttf", 1200, 423)
+	testProprietary(t, "microsoft", "Times_New_Roman.ttf", 1200, -1)
 }
 
 func TestProprietaryMicrosoftWebdings(t *testing.T) {
@@ -117,27 +153,55 @@ func testProprietary(t *testing.T, proprietor, filename string, minNumGlyphs, fi
 		t.Skip("skipping proprietary font test")
 	}
 
-	file, err := []byte(nil), error(nil)
+	basename, fontIndex, err := filename, -1, error(nil)
+	if i := strings.IndexByte(filename, '?'); i >= 0 {
+		fontIndex, err = strconv.Atoi(filename[i+1:])
+		if err != nil {
+			t.Fatalf("could not parse collection font index from filename %q", filename)
+		}
+		basename = filename[:i]
+	}
+
+	dir := ""
 	switch proprietor {
 	case "adobe":
-		file, err = ioutil.ReadFile(filepath.Join(*adobeDir, filename))
-		if err != nil {
-			t.Fatalf("%v\nPerhaps you need to set the -adobeDir=%v flag?", err, *adobeDir)
-		}
+		dir = *adobeDir
+	case "apple":
+		dir = *appleDir
 	case "microsoft":
-		file, err = ioutil.ReadFile(filepath.Join(*microsoftDir, filename))
-		if err != nil {
-			t.Fatalf("%v\nPerhaps you need to set the -microsoftDir=%v flag?", err, *microsoftDir)
-		}
+		dir = *microsoftDir
 	default:
 		panic("unreachable")
 	}
-	f, err := Parse(file)
+	file, err := ioutil.ReadFile(filepath.Join(dir, basename))
 	if err != nil {
-		t.Fatalf("Parse: %v", err)
+		t.Fatalf("%v\nPerhaps you need to set the -%sDir flag?", err, proprietor)
 	}
-	ppem := fixed.Int26_6(f.UnitsPerEm())
 	qualifiedFilename := proprietor + "/" + filename
+
+	f := (*Font)(nil)
+	if fontIndex >= 0 {
+		c, err := ParseCollection(file)
+		if err != nil {
+			t.Fatalf("ParseCollection: %v", err)
+		}
+		if want, ok := proprietaryNumFonts[qualifiedFilename]; ok {
+			if got := c.NumFonts(); got != want {
+				t.Fatalf("NumFonts: got %d, want %d", got, want)
+			}
+		}
+		f, err = c.Font(fontIndex)
+		if err != nil {
+			t.Fatalf("Font: %v", err)
+		}
+	} else {
+		f, err = Parse(file)
+		if err != nil {
+			t.Fatalf("Parse: %v", err)
+		}
+	}
+
+	ppem := fixed.Int26_6(f.UnitsPerEm())
 	var buf Buffer
 
 	// Some of the tests below, such as which glyph index a particular rune
@@ -147,12 +211,21 @@ func testProprietary(t *testing.T, proprietor, filename string, minNumGlyphs, fi
 	// message, but don't automatically fail (i.e. dont' call t.Fatalf).
 	gotVersion, err := f.Name(&buf, NameIDVersion)
 	if err != nil {
-		t.Fatalf("Name: %v", err)
+		t.Fatalf("Name(Version): %v", err)
 	}
 	wantVersion := proprietaryVersions[qualifiedFilename]
 	if gotVersion != wantVersion {
 		t.Logf("font version provided differs from the one the tests were written against:"+
 			"\ngot  %q\nwant %q", gotVersion, wantVersion)
+	}
+
+	gotFull, err := f.Name(&buf, NameIDFull)
+	if err != nil {
+		t.Fatalf("Name(Full): %v", err)
+	}
+	wantFull := proprietaryFullNames[qualifiedFilename]
+	if gotFull != wantFull {
+		t.Fatalf("Name(Full):\ngot  %q\nwant %q", gotFull, wantFull)
 	}
 
 	numGlyphs := f.NumGlyphs()
@@ -231,6 +304,15 @@ kernLoop:
 	}
 }
 
+// proprietaryNumFonts holds the expected number of fonts in each collection,
+// or 1 for a single font. It is not necessarily an exhaustive list of all
+// proprietary fonts tested.
+var proprietaryNumFonts = map[string]int{
+	"apple/ヒラギノ角ゴシック W0.ttc?0": 2,
+	"apple/ヒラギノ角ゴシック W0.ttc?1": 2,
+	"microsoft/Arial.ttf?0":      1,
+}
+
 // proprietaryVersions holds the expected version string of each proprietary
 // font tested. If third parties such as Adobe or Microsoft update their fonts,
 // and the tests subsequently fail, these versions should be updated too.
@@ -245,10 +327,39 @@ var proprietaryVersions = map[string]string{
 	"adobe/SourceSansPro-Regular.otf":   "Version 2.020;PS 2.0;hotconv 1.0.86;makeotf.lib2.5.63406",
 	"adobe/SourceSansPro-Regular.ttf":   "Version 2.020;PS 2.000;hotconv 1.0.86;makeotf.lib2.5.63406",
 
+	"apple/Apple Symbols.ttf":    "12.0d3e10",
+	"apple/GeezaPro.ttc?0":       "12.0d1e3",
+	"apple/GeezaPro.ttc?1":       "12.0d1e3",
+	"apple/ヒラギノ角ゴシック W0.ttc?0": "11.0d7e1",
+	"apple/ヒラギノ角ゴシック W0.ttc?1": "11.0d7e1",
+
 	"microsoft/Arial.ttf":           "Version 2.82",
+	"microsoft/Arial.ttf?0":         "Version 2.82",
 	"microsoft/Comic_Sans_MS.ttf":   "Version 2.10",
 	"microsoft/Times_New_Roman.ttf": "Version 2.82",
 	"microsoft/Webdings.ttf":        "Version 1.03",
+}
+
+// proprietaryFullNames holds the expected full name of each proprietary font
+// tested.
+var proprietaryFullNames = map[string]string{
+	"adobe/SourceCodePro-Regular.otf":   "Source Code Pro",
+	"adobe/SourceCodePro-Regular.ttf":   "Source Code Pro",
+	"adobe/SourceHanSansSC-Regular.otf": "Source Han Sans SC Regular",
+	"adobe/SourceSansPro-Regular.otf":   "Source Sans Pro",
+	"adobe/SourceSansPro-Regular.ttf":   "Source Sans Pro",
+
+	"apple/Apple Symbols.ttf":    "Apple Symbols",
+	"apple/GeezaPro.ttc?0":       "Geeza Pro Regular",
+	"apple/GeezaPro.ttc?1":       "Geeza Pro Bold",
+	"apple/ヒラギノ角ゴシック W0.ttc?0": "Hiragino Sans W0",
+	"apple/ヒラギノ角ゴシック W0.ttc?1": ".Hiragino Kaku Gothic Interface W0",
+
+	"microsoft/Arial.ttf":           "Arial",
+	"microsoft/Arial.ttf?0":         "Arial",
+	"microsoft/Comic_Sans_MS.ttf":   "Comic Sans MS",
+	"microsoft/Times_New_Roman.ttf": "Times New Roman",
+	"microsoft/Webdings.ttf":        "Webdings",
 }
 
 // proprietaryGlyphIndexTestCases hold a sample of each font's rune to glyph
@@ -533,6 +644,42 @@ var proprietaryGlyphTestCases = map[string]map[rune][]Segment{
 			translate(339, 650, lineTo(591, 1474)),
 			translate(339, 650, lineTo(371, 1194)),
 			translate(339, 650, lineTo(222, 1194)),
+		},
+
+		'﴾': { // U+FD3E ORNATE LEFT PARENTHESIS.
+			// - contour #0
+			moveTo(560, -384),
+			lineTo(516, -429),
+			quadTo(412, -304, 361, -226),
+			quadTo(258, -68, 201, 106),
+			quadTo(127, 334, 127, 595),
+			quadTo(127, 845, 201, 1069),
+			quadTo(259, 1246, 361, 1404),
+			quadTo(414, 1487, 514, 1608),
+			lineTo(560, 1566),
+			quadTo(452, 1328, 396, 1094),
+			quadTo(336, 845, 336, 603),
+			quadTo(336, 359, 370, 165),
+			quadTo(398, 8, 454, -142),
+			quadTo(482, -217, 560, -384),
+		},
+
+		'﴿': { // U+FD3F ORNATE RIGHT PARENTHESIS
+			// - contour #0
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, moveTo(560, -384)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, lineTo(516, -429)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(412, -304, 361, -226)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(258, -68, 201, 106)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(127, 334, 127, 595)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(127, 845, 201, 1069)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(259, 1246, 361, 1404)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(414, 1487, 514, 1608)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, lineTo(560, 1566)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(452, 1328, 396, 1094)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(336, 845, 336, 603)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(336, 359, 370, 165)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(398, 8, 454, -142)),
+			transform(-1<<14, 0, 0, +1<<14, 653, 0, quadTo(482, -217, 560, -384)),
 		},
 	},
 }

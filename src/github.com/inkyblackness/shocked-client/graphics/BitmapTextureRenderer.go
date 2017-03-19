@@ -12,14 +12,14 @@ var bitmapTextureVertexShaderSource = `
 #version 150
 precision mediump float;
 
-attribute vec2 vertexPosition;
-attribute vec2 uvPosition;
+in vec2 vertexPosition;
+in vec2 uvPosition;
 
 uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 
-varying vec2 uv;
+out vec2 uv;
 
 void main(void) {
    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 0.0, 1.0);
@@ -35,15 +35,14 @@ precision mediump float;
 uniform sampler2D palette;
 uniform sampler2D bitmap;
 
-varying vec2 uv;
+in vec2 uv;
+out vec4 fragColor;
 
 void main(void) {
    vec4 pixel = texture2D(bitmap, uv);
 
    if (pixel.a > 0.0) {
-      vec4 color = texture2D(palette, vec2(pixel.a, 0.5));
-
-      gl_FragColor = color;
+      fragColor = texture2D(palette, vec2(pixel.a, 0.5));
    } else {
       discard;
    }

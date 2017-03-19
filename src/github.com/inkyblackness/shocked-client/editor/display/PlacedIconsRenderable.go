@@ -13,14 +13,14 @@ var placedIconsVertexShaderSource = `
 #version 150
 precision mediump float;
 
-attribute vec3 vertexPosition;
-attribute vec3 uvPosition;
+in vec3 vertexPosition;
+in vec3 uvPosition;
 
 uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 
-varying vec2 uv;
+out vec2 uv;
 
 void main(void) {
 	gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vertexPosition, 1.0);
@@ -36,14 +36,14 @@ precision mediump float;
 uniform sampler2D palette;
 uniform sampler2D bitmap;
 
-varying vec2 uv;
+in vec2 uv;
+out vec4 fragColor;
 
 void main(void) {
 	vec4 pixel = texture2D(bitmap, uv);
-	vec4 color = texture2D(palette, vec2(pixel.a, 0.5));
 
 	if (pixel.a > 0.0) {
-		gl_FragColor = color;
+		fragColor = texture2D(palette, vec2(pixel.a, 0.5));
 	} else {
 		discard;
 	}

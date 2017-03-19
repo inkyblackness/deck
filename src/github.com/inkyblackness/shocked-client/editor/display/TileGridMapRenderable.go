@@ -13,12 +13,12 @@ var mapTileGridVertexShaderSource = `
 #version 150
 precision mediump float;
 
-attribute vec3 vertexPosition;
+in vec3 vertexPosition;
 
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 
-varying float height;
+out float height;
 
 void main(void) {
 	gl_Position = projectionMatrix * viewMatrix * vec4(vertexPosition.xy, 0.0, 1.0);
@@ -30,10 +30,11 @@ var mapTileGridFragmentShaderSource = `
 #version 150
 precision mediump float;
 
-varying float height;
+in float height;
+out vec4 fragColor;
 
 void main(void) {
-	gl_FragColor = vec4(0.0, 0.8, 0.0, height);
+	fragColor = vec4(0.0, 0.8, 0.0, height);
 }
 `
 
