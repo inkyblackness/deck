@@ -5,4 +5,4 @@ import (
 )
 
 var baseHardware = interpreters.New().
-	With("Version", 0, 1)
+	With("Version", 0, 1).As(interpreters.RangedValue(0, 3))

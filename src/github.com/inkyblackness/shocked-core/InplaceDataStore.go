@@ -92,6 +92,24 @@ func (inplace *InplaceDataStore) Font(projectID string, fontID int,
 	})
 }
 
+// GameObjects implements the model.DataStore interface
+func (inplace *InplaceDataStore) GameObjects(projectID string,
+	onSuccess func(objects []model.GameObject), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			gameObjects := project.GameObjects()
+			objects := gameObjects.Objects()
+
+			inplace.out(func() { onSuccess(objects) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
 // GameObjectIcon implements the model.DataStore interface
 func (inplace *InplaceDataStore) GameObjectIcon(projectID string, class, subclass, objType int,
 	onSuccess func(bmp *model.RawBitmap), onFailure model.FailureFunc) {
@@ -380,6 +398,68 @@ func (inplace *InplaceDataStore) LevelObjects(projectID string, archiveID string
 			entity.Table = level.Objects()
 
 			inplace.out(func() { onSuccess(&entity) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// AddLevelObject implements the model.DataStore interface
+func (inplace *InplaceDataStore) AddLevelObject(projectID string, archiveID string, levelID int, template model.LevelObjectTemplate,
+	onSuccess func(object model.LevelObject), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			level := project.Archive().Level(levelID)
+			var entity model.LevelObject
+
+			entity, err = level.AddObject(&template)
+			if err == nil {
+				inplace.out(func() { onSuccess(entity) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// RemoveLevelObject implements the model.DataStore interface
+func (inplace *InplaceDataStore) RemoveLevelObject(projectID string, archiveID string, levelID int, objectID int,
+	onSuccess func(), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			level := project.Archive().Level(levelID)
+
+			err = level.RemoveObject(objectID)
+			if err == nil {
+				inplace.out(func() { onSuccess() })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetLevelObject implements the model.DataStore interface
+func (inplace *InplaceDataStore) SetLevelObject(projectID string, archiveID string, levelID int, objectID int,
+	properties *model.LevelObjectProperties, onSuccess func(properties *model.LevelObjectProperties), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			level := project.Archive().Level(levelID)
+			var newProperties model.LevelObjectProperties
+
+			newProperties, err = level.SetObject(objectID, properties)
+			if err == nil {
+				inplace.out(func() { onSuccess(&newProperties) })
+			}
 		}
 		if err != nil {
 			inplace.out(onFailure)

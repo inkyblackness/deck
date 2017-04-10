@@ -6,4 +6,5 @@ type Factory interface {
 	ForTextButton() *TextButtonBuilder
 	ForComboBox() *ComboBoxBuilder
 	ForTextureSelector() *TextureSelectorBuilder
+	ForSlider() *SliderBuilder
 }

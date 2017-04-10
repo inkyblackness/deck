@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 
@@ -135,9 +136,13 @@ func (adapter *LevelAdapter) RequestLevelTexturesChange(textureIDs []int) {
 		textureIDs, adapter.onLevelTextures, adapter.context.simpleStoreFailure("SetLevelTextures"))
 }
 
+func (adapter *LevelAdapter) levelObjectsMap() map[int]*LevelObject {
+	return *adapter.levelObjects.get().(*map[int]*LevelObject)
+}
+
 // LevelObjects returns a sorted set of objects that match the provided filter.
 func (adapter *LevelAdapter) LevelObjects(filter func(*LevelObject) bool) []*LevelObject {
-	objects := *adapter.levelObjects.get().(*map[int]*LevelObject)
+	objects := adapter.levelObjectsMap()
 	indexList := make([]int, 0, len(objects))
 
 	for key, obj := range objects {
@@ -166,6 +171,76 @@ func (adapter *LevelAdapter) onLevelObjects(objects *model.LevelObjects) {
 		newMap[obj.Index()] = obj
 	}
 	adapter.levelObjects.set(&newMap)
+}
+
+// RequestNewObject requests to add a new object at the given coordinate.
+func (adapter *LevelAdapter) RequestNewObject(worldX, worldY float32, objectID ObjectID) {
+	integerX, integerY := int(worldX), int(worldY)
+	tileX, fineX := integerX>>8, integerX&0xFF
+	tileY, fineY := integerY>>8, integerY&0xFF
+
+	if (tileX >= 0) && (tileX < 64) && (tileY >= 0) && (tileY < 64) {
+		tile := adapter.tileMap.Tile(TileCoordinateOf(tileX, tileY))
+		z := int(*tile.Properties().FloorHeight) // TODO: take level.heightShift into account
+
+		template := model.LevelObjectTemplate{
+			Class:    objectID.Class(),
+			Subclass: objectID.Subclass(),
+			Type:     objectID.Type(),
+
+			TileX: tileX,
+			FineX: fineX,
+			TileY: tileY,
+			FineY: fineY,
+			Z:     z}
+
+		adapter.store.AddLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), adapter.storeLevelID(),
+			template, adapter.onLevelObjectAdded,
+			adapter.context.simpleStoreFailure("AddLevelObject"))
+	}
+}
+
+func (adapter *LevelAdapter) onLevelObjectAdded(object model.LevelObject) {
+	objects := adapter.levelObjectsMap()
+	obj := newLevelObject(&object)
+	objects[obj.Index()] = obj
+	adapter.levelObjects.notifyObservers()
+}
+
+// RequestRemoveObjects requests to remove all identified objects.
+func (adapter *LevelAdapter) RequestRemoveObjects(objectIndices []int) {
+	levelID := adapter.storeLevelID()
+	objects := adapter.levelObjectsMap()
+	successHandler := func(objectIndex int) func() {
+		return func() {
+			delete(objects, objectIndex)
+			adapter.levelObjects.notifyObservers()
+		}
+	}
+
+	for _, objectIndex := range objectIndices {
+		adapter.store.RemoveLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
+			objectIndex, successHandler(objectIndex),
+			adapter.context.simpleStoreFailure(fmt.Sprintf("RemoveLevelObject %v", objectIndex)))
+	}
+}
+
+// RequestObjectPropertiesChange requests to modify identified objects.
+func (adapter *LevelAdapter) RequestObjectPropertiesChange(objectIndices []int, properties *model.LevelObjectProperties) {
+	levelID := adapter.storeLevelID()
+	objects := adapter.levelObjectsMap()
+	successHandler := func(objectIndex int) func(newProperties *model.LevelObjectProperties) {
+		return func(newProperties *model.LevelObjectProperties) {
+			objects[objectIndex].onPropertiesChanged(newProperties)
+			adapter.levelObjects.notifyObservers()
+		}
+	}
+
+	for _, objectIndex := range objectIndices {
+		adapter.store.SetLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
+			objectIndex, properties, successHandler(objectIndex),
+			adapter.context.simpleStoreFailure(fmt.Sprintf("SetLevelObject %v", objectIndex)))
+	}
 }
 
 // RequestTilePropertyChange requests the tiles at given coordinates to set provided properties.

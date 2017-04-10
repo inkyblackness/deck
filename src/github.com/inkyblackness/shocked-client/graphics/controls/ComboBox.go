@@ -48,6 +48,7 @@ func (box *ComboBox) Dispose() {
 func (box *ComboBox) SetItems(items []ComboBoxItem) {
 	box.hideList()
 	box.items = items
+	box.listStartIndex = 0
 }
 
 // SetSelectedItem changes what is currently selected. Does not fire change handler.

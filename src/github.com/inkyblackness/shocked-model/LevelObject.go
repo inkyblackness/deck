@@ -4,13 +4,8 @@ package model
 type LevelObject struct {
 	Identifiable
 
-	Class    int `json:"class"`
-	Subclass int `json:"subclass"`
-	Type     int `json:"type"`
-
-	BaseProperties LevelObjectBaseProperties `json:"properties"`
-
-	ClassData []int `json:"classData"`
+	Class      int                   `json:"class"`
+	Properties LevelObjectProperties `json:"properties"`
 
 	Links []Link `json:"links"`
 }

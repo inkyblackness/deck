@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/inkyblackness/shocked-model"
 )
@@ -36,7 +37,9 @@ func (adapter *ObjectsAdapter) clear() {
 }
 
 func (adapter *ObjectsAdapter) refresh() {
-	// TODO: query all object properties (names)
+	adapter.store.GameObjects(adapter.context.ActiveProjectID(),
+		adapter.onNewGameObjects,
+		adapter.context.simpleStoreFailure("GameObjects"))
 }
 
 func (adapter *ObjectsAdapter) objectMap() map[ObjectID]*GameObject {
@@ -65,6 +68,23 @@ func (adapter *ObjectsAdapter) OnObjectsChanged(callback func()) {
 	adapter.objects.addObserver(callback)
 }
 
+func (adapter *ObjectsAdapter) onNewGameObjects(objects []model.GameObject) {
+	objectMap := adapter.objectMap()
+
+	for _, rawObject := range objects {
+		objID := MakeObjectID(rawObject.Class, rawObject.Subclass, rawObject.Type)
+		editorObject := &GameObject{
+			id: objID}
+
+		for i := 0; i < model.LanguageCount; i++ {
+			editorObject.shortName[i] = *rawObject.Properties.ShortName[i]
+			editorObject.longName[i] = *rawObject.Properties.LongName[i]
+		}
+		objectMap[objID] = editorObject
+	}
+	adapter.objects.notifyObservers()
+}
+
 // Icons returns a bitmap container for the objects. The key is based on the ObjectIDs.
 func (adapter *ObjectsAdapter) Icons() *Bitmaps {
 	return adapter.icons
@@ -78,4 +98,16 @@ func (adapter *ObjectsAdapter) RequestIcon(id ObjectID) {
 			adapter.icons.setRawBitmap(id.ToInt(), bmp)
 		},
 		adapter.context.simpleStoreFailure(fmt.Sprintf("GameObjectIcon[%v]", id)))
+}
+
+// ObjectsOfClass returns all objects matching the requested class.
+func (adapter *ObjectsAdapter) ObjectsOfClass(class int) (objects []*GameObject) {
+	for _, object := range adapter.objectMap() {
+		if object.id.Class() == class {
+			objects = append(objects, object)
+		}
+	}
+	sort.Slice(objects, func(a int, b int) bool { return objects[a].id.ToInt() < objects[b].id.ToInt() })
+
+	return
 }

@@ -7,10 +7,10 @@ import (
 var baseContainer = interpreters.New()
 
 var standardContainer = baseContainer.
-	With("ObjectIndex1", 0, 2).
-	With("ObjectIndex2", 2, 2).
-	With("ObjectIndex3", 4, 2).
-	With("ObjectIndex4", 6, 2)
+	With("ObjectIndex1", 0, 2).As(interpreters.ObjectIndex()).
+	With("ObjectIndex2", 2, 2).As(interpreters.ObjectIndex()).
+	With("ObjectIndex3", 4, 2).As(interpreters.ObjectIndex()).
+	With("ObjectIndex4", 6, 2).As(interpreters.ObjectIndex())
 
 var crate = standardContainer.
 	With("Width", 8, 1).

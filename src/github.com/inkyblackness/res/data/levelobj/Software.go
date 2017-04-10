@@ -8,20 +8,27 @@ var baseSoftware = interpreters.New()
 
 var multimediaFile = baseSoftware.
 	With("ID", 1, 1).
-	With("Type", 2, 1)
+	With("Type", 2, 1).As(interpreters.EnumValue(map[uint32]string{0: "E-Mail", 1: "Log", 2: "Data"}))
 
 var cyberspaceProgram = baseSoftware.
-	With("Version", 0, 1)
+	With("Version", 0, 1).As(interpreters.RangedValue(1, 9))
 
 var funPack = baseSoftware.
-	With("GameMask", 0, 1)
+	With("GameMask", 0, 1).As(interpreters.EnumValue(map[uint32]string{
+	0x01: "Ping",
+	0x02: "Eel Zapper",
+	0x04: "Road",
+	0x08: "Botbounce",
+	0x10: "15",
+	0x20: "TriopToe",
+	0x80: "Wing 0"}))
 
 var baseCyberspaceScenery = interpreters.New()
 
 var scenerySoftware = baseCyberspaceScenery.
 	With("Parameter", 0, 2).
-	With("Subclass", 2, 4).
-	With("Type", 6, 4)
+	With("Subclass", 2, 4).As(interpreters.RangedValue(0, 10)).
+	With("Type", 6, 4).As(interpreters.RangedValue(0, 10))
 
 func initSoftware() interpreterRetriever {
 	cyberspacePrograms := newInterpreterLeaf(cyberspaceProgram)

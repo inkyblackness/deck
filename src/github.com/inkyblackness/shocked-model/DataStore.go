@@ -13,6 +13,8 @@ type DataStore interface {
 	// Font queries a specific font.
 	Font(projectID string, fontID int, onSuccess func(font *Font), onFailure FailureFunc)
 
+	// GameObjects queries the basic properties of all objects in the project.
+	GameObjects(projectID string, onSuccess func(objects []GameObject), onFailure FailureFunc)
 	// GameObjectIcon queries the icon bitmap of a game object.
 	GameObjectIcon(projectID string, class, subclass, objType int, onSuccess func(bmp *RawBitmap), onFailure FailureFunc)
 
@@ -44,4 +46,13 @@ type DataStore interface {
 	// LevelObjects requests all objects of the level.
 	LevelObjects(projectID string, archiveID string, levelID int,
 		onSuccess func(objects *LevelObjects), onFailure FailureFunc)
+	// AddLevelObject requests to add a new object to the level.
+	AddLevelObject(projectID string, archiveID string, levelID int, template LevelObjectTemplate,
+		onSuccess func(object LevelObject), onFailure FailureFunc)
+	// RemoveLevelObject requests to remove an object from the level.
+	RemoveLevelObject(projectID string, archiveID string, levelID int, objectID int,
+		onSuccess func(), onFailure FailureFunc)
+	// SetLevelObject requests to update object properties.
+	SetLevelObject(projectID string, archiveID string, levelID int, objectID int, properties *LevelObjectProperties,
+		onSuccess func(properties *LevelObjectProperties), onFailure FailureFunc)
 }

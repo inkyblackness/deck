@@ -19,6 +19,7 @@ func Never(inst *Instance) bool {
 type Description struct {
 	fields      map[string]*entry
 	refinements map[string]*refinement
+	lastField   *entry
 }
 
 var empty = newDescription()
@@ -57,9 +58,19 @@ func (desc *Description) For(data []byte) *Instance {
 // The returned description is a new, separated object from the originating one.
 func (desc *Description) With(key string, byteStart int, byteCount int) *Description {
 	cloned := desc.clone()
-	cloned.fields[key] = &entry{start: byteStart, count: byteCount}
+	cloned.lastField = &entry{start: byteStart, count: byteCount}
+	cloned.fields[key] = cloned.lastField
 
 	return cloned
+}
+
+// As sets the value range for the previously added field.
+func (desc *Description) As(fieldRange FieldRange) *Description {
+	if desc.lastField == nil {
+		panic("No field active")
+	}
+	desc.lastField.via = fieldRange
+	return desc
 }
 
 // Refining adds another description within the given one. The provided predicate

@@ -78,6 +78,15 @@ func (inst *Instance) Get(key string) uint32 {
 	return value
 }
 
+// Describe returns the description of a value key.
+func (inst *Instance) Describe(key string, simplifier *Simplifier) {
+	e := inst.desc.fields[key]
+
+	if e != nil && inst.isValidRange(e) {
+		e.describe(simplifier)
+	}
+}
+
 // Set stores the provided value with the given key. Should there be no
 // registration for the key, the function does nothing.
 func (inst *Instance) Set(key string, value uint32) {

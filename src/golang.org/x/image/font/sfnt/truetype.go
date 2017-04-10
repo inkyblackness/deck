@@ -51,7 +51,7 @@ func midPoint(p, q fixed.Point26_6) fixed.Point26_6 {
 	}
 }
 
-func parseLoca(src *source, loca table, glyfOffset uint32, indexToLocFormat bool, numGlyphs int) (locations []uint32, err error) {
+func parseLoca(src *source, loca table, glyfOffset uint32, indexToLocFormat bool, numGlyphs int32) (locations []uint32, err error) {
 	if indexToLocFormat {
 		if loca.length != 4*uint32(numGlyphs+1) {
 			return nil, errInvalidLocaTable
@@ -85,7 +85,7 @@ func parseLoca(src *source, loca table, glyfOffset uint32, indexToLocFormat bool
 const glyfHeaderLen = 10
 
 func loadGlyf(f *Font, b *Buffer, x GlyphIndex, stackBottom, recursionDepth uint32) error {
-	data, err := f.viewGlyphData(b, x)
+	data, _, _, err := f.viewGlyphData(b, x)
 	if err != nil {
 		return err
 	}
@@ -285,9 +285,6 @@ func loadCompoundGlyf(f *Font, b *Buffer, data []byte, stackBottom, recursionDep
 				elem.transformYX = int16(u16(data[4:]))
 				elem.transformYY = int16(u16(data[6:]))
 				data = data[8:]
-				// TODO: find a font that does this, so we can verify that
-				// we've got the xy vs yx ordering right.
-				return errUnsupportedCompoundGlyph
 			}
 		}
 
@@ -417,44 +414,28 @@ func (g *glyfIter) close() {
 	case !g.firstOffCurveValid && !g.lastOffCurveValid:
 		g.closed = true
 		g.seg = Segment{
-			Op: SegmentOpLineTo,
-			Args: [6]fixed.Int26_6{
-				g.firstOnCurve.X,
-				g.firstOnCurve.Y,
-			},
+			Op:   SegmentOpLineTo,
+			Args: [3]fixed.Point26_6{g.firstOnCurve},
 		}
 	case !g.firstOffCurveValid && g.lastOffCurveValid:
 		g.closed = true
 		g.seg = Segment{
-			Op: SegmentOpQuadTo,
-			Args: [6]fixed.Int26_6{
-				g.lastOffCurve.X,
-				g.lastOffCurve.Y,
-				g.firstOnCurve.X,
-				g.firstOnCurve.Y,
-			},
+			Op:   SegmentOpQuadTo,
+			Args: [3]fixed.Point26_6{g.lastOffCurve, g.firstOnCurve},
 		}
 	case g.firstOffCurveValid && !g.lastOffCurveValid:
 		g.closed = true
 		g.seg = Segment{
-			Op: SegmentOpQuadTo,
-			Args: [6]fixed.Int26_6{
-				g.firstOffCurve.X,
-				g.firstOffCurve.Y,
-				g.firstOnCurve.X,
-				g.firstOnCurve.Y,
-			},
+			Op:   SegmentOpQuadTo,
+			Args: [3]fixed.Point26_6{g.firstOffCurve, g.firstOnCurve},
 		}
 	case g.firstOffCurveValid && g.lastOffCurveValid:
-		mid := midPoint(g.lastOffCurve, g.firstOffCurve)
 		g.lastOffCurveValid = false
 		g.seg = Segment{
 			Op: SegmentOpQuadTo,
-			Args: [6]fixed.Int26_6{
-				g.lastOffCurve.X,
-				g.lastOffCurve.Y,
-				mid.X,
-				mid.Y,
+			Args: [3]fixed.Point26_6{
+				g.lastOffCurve,
+				midPoint(g.lastOffCurve, g.firstOffCurve),
 			},
 		}
 	}
@@ -487,11 +468,8 @@ func (g *glyfIter) nextSegment() (ok bool) {
 				g.firstOnCurve = p
 				g.firstOnCurveValid = true
 				g.seg = Segment{
-					Op: SegmentOpMoveTo,
-					Args: [6]fixed.Int26_6{
-						p.X,
-						p.Y,
-					},
+					Op:   SegmentOpMoveTo,
+					Args: [3]fixed.Point26_6{p},
 				}
 				return true
 			} else if !g.firstOffCurveValid {
@@ -499,17 +477,13 @@ func (g *glyfIter) nextSegment() (ok bool) {
 				g.firstOffCurveValid = true
 				continue
 			} else {
-				midp := midPoint(g.firstOffCurve, p)
-				g.firstOnCurve = midp
+				g.firstOnCurve = midPoint(g.firstOffCurve, p)
 				g.firstOnCurveValid = true
 				g.lastOffCurve = p
 				g.lastOffCurveValid = true
 				g.seg = Segment{
-					Op: SegmentOpMoveTo,
-					Args: [6]fixed.Int26_6{
-						midp.X,
-						midp.Y,
-					},
+					Op:   SegmentOpMoveTo,
+					Args: [3]fixed.Point26_6{g.firstOnCurve},
 				}
 				return true
 			}
@@ -521,25 +495,19 @@ func (g *glyfIter) nextSegment() (ok bool) {
 				continue
 			} else {
 				g.seg = Segment{
-					Op: SegmentOpLineTo,
-					Args: [6]fixed.Int26_6{
-						p.X,
-						p.Y,
-					},
+					Op:   SegmentOpLineTo,
+					Args: [3]fixed.Point26_6{p},
 				}
 				return true
 			}
 
 		} else {
 			if !g.on {
-				midp := midPoint(g.lastOffCurve, p)
 				g.seg = Segment{
 					Op: SegmentOpQuadTo,
-					Args: [6]fixed.Int26_6{
-						g.lastOffCurve.X,
-						g.lastOffCurve.Y,
-						midp.X,
-						midp.Y,
+					Args: [3]fixed.Point26_6{
+						g.lastOffCurve,
+						midPoint(g.lastOffCurve, p),
 					},
 				}
 				g.lastOffCurve = p
@@ -547,13 +515,8 @@ func (g *glyfIter) nextSegment() (ok bool) {
 				return true
 			} else {
 				g.seg = Segment{
-					Op: SegmentOpQuadTo,
-					Args: [6]fixed.Int26_6{
-						g.lastOffCurve.X,
-						g.lastOffCurve.Y,
-						p.X,
-						p.Y,
-					},
+					Op:   SegmentOpQuadTo,
+					Args: [3]fixed.Point26_6{g.lastOffCurve, p},
 				}
 				g.lastOffCurveValid = false
 				return true

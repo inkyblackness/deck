@@ -7,12 +7,12 @@ import (
 var baseWeapon = interpreters.New()
 
 var energyWeapon = baseWeapon.
-	With("Charge", 0, 1).
-	With("Temperature", 1, 1)
+	With("Charge", 0, 1).As(interpreters.RangedValue(0, 255)).
+	With("Temperature", 1, 1).As(interpreters.RangedValue(0, 255))
 
 var projectileWeapon = baseWeapon.
-	With("AmmoType", 0, 1).
-	With("AmmoCount", 1, 1)
+	With("AmmoType", 0, 1).As(interpreters.EnumValue(map[uint32]string{0: "Standard", 1: "Special"})).
+	With("AmmoCount", 1, 1).As(interpreters.RangedValue(0, 255))
 
 func initWeapons() interpreterRetriever {
 	projectileWeapons := newInterpreterLeaf(projectileWeapon)

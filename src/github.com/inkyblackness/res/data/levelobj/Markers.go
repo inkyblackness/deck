@@ -14,7 +14,7 @@ var repulsor = baseMarker.
 	With("Flags", 18, 4)
 
 var aiHint = baseMarker.
-	With("NextObjectIndex", 6, 2)
+	With("NextObjectIndex", 6, 2).As(interpreters.ObjectIndex())
 
 var baseTrigger = baseMarker.
 	Refining("Action", 0, 22, actions.Unconditional(), interpreters.Always)

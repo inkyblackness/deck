@@ -2,13 +2,17 @@ package modes
 
 import (
 	"fmt"
+	"math"
 	"sort"
+	"strings"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
 
 	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/data/interpreters"
 	"github.com/inkyblackness/res/data/levelobj"
+
+	dataModel "github.com/inkyblackness/shocked-model"
 
 	"github.com/inkyblackness/shocked-client/editor/display"
 	"github.com/inkyblackness/shocked-client/editor/model"
@@ -22,25 +26,66 @@ import (
 )
 
 var classNames = []string{
-	" 0: Weapons",
-	" 1: AmmoClips",
-	" 2: Projectiles",
-	" 3: Explosives",
-	" 4: Patches",
-	" 5: Hardware",
-	" 6: Software",
-	" 7: Scenery",
-	" 8: Items",
-	" 9: Panels",
-	"10: Barriers",
-	"11: Animations",
-	"12: Markers",
-	"13: Containers",
-	"14: Critters"}
+	"Weapons 0",
+	"AmmoClips 1",
+	"Projectiles 2",
+	"Explosives 3",
+	"Patches 4",
+	"Hardware 5",
+	"Software 6",
+	"Scenery 7",
+	"Items 8",
+	"Panels 9",
+	"Barriers 10",
+	"Animations 11",
+	"Markers 12",
+	"Containers 13",
+	"Critters 14"}
+
+var maxObjectsPerClass = []int{16, 32, 32, 32, 32, 8, 16, 176, 128, 64, 64, 32, 160, 64, 64}
+
+type newObjectClassItem struct {
+	class int
+}
+
+func (item *newObjectClassItem) String() string {
+	return classNames[item.class]
+}
+
+type objectTypeItem struct {
+	id          model.ObjectID
+	displayName string
+}
+
+func (item *objectTypeItem) String() string {
+	return item.displayName + " (" + item.id.String() + ")"
+}
+
+type tabItem struct {
+	area        *ui.Area
+	displayName string
+}
+
+func (item *tabItem) String() string {
+	return item.displayName
+}
+
+type enumItem struct {
+	value       uint32
+	displayName string
+}
+
+func (item *enumItem) String() string {
+	return item.displayName
+}
+
+type disposableControl interface {
+	Dispose()
+}
 
 type levelObjectProperty struct {
 	title *controls.Label
-	value *controls.Label
+	value disposableControl
 }
 
 // LevelObjectsMode is a mode for level objects.
@@ -62,21 +107,63 @@ type LevelObjectsMode struct {
 	closestObjectHighlightIndex int
 	selectedObjects             []*model.LevelObject
 
-	highlightedObjectIndexTitle *controls.Label
-	highlightedObjectIndexValue *controls.Label
+	newObjectID model.ObjectID
 
-	selectedObjectsTitleLabel         *controls.Label
-	selectedObjectsClassTitleLabel    *controls.Label
-	selectedObjectsClassInfoLabel     *controls.Label
-	selectedObjectsSubclassTitleLabel *controls.Label
-	selectedObjectsSubclassInfoLabel  *controls.Label
-	selectedObjectsTypeTitleLabel     *controls.Label
-	selectedObjectsTypeInfoLabel      *controls.Label
+	newObjectClassLabel        *controls.Label
+	newObjectClassBox          *controls.ComboBox
+	objectClassUsageTitleLabel *controls.Label
+	objectClassUsageInfoLabel  *controls.Label
+	newObjectTypeLabel         *controls.Label
+	newObjectTypeBox           *controls.ComboBox
 
+	highlightedObjectInfoTitle *controls.Label
+	highlightedObjectInfoValue *controls.Label
+
+	selectedObjectsTitleLabel   *controls.Label
+	selectedObjectsDeleteLabel  *controls.Label
+	selectedObjectsDeleteButton *controls.TextButton
+	selectedObjectsIDTitleLabel *controls.Label
+	selectedObjectsIDInfoLabel  *controls.Label
+	selectedObjectsTypeLabel    *controls.Label
+	selectedObjectsTypeBox      *controls.ComboBox
+
+	selectedObjectsPropertiesTitle *controls.Label
+	selectedObjectsPropertiesBox   *controls.ComboBox
+
+	selectedObjectsBasePropertiesItem *tabItem
+	selectedObjectsBasePropertiesArea *ui.Area
+	selectedObjectsZTitle             *controls.Label
+	selectedObjectsZValue             *controls.Slider
+	selectedObjectsTileXTitle         *controls.Label
+	selectedObjectsTileXValue         *controls.Slider
+	selectedObjectsFineXTitle         *controls.Label
+	selectedObjectsFineXValue         *controls.Slider
+	selectedObjectsTileYTitle         *controls.Label
+	selectedObjectsTileYValue         *controls.Slider
+	selectedObjectsFineYTitle         *controls.Label
+	selectedObjectsFineYValue         *controls.Slider
+	selectedObjectsRotationXTitle     *controls.Label
+	selectedObjectsRotationXValue     *controls.Slider
+	selectedObjectsRotationYTitle     *controls.Label
+	selectedObjectsRotationYValue     *controls.Slider
+	selectedObjectsRotationZTitle     *controls.Label
+	selectedObjectsRotationZValue     *controls.Slider
+	selectedObjectsHitpointsTitle     *controls.Label
+	selectedObjectsHitpointsValue     *controls.Slider
+
+	selectedObjectsClassPropertiesItem    *tabItem
+	selectedObjectsPropertiesMainArea     *ui.Area
+	selectedObjectsPropertiesHeaderArea   *ui.Area
 	selectedObjectsPropertiesArea         *ui.Area
 	selectedObjectsPropertiesPanelBuilder *controlPanelBuilder
 	selectedObjectsPropertiesBottom       ui.Anchor
 	selectedObjectsProperties             []*levelObjectProperty
+}
+
+func intAsPointer(value int) (ptr *int) {
+	ptr = new(int)
+	*ptr = value
+	return
 }
 
 // NewLevelObjectsMode returns a new instance.
@@ -86,6 +173,8 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 		levelAdapter:   context.ModelAdapter().ActiveLevel(),
 		objectsAdapter: context.ModelAdapter().ObjectsAdapter(),
 		displayFilter:  func(*model.LevelObject) bool { return true },
+
+		newObjectID: model.MakeObjectID(0, 0, 0),
 
 		mapDisplay: mapDisplay}
 
@@ -122,11 +211,13 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 		builder.OnEvent(events.MouseScrollEventType, ui.SilentConsumer)
 
 		lastGrabX := float32(0.0)
+		grabbing := false
 		builder.OnEvent(events.MouseButtonDownEventType, func(area *ui.Area, event events.Event) bool {
 			buttonEvent := event.(*events.MouseButtonEvent)
 			if buttonEvent.Buttons() == env.MousePrimary {
 				area.RequestFocus()
 				lastGrabX, _ = buttonEvent.Position()
+				grabbing = true
 			}
 			return true
 		})
@@ -134,12 +225,13 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 			buttonEvent := event.(*events.MouseButtonEvent)
 			if buttonEvent.AffectedButtons() == env.MousePrimary {
 				area.ReleaseFocus()
+				grabbing = false
 			}
 			return true
 		})
 		builder.OnEvent(events.MouseMoveEventType, func(area *ui.Area, event events.Event) bool {
 			moveEvent := event.(*events.MouseMoveEvent)
-			if area.HasFocus() {
+			if grabbing {
 				newX, _ := moveEvent.Position()
 				mode.panelRight.RequestValue(mode.panelRight.Value() + (newX - lastGrabX))
 				lastGrabX = newX
@@ -152,19 +244,105 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 	{
 		panelBuilder := newControlPanelBuilder(mode.panel, context.ControlFactory())
 
-		mode.highlightedObjectIndexTitle, mode.highlightedObjectIndexValue = panelBuilder.addInfo("Highlighted Index")
+		mode.newObjectClassLabel, mode.newObjectClassBox = panelBuilder.addComboProperty("New Object Class", mode.onNewObjectClassChanged)
+		mode.objectClassUsageTitleLabel, mode.objectClassUsageInfoLabel = panelBuilder.addInfo("Class Usage")
+		mode.newObjectTypeLabel, mode.newObjectTypeBox = panelBuilder.addComboProperty("New Object Type", mode.onNewObjectTypeChanged)
+
+		mode.highlightedObjectInfoTitle, mode.highlightedObjectInfoValue = panelBuilder.addInfo("Highlighted Object")
 
 		mode.selectedObjectsTitleLabel = panelBuilder.addTitle("Selected Object(s)")
-		mode.selectedObjectsClassTitleLabel, mode.selectedObjectsClassInfoLabel = panelBuilder.addInfo("Class")
-		mode.selectedObjectsSubclassTitleLabel, mode.selectedObjectsSubclassInfoLabel = panelBuilder.addInfo("Subclass")
-		mode.selectedObjectsTypeTitleLabel, mode.selectedObjectsTypeInfoLabel = panelBuilder.addInfo("Type")
+		mode.selectedObjectsDeleteLabel, mode.selectedObjectsDeleteButton = panelBuilder.addTextButton("Delete Selected", "Delete", mode.deleteSelectedObjects)
+		mode.selectedObjectsIDTitleLabel, mode.selectedObjectsIDInfoLabel = panelBuilder.addInfo("Object ID")
+		mode.selectedObjectsTypeLabel, mode.selectedObjectsTypeBox = panelBuilder.addComboProperty("Type", func(item controls.ComboBoxItem) {
+			typeItem := item.(*objectTypeItem)
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.Subclass = intAsPointer(typeItem.id.Subclass())
+				properties.Type = intAsPointer(typeItem.id.Type())
+			})
+		})
+
+		mode.selectedObjectsPropertiesTitle, mode.selectedObjectsPropertiesBox = panelBuilder.addComboProperty("Show Properties", mode.onSelectedPropertiesDisplayChanged)
+
+		var basePropertiesPanelBuilder *controlPanelBuilder
+		mode.selectedObjectsBasePropertiesArea, basePropertiesPanelBuilder = panelBuilder.addSection(false)
+		mode.selectedObjectsZTitle, mode.selectedObjectsZValue = basePropertiesPanelBuilder.addSliderProperty("Z", func(newValue int64) {
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.Z = intAsPointer(int(newValue))
+			})
+		})
+		mode.selectedObjectsZValue.SetRange(0, 255)
+
+		mode.selectedObjectsTileXTitle, mode.selectedObjectsTileXValue = basePropertiesPanelBuilder.addSliderProperty("TileX", func(newValue int64) {
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.TileX = intAsPointer(int(newValue))
+			})
+		})
+		mode.selectedObjectsTileXValue.SetRange(0, 63)
+		mode.selectedObjectsFineXTitle, mode.selectedObjectsFineXValue = basePropertiesPanelBuilder.addSliderProperty("FineX", func(newValue int64) {
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.FineX = intAsPointer(int(newValue))
+			})
+		})
+		mode.selectedObjectsFineXValue.SetRange(0, 255)
+
+		mode.selectedObjectsTileYTitle, mode.selectedObjectsTileYValue = basePropertiesPanelBuilder.addSliderProperty("TileY", func(newValue int64) {
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.TileY = intAsPointer(int(newValue))
+			})
+		})
+		mode.selectedObjectsTileYValue.SetRange(0, 63)
+		mode.selectedObjectsFineYTitle, mode.selectedObjectsFineYValue = basePropertiesPanelBuilder.addSliderProperty("FineY", func(newValue int64) {
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.FineY = intAsPointer(int(newValue))
+			})
+		})
+		mode.selectedObjectsFineYValue.SetRange(0, 255)
+
+		mode.selectedObjectsRotationXTitle, mode.selectedObjectsRotationXValue = basePropertiesPanelBuilder.addSliderProperty("RotationX", func(newValue int64) {
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.RotationX = intAsPointer(int(newValue))
+			})
+		})
+		mode.selectedObjectsRotationXValue.SetRange(0, 255)
+		mode.selectedObjectsRotationYTitle, mode.selectedObjectsRotationYValue = basePropertiesPanelBuilder.addSliderProperty("RotationY", func(newValue int64) {
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.RotationY = intAsPointer(int(newValue))
+			})
+		})
+		mode.selectedObjectsRotationYValue.SetRange(0, 255)
+		mode.selectedObjectsRotationZTitle, mode.selectedObjectsRotationZValue = basePropertiesPanelBuilder.addSliderProperty("RotationZ", func(newValue int64) {
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.RotationZ = intAsPointer(int(newValue))
+			})
+		})
+		mode.selectedObjectsRotationZValue.SetRange(0, 255)
+
+		mode.selectedObjectsHitpointsTitle, mode.selectedObjectsHitpointsValue = basePropertiesPanelBuilder.addSliderProperty("Hitpoints", func(newValue int64) {
+			mode.updateSelectedObjectsBaseProperties(func(properties *dataModel.LevelObjectProperties) {
+				properties.Hitpoints = intAsPointer(int(newValue))
+			})
+		})
+		mode.selectedObjectsHitpointsValue.SetRange(0, 32767)
+
+		classPropertiesBottomResolver := func() ui.Anchor { return mode.selectedObjectsPropertiesBottom }
+		var mainClassPanelBuilder *controlPanelBuilder
+		mode.selectedObjectsPropertiesMainArea, mainClassPanelBuilder =
+			panelBuilder.addDynamicSection(true, classPropertiesBottomResolver)
+		mode.selectedObjectsPropertiesHeaderArea, _ = mainClassPanelBuilder.addSection(true)
 
 		mode.selectedObjectsPropertiesArea, mode.selectedObjectsPropertiesPanelBuilder =
-			panelBuilder.addDynamicSection(true, func() ui.Anchor { return mode.selectedObjectsPropertiesBottom })
-		mode.selectedObjectsPropertiesBottom = mode.selectedObjectsPropertiesArea.Top()
+			mainClassPanelBuilder.addDynamicSection(true, classPropertiesBottomResolver)
+		mode.selectedObjectsPropertiesBottom = mode.selectedObjectsPropertiesHeaderArea.Bottom()
+
+		mode.selectedObjectsBasePropertiesItem = &tabItem{mode.selectedObjectsBasePropertiesArea, "Base Properties"}
+		mode.selectedObjectsClassPropertiesItem = &tabItem{mode.selectedObjectsPropertiesMainArea, "Class Properties"}
+		propertiesTabItems := []controls.ComboBoxItem{mode.selectedObjectsBasePropertiesItem, mode.selectedObjectsClassPropertiesItem}
+		mode.selectedObjectsPropertiesBox.SetItems(propertiesTabItems)
+		mode.selectedObjectsPropertiesBox.SetSelectedItem(mode.selectedObjectsClassPropertiesItem)
 	}
 
 	mode.levelAdapter.OnLevelObjectsChanged(mode.onLevelObjectsChanged)
+	mode.context.ModelAdapter().ObjectsAdapter().OnObjectsChanged(mode.onGameObjectsChanged)
 
 	return mode
 }
@@ -184,9 +362,18 @@ func (mode *LevelObjectsMode) SetActive(active bool) {
 }
 
 func (mode *LevelObjectsMode) onLevelObjectsChanged() {
+	mode.updateNewObjectClassQuota()
 	if mode.area.IsVisible() {
 		mode.updateDisplayedObjects()
 	}
+}
+
+func (mode *LevelObjectsMode) onSelectedPropertiesDisplayChanged(item controls.ComboBoxItem) {
+	tabItem := item.(*tabItem)
+
+	mode.selectedObjectsBasePropertiesItem.area.SetVisible(false)
+	mode.selectedObjectsClassPropertiesItem.area.SetVisible(false)
+	tabItem.area.SetVisible(true)
 }
 
 func (mode *LevelObjectsMode) updateDisplayedObjects() {
@@ -196,6 +383,23 @@ func (mode *LevelObjectsMode) updateDisplayedObjects() {
 	mode.closestObjects = nil
 	mode.closestObjectHighlightIndex = 0
 	mode.updateClosestObjectHighlight()
+
+	mode.updateSelectedFromDisplayedObjects()
+}
+
+func (mode *LevelObjectsMode) updateSelectedFromDisplayedObjects() {
+	displayedIndices := make(map[int]bool)
+	for _, displayedObject := range mode.displayedObjects {
+		displayedIndices[displayedObject.Index()] = true
+	}
+
+	selectedObjects := make([]*model.LevelObject, 0, len(mode.selectedObjects))
+	for _, selectedObject := range mode.selectedObjects {
+		if displayedIndices[selectedObject.Index()] {
+			selectedObjects = append(selectedObjects, selectedObject)
+		}
+	}
+	mode.setSelectedObjects(selectedObjects)
 }
 
 func (mode *LevelObjectsMode) onMouseMoved(area *ui.Area, event events.Event) (consumed bool) {
@@ -245,6 +449,9 @@ func (mode *LevelObjectsMode) onMouseButtonClicked(area *ui.Area, event events.E
 			}
 		}
 		consumed = true
+	} else if mouseEvent.AffectedButtons() == env.MouseSecondary {
+		worldX, worldY := mode.mapDisplay.WorldCoordinatesForPixel(mouseEvent.Position())
+		mode.createNewObject(worldX, worldY)
 	}
 
 	return
@@ -281,10 +488,14 @@ func (mode *LevelObjectsMode) updateClosestDisplayedObjects(worldX, worldY float
 func (mode *LevelObjectsMode) updateClosestObjectHighlight() {
 	if len(mode.closestObjects) > 0 {
 		object := mode.closestObjects[mode.closestObjectHighlightIndex]
-		mode.highlightedObjectIndexValue.SetText(fmt.Sprintf("%v", object.Index()))
+		displayName := "unknown"
+		if gameObject := mode.context.ModelAdapter().ObjectsAdapter().Object(object.ID()); gameObject != nil {
+			displayName = gameObject.DisplayName()
+		}
+		mode.highlightedObjectInfoValue.SetText(fmt.Sprintf("%v: %v (%v)", object.Index(), object.ID(), displayName))
 		mode.mapDisplay.SetHighlightedObject(object)
 	} else {
-		mode.highlightedObjectIndexValue.SetText("")
+		mode.highlightedObjectInfoValue.SetText("")
 		mode.mapDisplay.SetHighlightedObject(nil)
 	}
 }
@@ -317,32 +528,89 @@ func (mode *LevelObjectsMode) onSelectedObjectsChanged() {
 	classUnifier := util.NewValueUnifier(-1)
 	subclassUnifier := util.NewValueUnifier(-1)
 	typeUnifier := util.NewValueUnifier(-1)
+	tileXUnifier := util.NewValueUnifier(-1)
+	fineXUnifier := util.NewValueUnifier(-1)
+	tileYUnifier := util.NewValueUnifier(-1)
+	fineYUnifier := util.NewValueUnifier(-1)
+	zUnifier := util.NewValueUnifier(-1)
+	rotationXUnifier := util.NewValueUnifier(-1)
+	rotationYUnifier := util.NewValueUnifier(-1)
+	rotationZUnifier := util.NewValueUnifier(-1)
+	hitpointsUnifier := util.NewValueUnifier(-1)
 
 	for _, object := range mode.selectedObjects {
 		classUnifier.Add(object.ID().Class())
 		subclassUnifier.Add(object.ID().Subclass())
 		typeUnifier.Add(object.ID().Type())
+		zUnifier.Add(object.Z())
+		tileXUnifier.Add(object.TileX())
+		fineXUnifier.Add(object.FineX())
+		tileYUnifier.Add(object.TileY())
+		fineYUnifier.Add(object.FineY())
+		rotationXUnifier.Add(object.RotationX())
+		rotationYUnifier.Add(object.RotationY())
+		rotationZUnifier.Add(object.RotationZ())
+		hitpointsUnifier.Add(object.Hitpoints())
 	}
 	unifiedClass := classUnifier.Value().(int)
 	unifiedSubclass := subclassUnifier.Value().(int)
 	unifiedType := typeUnifier.Value().(int)
+	var unifiedIDString string
 	if unifiedClass != -1 {
-		mode.selectedObjectsClassInfoLabel.SetText(classNames[unifiedClass])
+		unifiedIDString = classNames[unifiedClass]
+		typeItems := mode.objectItemsForClass(unifiedClass)
+		mode.selectedObjectsTypeBox.SetItems(typeItems)
 	} else {
-		mode.selectedObjectsClassInfoLabel.SetText("")
+		unifiedIDString = "**"
 		unifiedSubclass = -1
+		mode.selectedObjectsTypeBox.SetItems(nil)
 	}
+	unifiedIDString += "/"
 	if unifiedSubclass != -1 {
-		mode.selectedObjectsSubclassInfoLabel.SetText(fmt.Sprintf("%v", unifiedSubclass))
+		unifiedIDString += fmt.Sprintf("%v", unifiedSubclass)
 	} else {
-		mode.selectedObjectsSubclassInfoLabel.SetText("")
+		unifiedIDString += "*"
 		unifiedType = -1
 	}
+	unifiedIDString += "/"
 	if unifiedType != -1 {
-		mode.selectedObjectsTypeInfoLabel.SetText(fmt.Sprintf("%v", unifiedType))
+		unifiedIDString += fmt.Sprintf("%v", unifiedType)
 	} else {
-		mode.selectedObjectsTypeInfoLabel.SetText("")
+		unifiedIDString += "*"
 	}
+	if len(mode.selectedObjects) > 0 {
+		mode.selectedObjectsIDInfoLabel.SetText(unifiedIDString)
+	} else {
+		mode.selectedObjectsIDInfoLabel.SetText("")
+	}
+	if (unifiedClass != -1) && (unifiedSubclass != -1) && (unifiedType != -1) {
+		objectID := model.MakeObjectID(unifiedClass, unifiedSubclass, unifiedType)
+		gameObject := mode.objectsAdapter.Object(objectID)
+		item := &objectTypeItem{objectID, gameObject.DisplayName()}
+		mode.selectedObjectsTypeBox.SetSelectedItem(item)
+	} else {
+		mode.selectedObjectsTypeBox.SetSelectedItem(nil)
+	}
+
+	setSliderValue := func(slider *controls.Slider, unifier *util.ValueUnifier) {
+		value := unifier.Value().(int)
+		if value >= 0 {
+			slider.SetValue(int64(value))
+		} else {
+			slider.SetValueUndefined()
+		}
+	}
+
+	setSliderValue(mode.selectedObjectsTileXValue, tileXUnifier)
+	setSliderValue(mode.selectedObjectsFineXValue, fineXUnifier)
+	setSliderValue(mode.selectedObjectsTileYValue, tileYUnifier)
+	setSliderValue(mode.selectedObjectsFineYValue, fineYUnifier)
+	setSliderValue(mode.selectedObjectsZValue, zUnifier)
+	setSliderValue(mode.selectedObjectsRotationXValue, rotationXUnifier)
+	setSliderValue(mode.selectedObjectsRotationYValue, rotationYUnifier)
+	setSliderValue(mode.selectedObjectsRotationZValue, rotationZUnifier)
+	setSliderValue(mode.selectedObjectsHitpointsValue, hitpointsUnifier)
+
 	mode.recreateLevelObjectProperties()
 }
 
@@ -352,12 +620,16 @@ func (mode *LevelObjectsMode) recreateLevelObjectProperties() {
 		oldProperty.value.Dispose()
 	}
 	mode.selectedObjectsPropertiesPanelBuilder.reset()
-	mode.selectedObjectsPropertiesBottom = mode.selectedObjectsPropertiesArea.Top()
+	mode.selectedObjectsPropertiesBottom = mode.selectedObjectsPropertiesHeaderArea.Bottom()
 
 	var newProperties = []*levelObjectProperty{}
 	if len(mode.selectedObjects) > 0 {
 		propertyUnifier := make(map[string]*util.ValueUnifier)
+		propertyDescribers := make(map[string]func(*interpreters.Simplifier))
 		propertyOrder := []string{}
+		describer := func(interpreter *interpreters.Instance, key string) func(simpl *interpreters.Simplifier) {
+			return func(simpl *interpreters.Simplifier) { interpreter.Describe(key, simpl) }
+		}
 
 		var unifyInterpreter func(string, *interpreters.Instance, bool, map[string]bool)
 		unifyInterpreter = func(path string, interpreter *interpreters.Instance, first bool, thisKeys map[string]bool) {
@@ -366,11 +638,12 @@ func (mode *LevelObjectsMode) recreateLevelObjectProperties() {
 				thisKeys[fullPath] = true
 				if unifier, existing := propertyUnifier[fullPath]; existing || first {
 					if !existing {
-						unifier = util.NewValueUnifier(uint32(0xFFFFFFFF))
+						unifier = util.NewValueUnifier(int64(math.MinInt64))
 						propertyUnifier[fullPath] = unifier
+						propertyDescribers[fullPath] = describer(interpreter, key)
 						propertyOrder = append(propertyOrder, fullPath)
 					}
-					unifier.Add(interpreter.Get(key))
+					unifier.Add(int64(interpreter.Get(key)))
 				}
 			}
 			for _, key := range interpreter.ActiveRefinements() {
@@ -378,10 +651,7 @@ func (mode *LevelObjectsMode) recreateLevelObjectProperties() {
 			}
 		}
 
-		interpreterFactory := levelobj.ForRealWorld
-		if mode.levelAdapter.IsCyberspace() {
-			interpreterFactory = levelobj.ForCyberspace
-		}
+		interpreterFactory := mode.interpreterFactory()
 
 		for index, object := range mode.selectedObjects {
 			objID := object.ID()
@@ -405,12 +675,168 @@ func (mode *LevelObjectsMode) recreateLevelObjectProperties() {
 		for _, key := range propertyOrder {
 			if unifier, existing := propertyUnifier[key]; existing {
 				property := &levelObjectProperty{}
+				mode.createPropertyControls(property, key, unifier, propertyDescribers[key])
 				newProperties = append(newProperties, property)
-				property.title, property.value = mode.selectedObjectsPropertiesPanelBuilder.addInfo(key)
-				property.value.SetText(fmt.Sprintf("%v", unifier.Value().(uint32)))
 				mode.selectedObjectsPropertiesBottom = mode.selectedObjectsPropertiesPanelBuilder.bottom()
 			}
 		}
 	}
 	mode.selectedObjectsProperties = newProperties
+}
+
+func (mode *LevelObjectsMode) interpreterFactory() func(resID res.ObjectID, classData []byte) *interpreters.Instance {
+	factory := levelobj.ForRealWorld
+	if mode.levelAdapter.IsCyberspace() {
+		factory = levelobj.ForCyberspace
+	}
+	return factory
+}
+
+func (mode *LevelObjectsMode) createPropertyControls(property *levelObjectProperty, key string,
+	unifier *util.ValueUnifier, describer func(*interpreters.Simplifier)) {
+	unifiedValue := unifier.Value().(int64)
+
+	simplifier := interpreters.NewSimplifier(func(minValue, maxValue int64) {
+		title, slider := mode.selectedObjectsPropertiesPanelBuilder.addSliderProperty(key, func(newValue int64) {
+			mode.updateSelectedObjectsClassProperties(key, uint32(newValue))
+		})
+		slider.SetRange(minValue, maxValue)
+		if unifiedValue != math.MinInt64 {
+			slider.SetValue(unifiedValue)
+		}
+		property.title, property.value = title, slider
+	})
+
+	simplifier.SetEnumValueHandler(func(values map[uint32]string) {
+		title, box := mode.selectedObjectsPropertiesPanelBuilder.addComboProperty(key, func(item controls.ComboBoxItem) {
+			enumItem := item.(*enumItem)
+			mode.updateSelectedObjectsClassProperties(key, enumItem.value)
+		})
+		valueKeys := make([]uint32, 0, len(values))
+		for valueKey := range values {
+			valueKeys = append(valueKeys, valueKey)
+		}
+		sort.Slice(valueKeys, func(indexA, indexB int) bool { return valueKeys[indexA] < valueKeys[indexB] })
+		items := make([]controls.ComboBoxItem, len(valueKeys))
+		var selectedItem controls.ComboBoxItem
+		for index, valueKey := range valueKeys {
+			items[index] = &enumItem{valueKey, values[valueKey]}
+			if int64(valueKey) == unifiedValue {
+				selectedItem = items[index]
+			}
+		}
+		box.SetItems(items)
+		box.SetSelectedItem(selectedItem)
+		property.title, property.value = title, box
+	})
+
+	simplifier.SetObjectIndexHandler(func() {
+		title, slider := mode.selectedObjectsPropertiesPanelBuilder.addSliderProperty(key, func(newValue int64) {
+			mode.updateSelectedObjectsClassProperties(key, uint32(newValue))
+		})
+		slider.SetRange(0, 871)
+		if unifiedValue != math.MinInt64 {
+			slider.SetValue(unifiedValue)
+		}
+		property.title, property.value = title, slider
+	})
+
+	describer(simplifier)
+}
+
+func (mode *LevelObjectsMode) selectedObjectIndices() []int {
+	objectIndices := make([]int, len(mode.selectedObjects))
+	for index, object := range mode.selectedObjects {
+		objectIndices[index] = object.Index()
+	}
+	return objectIndices
+}
+
+func (mode *LevelObjectsMode) updateSelectedObjectsBaseProperties(modifier func(properties *dataModel.LevelObjectProperties)) {
+	var properties dataModel.LevelObjectProperties
+	modifier(&properties)
+	mode.levelAdapter.RequestObjectPropertiesChange(mode.selectedObjectIndices(), &properties)
+}
+
+func (mode *LevelObjectsMode) updateSelectedObjectsClassProperties(key string, value uint32) {
+	interpreterFactory := mode.interpreterFactory()
+
+	for _, object := range mode.selectedObjects {
+		objID := object.ID()
+		resID := res.MakeObjectID(res.ObjectClass(objID.Class()), res.ObjectSubclass(objID.Subclass()), res.ObjectType(objID.Type()))
+		var properties dataModel.LevelObjectProperties
+
+		properties.ClassData = object.ClassData()
+		interpreter := interpreterFactory(resID, properties.ClassData)
+		subKeys := strings.Split(key, ".")
+		valueIndex := len(subKeys) - 1
+		for subIndex := 0; subIndex < valueIndex; subIndex++ {
+			interpreter = interpreter.Refined(subKeys[subIndex])
+		}
+		interpreter.Set(subKeys[valueIndex], value)
+		mode.levelAdapter.RequestObjectPropertiesChange([]int{object.Index()}, &properties)
+	}
+}
+
+func (mode *LevelObjectsMode) deleteSelectedObjects() {
+	mode.levelAdapter.RequestRemoveObjects(mode.selectedObjectIndices())
+}
+
+func (mode *LevelObjectsMode) onGameObjectsChanged() {
+	newClassItems := make([]controls.ComboBoxItem, len(classNames))
+
+	for index := range classNames {
+		newClassItems[index] = &newObjectClassItem{index}
+	}
+	mode.newObjectClassBox.SetItems(newClassItems)
+	mode.newObjectClassBox.SetSelectedItem(newClassItems[mode.newObjectID.Class()])
+	mode.updateNewObjectClass(mode.newObjectID.Class())
+}
+
+func (mode *LevelObjectsMode) onNewObjectClassChanged(item controls.ComboBoxItem) {
+	classItem := item.(*newObjectClassItem)
+	mode.updateNewObjectClass(classItem.class)
+	mode.updateNewObjectClassQuota()
+}
+
+func (mode *LevelObjectsMode) updateNewObjectClass(objectClass int) {
+	typeItems := mode.objectItemsForClass(objectClass)
+
+	mode.newObjectTypeBox.SetItems(typeItems)
+	if len(typeItems) > 0 {
+		mode.newObjectTypeBox.SetSelectedItem(typeItems[0])
+		mode.onNewObjectTypeChanged(typeItems[0])
+	} else {
+		mode.newObjectTypeBox.SetSelectedItem(nil)
+		mode.newObjectID = model.MakeObjectID(objectClass, 0, 0)
+	}
+}
+
+func (mode *LevelObjectsMode) updateNewObjectClassQuota() {
+	maxCount := maxObjectsPerClass[mode.newObjectID.Class()] - 1 // zero entry can never be used, so it's one less
+	currentClassObjects := mode.levelAdapter.LevelObjects(func(object *model.LevelObject) bool {
+		return object.ID().Class() == mode.newObjectID.Class()
+	})
+
+	mode.objectClassUsageInfoLabel.SetText(fmt.Sprintf("%3d/%3d", len(currentClassObjects), maxCount))
+}
+
+func (mode *LevelObjectsMode) onNewObjectTypeChanged(item controls.ComboBoxItem) {
+	typeItem := item.(*objectTypeItem)
+	mode.newObjectID = typeItem.id
+}
+
+func (mode *LevelObjectsMode) createNewObject(worldX, worldY float32) {
+	mode.levelAdapter.RequestNewObject(worldX, worldY, mode.newObjectID)
+}
+
+func (mode *LevelObjectsMode) objectItemsForClass(objectClass int) []controls.ComboBoxItem {
+	availableGameObjects := mode.context.ModelAdapter().ObjectsAdapter().ObjectsOfClass(objectClass)
+	typeItems := make([]controls.ComboBoxItem, len(availableGameObjects))
+
+	for index, gameObject := range availableGameObjects {
+		typeItems[index] = &objectTypeItem{gameObject.ID(), gameObject.DisplayName()}
+	}
+
+	return typeItems
 }

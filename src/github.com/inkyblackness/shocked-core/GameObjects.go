@@ -104,20 +104,33 @@ func (gameObjects *GameObjects) Icon(id res.ObjectID) (bmp image.Bitmap) {
 	return
 }
 
-// Properties returns the current properties of a specific game object.
-func (gameObjects *GameObjects) Properties(id res.ObjectID) model.GameObjectProperties {
-	prop := model.GameObjectProperties{}
-	index := objprop.ObjectIDToIndex(gameObjects.desc, id)
+// Objects returns an array of all objects
+func (gameObjects *GameObjects) Objects() []model.GameObject {
+	result := []model.GameObject{}
+	linearIndex := uint16(0)
 
-	for i := 0; i < model.LanguageCount; i++ {
-		shortName := gameObjects.cybstrng[i].Get(res.ResourceID(0x086D))
-		longName := gameObjects.cybstrng[i].Get(res.ResourceID(0x0024))
+	for classIndex, classDesc := range gameObjects.desc {
+		for subclassIndex, subclassDesc := range classDesc.Subclasses {
+			for typeIndex := uint32(0); typeIndex < subclassDesc.TypeCount; typeIndex++ {
+				var modelData model.GameObject
 
-		prop.ShortName[i] = gameObjects.decodeString(shortName.BlockData(uint16(index)))
-		prop.LongName[i] = gameObjects.decodeString(longName.BlockData(uint16(index)))
+				modelData.Class = classIndex
+				modelData.Subclass = subclassIndex
+				modelData.Type = int(typeIndex)
+				for i := 0; i < model.LanguageCount; i++ {
+					shortName := gameObjects.cybstrng[i].Get(res.ResourceID(0x086D))
+					longName := gameObjects.cybstrng[i].Get(res.ResourceID(0x0024))
+
+					modelData.Properties.ShortName[i] = gameObjects.decodeString(shortName.BlockData(linearIndex))
+					modelData.Properties.LongName[i] = gameObjects.decodeString(longName.BlockData(linearIndex))
+				}
+
+				result = append(result, modelData)
+				linearIndex++
+			}
+		}
 	}
-
-	return prop
+	return result
 }
 
 func (gameObjects *GameObjects) decodeString(data []byte) *string {

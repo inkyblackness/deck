@@ -10,16 +10,16 @@ var paperItem = baseItem.
 	With("PaperId", 2, 1)
 
 var briefcaseItem = baseItem.
-	With("ObjectIndex1", 2, 2).
-	With("ObjectIndex2", 4, 2).
-	With("ObjectIndex3", 6, 2).
-	With("ObjectIndex4", 8, 2)
+	With("ObjectIndex1", 2, 2).As(interpreters.ObjectIndex()).
+	With("ObjectIndex2", 4, 2).As(interpreters.ObjectIndex()).
+	With("ObjectIndex3", 6, 2).As(interpreters.ObjectIndex()).
+	With("ObjectIndex4", 8, 2).As(interpreters.ObjectIndex())
 
 var corpseItem = baseItem.
-	With("ObjectIndex1", 2, 2).
-	With("ObjectIndex2", 4, 2).
-	With("ObjectIndex3", 6, 2).
-	With("ObjectIndex4", 8, 2)
+	With("ObjectIndex1", 2, 2).As(interpreters.ObjectIndex()).
+	With("ObjectIndex2", 4, 2).As(interpreters.ObjectIndex()).
+	With("ObjectIndex3", 6, 2).As(interpreters.ObjectIndex()).
+	With("ObjectIndex4", 8, 2).As(interpreters.ObjectIndex())
 
 var severedHeadItem = baseItem.
 	With("ImageIndex", 2, 1)

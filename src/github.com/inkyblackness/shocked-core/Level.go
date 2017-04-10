@@ -172,15 +172,6 @@ func (level *Level) SetTextures(newIds []int) {
 	blockStore.SetBlockData(0, buffer.Bytes())
 }
 
-func bytesToIntArray(bs []byte) []int {
-	result := make([]int, len(bs))
-	for index, value := range bs {
-		result[index] = int(value)
-	}
-
-	return result
-}
-
 // Objects returns an array of all used objects.
 func (level *Level) Objects() []model.LevelObject {
 	level.mutex.Lock()
@@ -190,38 +181,79 @@ func (level *Level) Objects() []model.LevelObject {
 
 	for index, rawEntry := range level.objectList {
 		if rawEntry.IsInUse() {
-			entry := model.LevelObject{
-				Identifiable: model.Identifiable{ID: fmt.Sprintf("%d", index)},
-				Class:        int(rawEntry.Class),
-				Subclass:     int(rawEntry.Subclass),
-				Type:         int(rawEntry.Type)}
-
-			entry.BaseProperties.TileX = int(rawEntry.X >> 8)
-			entry.BaseProperties.FineX = int(rawEntry.X & 0xFF)
-			entry.BaseProperties.TileY = int(rawEntry.Y >> 8)
-			entry.BaseProperties.FineY = int(rawEntry.Y & 0xFF)
-			entry.BaseProperties.Z = int(rawEntry.Z)
-
-			meta := data.LevelObjectClassMetaEntry(rawEntry.Class)
-			classStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 10 + entry.Class))
-			blockData := classStore.BlockData(0)
-			startOffset := meta.EntrySize * int(rawEntry.ClassTableIndex)
-			if (startOffset + meta.EntrySize) > len(blockData) {
-				fmt.Printf("!!!!! class %d meta says %d bytes size, can't reach index %d in blockData %d",
-					int(entry.Class), meta.EntrySize, rawEntry.ClassTableIndex, len(blockData))
-			} else {
-				entry.ClassData = bytesToIntArray(blockData[startOffset+data.LevelObjectPrefixSize : startOffset+meta.EntrySize])
-			}
-
-			result = append(result, entry)
+			result = append(result, level.objectFromRawEntry(index, &rawEntry))
 		}
 	}
 
 	return result
 }
 
+func intAsPointer(value int) (ptr *int) {
+	ptr = new(int)
+	*ptr = value
+	return
+}
+
+func (level *Level) objectFromRawEntry(index int, rawEntry *data.LevelObjectEntry) (entry model.LevelObject) {
+	entry.Identifiable = model.Identifiable{ID: fmt.Sprintf("%d", index)}
+	entry.Class = int(rawEntry.Class)
+
+	entry.Properties.Subclass = intAsPointer(int(rawEntry.Subclass))
+	entry.Properties.Type = intAsPointer(int(rawEntry.Type))
+
+	entry.Properties.TileX = intAsPointer(int(rawEntry.X >> 8))
+	entry.Properties.FineX = intAsPointer(int(rawEntry.X & 0xFF))
+	entry.Properties.TileY = intAsPointer(int(rawEntry.Y >> 8))
+	entry.Properties.FineY = intAsPointer(int(rawEntry.Y & 0xFF))
+	entry.Properties.Z = intAsPointer(int(rawEntry.Z))
+
+	entry.Properties.RotationX = intAsPointer(int(rawEntry.Rot1))
+	entry.Properties.RotationY = intAsPointer(int(rawEntry.Rot3))
+	entry.Properties.RotationZ = intAsPointer(int(rawEntry.Rot2))
+	entry.Properties.Hitpoints = intAsPointer(int(rawEntry.Hitpoints))
+
+	meta := data.LevelObjectClassMetaEntry(rawEntry.Class)
+	classStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 10 + entry.Class))
+	blockData := classStore.BlockData(0)
+	startOffset := meta.EntrySize * int(rawEntry.ClassTableIndex)
+	if (startOffset + meta.EntrySize) > len(blockData) {
+		fmt.Printf("!!!!! class %d meta says %d bytes size, can't reach index %d in blockData %d",
+			int(entry.Class), meta.EntrySize, rawEntry.ClassTableIndex, len(blockData))
+	} else {
+		entry.Properties.ClassData = blockData[startOffset+data.LevelObjectPrefixSize : startOffset+meta.EntrySize]
+	}
+
+	return
+}
+
+// RemoveObject removes an object from the level.
+func (level *Level) RemoveObject(objectIndex int) (err error) {
+	level.mutex.Lock()
+	defer level.mutex.Unlock()
+
+	if (objectIndex > 0) && (objectIndex < len(level.objectList)) {
+		objectEntry := &level.objectList[objectIndex]
+
+		if objectEntry.IsInUse() {
+			classMeta := data.LevelObjectClassMetaEntry(objectEntry.Class)
+			classStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 10 + int(objectEntry.Class)))
+			classTable := logic.DecodeLevelObjectClassTable(classStore.BlockData(0), classMeta.EntrySize)
+			classChain := classTable.AsChain()
+
+			level.crossrefList.RemoveEntriesFromMap(logic.CrossReferenceListIndex(objectEntry.CrossReferenceTableIndex), level.tileMap)
+			classChain.ReleaseLink(data.LevelObjectChainIndex(objectEntry.ClassTableIndex))
+			level.objectChain.ReleaseLink(data.LevelObjectChainIndex(objectIndex))
+			objectEntry.InUse = 0
+
+			level.onObjectListChanged(classStore, classTable)
+		}
+	}
+
+	return
+}
+
 // AddObject adds a new object at given tile.
-func (level *Level) AddObject(template *model.LevelObjectTemplate) (createdIndex int, err error) {
+func (level *Level) AddObject(template *model.LevelObjectTemplate) (entry model.LevelObject, err error) {
 	level.mutex.Lock()
 	defer level.mutex.Unlock()
 
@@ -250,7 +282,6 @@ func (level *Level) AddObject(template *model.LevelObjectTemplate) (createdIndex
 		err = objectErr
 		return
 	}
-	createdIndex = int(objectIndex)
 
 	locations := []logic.TileLocation{logic.AtTile(uint16(template.TileX), uint16(template.TileY))}
 
@@ -282,6 +313,107 @@ func (level *Level) AddObject(template *model.LevelObjectTemplate) (createdIndex
 	objectEntry.ClassTableIndex = uint16(classIndex)
 	classEntry.LevelObjectTableIndex = uint16(objectIndex)
 
+	level.onObjectListChanged(classStore, classTable)
+	entry = level.objectFromRawEntry(int(objectIndex), objectEntry)
+
+	return
+}
+
+// SetObject modifies the properties of identified object.
+func (level *Level) SetObject(objectIndex int, newProperties *model.LevelObjectProperties) (properties model.LevelObjectProperties, err error) {
+	level.mutex.Lock()
+	defer level.mutex.Unlock()
+
+	if (objectIndex > 0) && (objectIndex < len(level.objectList)) {
+		objectEntry := &level.objectList[objectIndex]
+
+		if objectEntry.IsInUse() {
+			classMeta := data.LevelObjectClassMetaEntry(objectEntry.Class)
+			classStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 10 + int(objectEntry.Class)))
+			classTable := logic.DecodeLevelObjectClassTable(classStore.BlockData(0), classMeta.EntrySize)
+			changedTile := false
+
+			if newProperties.Subclass != nil {
+				objectEntry.Subclass = res.ObjectSubclass(*newProperties.Subclass)
+			}
+			if newProperties.Type != nil {
+				objectEntry.Type = res.ObjectType(*newProperties.Type)
+			}
+			if newProperties.Z != nil {
+				objectEntry.Z = byte(*newProperties.Z)
+			}
+			newTileX, newFineX := objectEntry.X.Tile(), objectEntry.X.Offset()
+			if (newProperties.TileX != nil) && (newTileX != byte(*newProperties.TileX)) {
+				newTileX = byte(*newProperties.TileX)
+				changedTile = true
+			}
+			if newProperties.FineX != nil {
+				newFineX = byte(*newProperties.FineX)
+			}
+			objectEntry.X = data.MapCoordinateOf(newTileX, newFineX)
+			newTileY, newFineY := objectEntry.Y.Tile(), objectEntry.Y.Offset()
+			if (newProperties.TileY != nil) && (newTileY != byte(*newProperties.TileY)) {
+				newTileY = byte(*newProperties.TileY)
+				changedTile = true
+			}
+			if newProperties.FineY != nil {
+				newFineY = byte(*newProperties.FineY)
+			}
+			objectEntry.Y = data.MapCoordinateOf(newTileY, newFineY)
+
+			if newProperties.RotationX != nil {
+				objectEntry.Rot1 = byte(*newProperties.RotationX)
+			}
+			if newProperties.RotationY != nil {
+				objectEntry.Rot3 = byte(*newProperties.RotationY)
+			}
+			if newProperties.RotationZ != nil {
+				objectEntry.Rot2 = byte(*newProperties.RotationZ)
+			}
+			if newProperties.Hitpoints != nil {
+				objectEntry.Hitpoints = uint16(*newProperties.Hitpoints)
+			}
+
+			if len(newProperties.ClassData) > 0 {
+				classEntry := classTable.Entry(data.LevelObjectChainIndex(objectEntry.ClassTableIndex))
+
+				copy(classEntry.Data(), newProperties.ClassData)
+			}
+			if changedTile {
+				locations := []logic.TileLocation{logic.AtTile(uint16(newTileX), uint16(newTileY))}
+
+				if objectEntry.CrossReferenceTableIndex != 0 {
+					level.crossrefList.RemoveEntriesFromMap(logic.CrossReferenceListIndex(objectEntry.CrossReferenceTableIndex), level.tileMap)
+					objectEntry.CrossReferenceTableIndex = 0
+				}
+
+				crossrefIndex, crossrefErr := level.crossrefList.AddObjectToMap(uint16(objectIndex), level.tileMap, locations)
+				if crossrefErr != nil {
+					// This is a kind of bad (and weird) situation.
+					// The object, which was already stored, can not be stored anymore (?) and is furthermore left
+					// in an incorrect state.
+					err = crossrefErr
+					return
+				}
+				crossrefEntry := level.crossrefList.Entry(crossrefIndex)
+
+				objectEntry.CrossReferenceTableIndex = uint16(crossrefIndex)
+				crossrefEntry.LevelObjectTableIndex = uint16(objectIndex)
+			}
+
+			level.onObjectListChanged(classStore, classTable)
+			properties = level.objectFromRawEntry(int(objectIndex), objectEntry).Properties
+		} else {
+			err = fmt.Errorf("Object is not in use")
+		}
+	} else {
+		err = fmt.Errorf("Invalid object index")
+	}
+
+	return
+}
+
+func (level *Level) onObjectListChanged(classStore chunk.BlockStore, classTable *logic.LevelObjectClassTable) {
 	classStore.SetBlockData(0, classTable.Encode())
 
 	objWriter := bytes.NewBuffer(nil)
@@ -290,8 +422,6 @@ func (level *Level) AddObject(template *model.LevelObjectTemplate) (createdIndex
 
 	level.crossrefListStore.SetBlockData(0, level.crossrefList.Encode())
 	level.onTileDataChanged()
-
-	return
 }
 
 func (level *Level) readTable(levelBlockID int, value interface{}) {

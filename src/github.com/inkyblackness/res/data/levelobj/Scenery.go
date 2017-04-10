@@ -7,22 +7,22 @@ import (
 var baseScenery = interpreters.New()
 
 var displayScenery = baseScenery.
-	With("FrameCount", 0, 2).
-	With("LoopType", 2, 2).
-	With("AlternationType", 4, 2).
-	With("PictureSource", 6, 2).
-	With("AlternateSource", 8, 2)
+	With("FrameCount", 0, 2).As(interpreters.RangedValue(0, 4)).
+	With("LoopType", 2, 2).As(interpreters.EnumValue(map[uint32]string{0: "Forward", 1: "Forward/Backward", 2: "Backward", 3: "Forward/Backward"})).
+	With("AlternationType", 4, 2).As(interpreters.EnumValue(map[uint32]string{0: "Don't Alternate", 3: "Alternate Randomly"})).
+	With("PictureSource", 6, 2).As(interpreters.RangedValue(0, 0x01FF)).
+	With("AlternateSource", 8, 2).As(interpreters.RangedValue(0, 0x01FF))
 
 var displayControlPedestal = baseScenery.
-	With("FrameCount", 0, 2).
-	With("TriggerObjectIndex", 2, 2).
-	With("AlternationType", 4, 2).
-	With("PictureSource", 6, 2).
-	With("AlternateSource", 8, 2)
+	With("FrameCount", 0, 2).As(interpreters.RangedValue(0, 4)).
+	With("TriggerObjectIndex", 2, 2).As(interpreters.ObjectIndex()).
+	With("AlternationType", 4, 2).As(interpreters.EnumValue(map[uint32]string{0: "Don't Alternate", 3: "Alternate Randomly"})).
+	With("PictureSource", 6, 2).As(interpreters.RangedValue(0, 0x01FF)).
+	With("AlternateSource", 8, 2).As(interpreters.RangedValue(0, 0x01FF))
 
 var cabinetFurniture = baseScenery.
-	With("Object1Index", 2, 2).
-	With("Object2Index", 4, 2)
+	With("Object1Index", 2, 2).As(interpreters.ObjectIndex()).
+	With("Object2Index", 4, 2).As(interpreters.ObjectIndex())
 
 var texturableFurniture = baseScenery.
 	With("TextureIndex", 6, 2)
@@ -30,20 +30,20 @@ var texturableFurniture = baseScenery.
 var wordScenery = baseScenery.
 	With("TextIndex", 0, 2).
 	With("FontAndSize", 2, 1).
-	With("Color", 4, 1)
+	With("Color", 4, 1).As(interpreters.RangedValue(0, 255))
 
 var textureMapScenery = baseScenery.
 	With("TextureIndex", 6, 2)
 
 var buttonControlPedestal = baseScenery.
-	With("TriggerObjectIndex", 2, 2)
+	With("TriggerObjectIndex", 2, 2).As(interpreters.ObjectIndex())
 
 var surgicalMachine = baseScenery.
-	With("BrokenState", 2, 1).
+	With("BrokenState", 2, 1).As(interpreters.EnumValue(map[uint32]string{0x00: "OK", 0xE7: "Broken"})).
 	With("BrokenMessageIndex", 5, 1)
 
 var securityCamera = baseScenery.
-	With("PanningSwitch", 2, 1)
+	With("PanningSwitch", 2, 1).As(interpreters.EnumValue(map[uint32]string{0: "Stationary", 1: "Panning"}))
 
 var solidBridge = baseScenery.
 	With("Size", 2, 1).

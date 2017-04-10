@@ -89,6 +89,36 @@ func (panelBuilder *controlPanelBuilder) addInfo(labelText string) (title *contr
 	return
 }
 
+func (panelBuilder *controlPanelBuilder) addTextButton(labelText, buttonText string, handler controls.ActionHandler) (title *controls.Label, button *controls.TextButton) {
+	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, 2)
+	bottom := ui.NewOffsetAnchor(top, 25)
+	{
+		builder := panelBuilder.controlFactory.ForLabel()
+		builder.SetParent(panelBuilder.parent)
+		builder.SetLeft(panelBuilder.listLeft)
+		builder.SetTop(top)
+		builder.SetRight(panelBuilder.listCenterEnd)
+		builder.SetBottom(bottom)
+		builder.AlignedHorizontallyBy(controls.RightAligner)
+		title = builder.Build()
+		title.SetText(labelText)
+	}
+	{
+		builder := panelBuilder.controlFactory.ForTextButton()
+		builder.SetParent(panelBuilder.parent)
+		builder.SetLeft(panelBuilder.listCenterStart)
+		builder.SetTop(top)
+		builder.SetRight(panelBuilder.listRight)
+		builder.SetBottom(bottom)
+		builder.WithText(buttonText)
+		builder.OnAction(handler)
+		button = builder.Build()
+	}
+	panelBuilder.lastBottom = bottom
+
+	return
+}
+
 func (panelBuilder *controlPanelBuilder) addComboProperty(labelText string, handler controls.SelectionChangeHandler) (label *controls.Label, box *controls.ComboBox) {
 	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, 2)
 	bottom := ui.NewOffsetAnchor(top, 25)
@@ -112,6 +142,35 @@ func (panelBuilder *controlPanelBuilder) addComboProperty(labelText string, hand
 		builder.SetBottom(bottom)
 		builder.WithSelectionChangeHandler(handler)
 		box = builder.Build()
+	}
+	panelBuilder.lastBottom = bottom
+
+	return
+}
+
+func (panelBuilder *controlPanelBuilder) addSliderProperty(labelText string, handler controls.SliderChangeHandler) (label *controls.Label, slider *controls.Slider) {
+	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, 2)
+	bottom := ui.NewOffsetAnchor(top, 25)
+	{
+		builder := panelBuilder.controlFactory.ForLabel()
+		builder.SetParent(panelBuilder.parent)
+		builder.SetLeft(panelBuilder.listLeft)
+		builder.SetTop(top)
+		builder.SetRight(panelBuilder.listCenterEnd)
+		builder.SetBottom(bottom)
+		builder.AlignedHorizontallyBy(controls.RightAligner)
+		label = builder.Build()
+		label.SetText(labelText)
+	}
+	{
+		builder := panelBuilder.controlFactory.ForSlider()
+		builder.SetParent(panelBuilder.parent)
+		builder.SetLeft(panelBuilder.listCenterStart)
+		builder.SetTop(top)
+		builder.SetRight(panelBuilder.listRight)
+		builder.SetBottom(bottom)
+		builder.WithSliderChangeHandler(handler)
+		slider = builder.Build()
 	}
 	panelBuilder.lastBottom = bottom
 

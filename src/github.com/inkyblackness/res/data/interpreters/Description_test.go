@@ -63,3 +63,22 @@ func (suite *DescriptionSuite) TestRefiningCopiesPreviousRefinements(c *check.C)
 
 	c.Check(second.refinements["sub1"], check.NotNil)
 }
+
+func (suite *DescriptionSuite) TestAsPanicsIfNoFieldIsActive(c *check.C) {
+	c.Check(func() { New().As(func(simpl *Simplifier) bool { return false }) }, check.PanicMatches, "No field active")
+}
+
+func (suite *DescriptionSuite) TestAsRegistersRangeFunctionForLastField(c *check.C) {
+	rangeFuncCalled := false
+	rangeFunc := func(simpl *Simplifier) bool {
+		rangeFuncCalled = true
+		return true
+	}
+	desc := New().With("fieldA", 0, 2).As(rangeFunc)
+
+	inst := desc.For([]byte{0x00, 0x01})
+	simplifier := NewSimplifier(func(minValue, maxValue int64) {})
+	inst.Describe("fieldA", simplifier)
+
+	c.Check(rangeFuncCalled, check.Equals, true)
+}
