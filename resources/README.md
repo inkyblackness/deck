@@ -14,6 +14,7 @@ These are executables downloaded from the internet. If you are unsure what they 
 ### InkyBlackness - Shocked ("shocked-client")
 This tool is the primary application. It is a GUI editor for the resources, including a map editor.
 The tool uses OpenGL 3.2 .
+User documentation is available online here: https://github.com/inkyblackness/shocked-client/wiki
 
 #### Starting the editor
 
@@ -21,10 +22,9 @@ Example:
 
 ```
 shocked-client --path <path to resources>
-
 ```
 
-The ```--path``` parameter can be provided several times and point to one directory with resources files. If all resources are in the same directory, only one is enough. Two might be used for a vanillay System Shock installation, with one directory pointing to the resources on the CD-ROM and the other to the files on harddisk.
+The ```--path``` parameter can be provided several times and point to one directory with resources files each time. If all resources are in the same directory, only one is enough. Two might be used for a vanillay System Shock installation, with one directory pointing to the resources on the CD-ROM and the other to the files on harddisk.
 Note that the provided path(s) must point to an actual data directory, within which the .res files are stored.
 
 
