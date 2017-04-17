@@ -27,8 +27,8 @@ var baseCyberspaceScenery = interpreters.New()
 
 var scenerySoftware = baseCyberspaceScenery.
 	With("Parameter", 0, 2).
-	With("Subclass", 2, 4).As(interpreters.RangedValue(0, 10)).
-	With("Type", 6, 4).As(interpreters.RangedValue(0, 10))
+	With("Subclass", 2, 4).As(interpreters.RangedValue(0, 7)).
+	With("Type", 6, 4).As(interpreters.RangedValue(0, 16))
 
 func initSoftware() interpreterRetriever {
 	cyberspacePrograms := newInterpreterLeaf(cyberspaceProgram)

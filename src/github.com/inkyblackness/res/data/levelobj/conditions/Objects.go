@@ -5,8 +5,8 @@ import (
 )
 
 var objectType = interpreters.New().
-	With("Type", 0, 1).
-	With("Subclass", 1, 1).
+	With("Type", 0, 1).As(interpreters.RangedValue(0, 16)).
+	With("Subclass", 1, 1).As(interpreters.RangedValue(0, 7)).
 	With("Class", 2, 1).As(interpreters.RangedValue(0, 14))
 
 var objectIndex = interpreters.New().

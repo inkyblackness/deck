@@ -11,8 +11,8 @@ func forType(typeID int) func(*interpreters.Instance) bool {
 }
 
 var transportHackerDetails = interpreters.New().
-	With("TargetX", 0, 4).
-	With("TargetY", 4, 4)
+	With("TargetX", 0, 4).As(interpreters.RangedValue(1, 63)).
+	With("TargetY", 4, 4).As(interpreters.RangedValue(1, 63))
 
 var changeHealthDetails = interpreters.New().
 	With("HealthDelta", 4, 2).
@@ -40,13 +40,13 @@ var showCutsceneDetails = interpreters.New().
 
 var triggerOtherObjectsDetails = interpreters.New().
 	With("Object1Index", 0, 2).As(interpreters.ObjectIndex()).
-	With("Object1Delay", 2, 2).
+	With("Object1Delay", 2, 2).As(interpreters.RangedValue(0, 6000)).
 	With("Object2Index", 4, 2).As(interpreters.ObjectIndex()).
-	With("Object2Delay", 6, 2).
+	With("Object2Delay", 6, 2).As(interpreters.RangedValue(0, 6000)).
 	With("Object3Index", 8, 2).As(interpreters.ObjectIndex()).
-	With("Object3Delay", 10, 2).
+	With("Object3Delay", 10, 2).As(interpreters.RangedValue(0, 6000)).
 	With("Object4Index", 12, 2).As(interpreters.ObjectIndex()).
-	With("Object4Delay", 14, 2)
+	With("Object4Delay", 14, 2).As(interpreters.RangedValue(0, 6000))
 
 var changeLightingDetails = interpreters.New().
 	With("ReferenceObjectIndex", 2, 2).As(interpreters.ObjectIndex()).
@@ -116,20 +116,20 @@ var setScreenPictureDetails = interpreters.New().
 var trapMessageDetails = interpreters.New().
 	With("BackgroundImageIndex", 0, 4).
 	With("MessageIndex", 4, 4).
-	With("TextColor", 8, 4).
-	With("MfdSuppressionFlag", 12, 4)
+	With("TextColor", 8, 4).As(interpreters.RangedValue(0, 255)).
+	With("MfdSuppressionFlag", 12, 4).As(interpreters.EnumValue(map[uint32]string{0: "Show in MFD", 1: "Show only in HUD"}))
 
 var spawnObjectsDetails = interpreters.New().
-	With("ObjectClass", 2, 1).
-	With("ObjectSubclass", 1, 1).
-	With("ObjectType", 0, 1).
+	With("ObjectClass", 2, 1).As(interpreters.RangedValue(0, 14)).
+	With("ObjectSubclass", 1, 1).As(interpreters.RangedValue(0, 7)).
+	With("ObjectType", 0, 1).As(interpreters.RangedValue(0, 16)).
 	With("ReferenceObject1Index", 4, 2).As(interpreters.ObjectIndex()).
 	With("ReferenceObject2Index", 6, 2).As(interpreters.ObjectIndex()).
-	With("NumberOfObjects", 8, 4)
+	With("NumberOfObjects", 8, 4).As(interpreters.RangedValue(0, 100))
 
 var changeObjectTypeDetails = interpreters.New().
 	With("ObjectIndex", 0, 4).As(interpreters.ObjectIndex()).
-	With("NewType", 4, 2)
+	With("NewType", 4, 2).As(interpreters.RangedValue(0, 16))
 
 // Change state block
 
@@ -144,7 +144,7 @@ var showGameCodeDigitChange = interpreters.New().
 
 var setParameterFromVariableChange = interpreters.New().
 	With("ObjectIndex", 0, 4).As(interpreters.ObjectIndex()).
-	With("ParameterNumber", 4, 4).
+	With("ParameterNumber", 4, 4).As(interpreters.RangedValue(0, 16)).
 	With("VariableIndex", 8, 4)
 
 var setButtonStateChange = interpreters.New().

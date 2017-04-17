@@ -13,7 +13,7 @@ func init() {
 	software := initSoftware()
 	animations := newInterpreterEntry(baseAnimation)
 	markers := initMarkers()
-	critters := newInterpreterEntry(baseCritter)
+	critters := initCritters()
 
 	realWorldEntries = newInterpreterEntry(interpreters.New())
 	realWorldEntries.set(0, initWeapons())
@@ -38,4 +38,5 @@ func init() {
 	cyberspaceEntries.set(8, initCyberspaceItems())
 	cyberspaceEntries.set(9, initCyberspacePanels())
 	cyberspaceEntries.set(12, markers)
+	cyberspaceEntries.set(14, critters)
 }

@@ -37,8 +37,8 @@ var cyberspaceTerminal = gameVariablePanel.
 	With("TargetLevel", 18, 4).As(interpreters.EnumValue(map[uint32]string{10: "10", 14: "14", 15: "15"}))
 
 var energyChargeStation = gameVariablePanel.
-	With("EnergyDelta", 6, 4).
-	With("RechargeTime", 10, 4).
+	With("EnergyDelta", 6, 4).As(interpreters.RangedValue(0, 255)).
+	With("RechargeTime", 10, 4).As(interpreters.RangedValue(0, 3600)).
 	With("TriggerObjectIndex", 14, 4).As(interpreters.ObjectIndex()).
 	With("RechargedTimestamp", 18, 4)
 
