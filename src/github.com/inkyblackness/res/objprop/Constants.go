@@ -129,7 +129,7 @@ func StandardProperties() []ClassDescriptor {
 	{ // Marker
 		subclasses := []SubclassDescriptor{
 			SubclassDescriptor{TypeCount: 13, SpecificDataLength: 1},
-			SubclassDescriptor{TypeCount: 1, SpecificDataLength: 1},
+			SubclassDescriptor{TypeCount: 1, SpecificDataLength: 2},
 			SubclassDescriptor{TypeCount: 5, SpecificDataLength: 1}}
 
 		result = append(result, ClassDescriptor{GenericDataLength: 1, Subclasses: subclasses})
@@ -148,9 +148,9 @@ func StandardProperties() []ClassDescriptor {
 	}
 	{ // Critter
 		subclasses := []SubclassDescriptor{
-			SubclassDescriptor{TypeCount: 9, SpecificDataLength: 1},
-			SubclassDescriptor{TypeCount: 12, SpecificDataLength: 2},
-			SubclassDescriptor{TypeCount: 7, SpecificDataLength: 2},
+			SubclassDescriptor{TypeCount: 9, SpecificDataLength: 3},
+			SubclassDescriptor{TypeCount: 12, SpecificDataLength: 1},
+			SubclassDescriptor{TypeCount: 7, SpecificDataLength: 1},
 			SubclassDescriptor{TypeCount: 7, SpecificDataLength: 6},
 			SubclassDescriptor{TypeCount: 2, SpecificDataLength: 1}}
 

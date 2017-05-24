@@ -1,16 +1,19 @@
 package model
 
+// TileProperties describe one tile in the map.
 type TileProperties struct {
-	Type *TileType `json:"type"`
+	Type *TileType
 
-	FloorHeight   *HeightUnit `json:"floorHeight"`
-	CeilingHeight *HeightUnit `json:"ceilingHeight"`
-	SlopeHeight   *HeightUnit `json:"slopeHeight"`
+	FloorHeight   *HeightUnit
+	CeilingHeight *HeightUnit
+	SlopeHeight   *HeightUnit
 
-	SlopeControl *SlopeControl `json:"slopeControl"`
+	SlopeControl *SlopeControl
 
-	CalculatedWallHeights *CalculatedWallHeights `json:"calculatedWallHeights"`
+	CalculatedWallHeights *CalculatedWallHeights
 
-	RealWorld *RealWorldTileProperties `json:"realWorld"`
+	MusicIndex *int
+
+	RealWorld *RealWorldTileProperties
 	//Cyberspace *CyberspaceTileProperties
 }

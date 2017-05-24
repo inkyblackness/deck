@@ -75,6 +75,8 @@ type Level struct {
 
 	mutex sync.Mutex
 
+	isCyberspace bool
+
 	tileMapStore chunk.BlockStore
 	tileMap      *logic.TileMap
 
@@ -115,6 +117,9 @@ func NewLevel(store chunk.Store, id int) *Level {
 			})
 	}
 
+	info := level.information()
+	level.isCyberspace = info.IsCyberspace()
+
 	return level
 }
 
@@ -127,13 +132,20 @@ func (level *Level) ID() int {
 	return level.id
 }
 
-// Properties returns the properties of the level.
-func (level *Level) Properties() (result model.LevelProperties) {
+func (level *Level) information() data.LevelInformation {
 	blockData := level.store.Get(res.ResourceID(4000 + level.id*100 + 4)).BlockData(0)
 	reader := bytes.NewReader(blockData)
 	var info data.LevelInformation
 
 	binary.Read(reader, binary.LittleEndian, &info)
+
+	return info
+}
+
+// Properties returns the properties of the level.
+func (level *Level) Properties() (result model.LevelProperties) {
+	info := level.information()
+
 	result.CyberspaceFlag = info.IsCyberspace()
 	result.HeightShift = int(info.HeightShift)
 
@@ -190,6 +202,12 @@ func (level *Level) Objects() []model.LevelObject {
 
 func intAsPointer(value int) (ptr *int) {
 	ptr = new(int)
+	*ptr = value
+	return
+}
+
+func boolAsPointer(value bool) (ptr *bool) {
+	ptr = new(bool)
 	*ptr = value
 	return
 }
@@ -305,7 +323,10 @@ func (level *Level) AddObject(template *model.LevelObjectTemplate) (entry model.
 	objectEntry.Rot1 = 0
 	objectEntry.Rot2 = 0
 	objectEntry.Rot3 = 0
-	objectEntry.Hitpoints = 1
+	objectEntry.Hitpoints = uint16(template.Hitpoints)
+	if objectEntry.Hitpoints == 0 {
+		objectEntry.Hitpoints = 1
+	}
 
 	objectEntry.CrossReferenceTableIndex = uint16(crossrefIndex)
 	crossrefEntry.LevelObjectTableIndex = uint16(objectIndex)
@@ -653,25 +674,27 @@ func (level *Level) TileProperties(x, y int) (result model.TileProperties) {
 		result.CalculatedWallHeights.West = level.calculateWallHeight(entry, DirWest, x-1, y, DirEast)
 	}
 
-	{
+	result.MusicIndex = intAsPointer(entry.Flags.MusicIndex())
+
+	if !level.isCyberspace {
 		var properties model.RealWorldTileProperties
 		var textureIDs = uint16(entry.Textures)
 
-		properties.WallTexture = new(int)
-		*properties.WallTexture = int(textureIDs & 0x3F)
-		properties.CeilingTexture = new(int)
-		*properties.CeilingTexture = int((textureIDs >> 6) & 0x1F)
-		properties.CeilingTextureRotations = new(int)
-		*properties.CeilingTextureRotations = int((entry.Ceiling >> 5) & 0x03)
-		properties.FloorTexture = new(int)
-		*properties.FloorTexture = int((textureIDs >> 11) & 0x1F)
-		properties.FloorTextureRotations = new(int)
-		*properties.FloorTextureRotations = int((entry.Floor >> 5) & 0x03)
+		properties.WallTexture = intAsPointer(int(textureIDs & 0x3F))
+		properties.CeilingTexture = intAsPointer(int((textureIDs >> 6) & 0x1F))
+		properties.CeilingTextureRotations = intAsPointer(int((entry.Ceiling >> 5) & 0x03))
+		properties.FloorTexture = intAsPointer(int((textureIDs >> 11) & 0x1F))
+		properties.FloorTextureRotations = intAsPointer(int((entry.Floor >> 5) & 0x03))
 
-		properties.UseAdjacentWallTexture = new(bool)
-		*properties.UseAdjacentWallTexture = (entry.Flags & 0x00000100) != 0
+		properties.UseAdjacentWallTexture = boolAsPointer((entry.Flags & 0x00000100) != 0)
 		properties.WallTextureOffset = new(model.HeightUnit)
 		*properties.WallTextureOffset = model.HeightUnit(entry.Flags & 0x0000001F)
+
+		properties.FloorHazard = boolAsPointer((entry.Floor & 0x80) != 0)
+		properties.CeilingHazard = boolAsPointer((entry.Ceiling & 0x80) != 0)
+
+		properties.FloorShadow = intAsPointer(entry.Flags.FloorShadow())
+		properties.CeilingShadow = intAsPointer(entry.Flags.CeilingShadow())
 
 		result.RealWorld = &properties
 	}
@@ -701,7 +724,10 @@ func (level *Level) SetTileProperties(x, y int, properties model.TileProperties)
 	if properties.SlopeControl != nil {
 		flags = (flags & ^uint32(0x00000C00)) | (uint32(slopeControl(*properties.SlopeControl)) << 10)
 	}
-	if properties.RealWorld != nil {
+	if properties.MusicIndex != nil {
+		flags = uint32(data.TileFlag(flags).WithMusicIndex(*properties.MusicIndex))
+	}
+	if !level.isCyberspace && (properties.RealWorld != nil) {
 		var textureIDs = uint16(entry.Textures)
 
 		if properties.RealWorld.FloorTexture != nil && (*properties.RealWorld.FloorTexture < 0x20) {
@@ -727,6 +753,24 @@ func (level *Level) SetTileProperties(x, y int, properties model.TileProperties)
 		}
 		if properties.RealWorld.WallTextureOffset != nil && *properties.RealWorld.WallTextureOffset < 0x20 {
 			flags = (flags & ^uint32(0x0000001F)) | uint32(*properties.RealWorld.WallTextureOffset)
+		}
+		if properties.RealWorld.FloorHazard != nil {
+			entry.Floor &= 0x7F
+			if *properties.RealWorld.FloorHazard {
+				entry.Floor |= 0x80
+			}
+		}
+		if properties.RealWorld.CeilingHazard != nil {
+			entry.Ceiling &= 0x7F
+			if *properties.RealWorld.CeilingHazard {
+				entry.Ceiling |= 0x80
+			}
+		}
+		if properties.RealWorld.FloorShadow != nil {
+			flags = uint32(data.TileFlag(flags).WithFloorShadow(*properties.RealWorld.FloorShadow))
+		}
+		if properties.RealWorld.CeilingShadow != nil {
+			flags = uint32(data.TileFlag(flags).WithCeilingShadow(*properties.RealWorld.CeilingShadow))
 		}
 
 		entry.Textures = data.TileTextureInfo(textureIDs)

@@ -41,9 +41,9 @@ func NewAdapter(store model.DataStore) *Adapter {
 		palette: newObservable()}
 
 	adapter.message.set("")
-	adapter.activeLevel = newLevelAdapter(adapter, store)
 	adapter.textureAdapter = newTextureAdapter(adapter, store)
 	adapter.objectsAdapter = newObjectsAdapter(adapter, store)
+	adapter.activeLevel = newLevelAdapter(adapter, store, adapter.objectsAdapter)
 	adapter.palette.set(&[256]model.Color{})
 
 	return adapter

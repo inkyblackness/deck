@@ -26,6 +26,7 @@ type rootArea struct {
 	messageLabel *controls.Label
 
 	welcomeMode      *modeSelector
+	gameObjectsMode  *modeSelector
 	levelControlMode *modeSelector
 	levelMapMode     *modeSelector
 	levelObjectsMode *modeSelector
@@ -65,6 +66,7 @@ func newRootArea(context modes.Context) *ui.Area {
 	}
 
 	root.welcomeMode = root.addMode(modes.NewWelcomeMode(context, root.modeArea), "Welcome")
+	root.gameObjectsMode = root.addMode(modes.NewGameObjectsMode(context, root.modeArea), "Game Objects")
 	root.levelControlMode = root.addMode(modes.NewLevelControlMode(context, root.modeArea, mapDisplay), "Level Control")
 	root.levelMapMode = root.addMode(modes.NewLevelMapMode(context, root.modeArea, mapDisplay), "Level Map")
 	root.levelObjectsMode = root.addMode(modes.NewLevelObjectsMode(context, root.modeArea, mapDisplay), "Level Objects")

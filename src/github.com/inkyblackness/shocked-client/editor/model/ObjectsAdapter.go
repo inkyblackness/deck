@@ -80,6 +80,7 @@ func (adapter *ObjectsAdapter) onNewGameObjects(objects []model.GameObject) {
 			editorObject.shortName[i] = *rawObject.Properties.ShortName[i]
 			editorObject.longName[i] = *rawObject.Properties.LongName[i]
 		}
+		editorObject.data = rawObject.Properties.Data
 		objectMap[objID] = editorObject
 	}
 	adapter.objects.notifyObservers()
@@ -102,12 +103,34 @@ func (adapter *ObjectsAdapter) RequestIcon(id ObjectID) {
 
 // ObjectsOfClass returns all objects matching the requested class.
 func (adapter *ObjectsAdapter) ObjectsOfClass(class int) (objects []*GameObject) {
+	return adapter.objectsByFilter(func(object *GameObject) bool { return object.id.Class() == class })
+}
+
+// Objects returns all objects
+func (adapter *ObjectsAdapter) Objects() (objects []*GameObject) {
+	return adapter.objectsByFilter(func(object *GameObject) bool { return true })
+}
+
+func (adapter *ObjectsAdapter) objectsByFilter(predicate func(*GameObject) bool) (objects []*GameObject) {
 	for _, object := range adapter.objectMap() {
-		if object.id.Class() == class {
+		if predicate(object) {
 			objects = append(objects, object)
 		}
 	}
 	sort.Slice(objects, func(a int, b int) bool { return objects[a].id.ToInt() < objects[b].id.ToInt() })
 
 	return
+}
+
+// RequestObjectPropertiesChange requests to modify the properties of identifed object.
+func (adapter *ObjectsAdapter) RequestObjectPropertiesChange(objectID ObjectID, properties *model.GameObjectProperties) {
+	objectMap := adapter.objectMap()
+
+	adapter.store.SetGameObject(adapter.context.ActiveProjectID(),
+		objectID.Class(), objectID.Subclass(), objectID.Type(), properties,
+		func(newProperties *model.GameObjectProperties) {
+			objectMap[objectID].data = newProperties.Data
+			adapter.objects.notifyObservers()
+		},
+		adapter.context.simpleStoreFailure(fmt.Sprintf("SetGameObject %v", objectID)))
 }

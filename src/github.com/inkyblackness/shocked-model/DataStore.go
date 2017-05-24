@@ -17,6 +17,9 @@ type DataStore interface {
 	GameObjects(projectID string, onSuccess func(objects []GameObject), onFailure FailureFunc)
 	// GameObjectIcon queries the icon bitmap of a game object.
 	GameObjectIcon(projectID string, class, subclass, objType int, onSuccess func(bmp *RawBitmap), onFailure FailureFunc)
+	// SetGameObject requests to update the properties of a game object.
+	SetGameObject(projectID string, class, subclass, objType int, properties *GameObjectProperties,
+		onSuccess func(properties *GameObjectProperties), onFailure FailureFunc)
 
 	// Palette queries a palette.
 	Palette(projectID string, paletteID string, onSuccess func(colors [256]Color), onFailure FailureFunc)

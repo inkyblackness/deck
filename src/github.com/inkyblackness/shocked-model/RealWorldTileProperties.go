@@ -1,13 +1,20 @@
 package model
 
+// RealWorldTileProperties describes tile properties of the real wold.
 type RealWorldTileProperties struct {
-	FloorTexture   *int `json:"floorTexture"`
-	CeilingTexture *int `json:"ceilingTexture"`
-	WallTexture    *int `json:"wallTexture"`
+	FloorTexture   *int
+	CeilingTexture *int
+	WallTexture    *int
 
-	FloorTextureRotations   *int `json:"floorTextureRotations"`
-	CeilingTextureRotations *int `json:"ceilingTextureRotations"`
+	FloorTextureRotations   *int
+	CeilingTextureRotations *int
 
-	UseAdjacentWallTexture *bool       `json:"useAdjacentWallTexture"`
-	WallTextureOffset      *HeightUnit `json:"wallTextureOffset"`
+	UseAdjacentWallTexture *bool
+	WallTextureOffset      *HeightUnit
+
+	FloorHazard   *bool
+	CeilingHazard *bool
+
+	FloorShadow   *int
+	CeilingShadow *int
 }

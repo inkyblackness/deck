@@ -16,6 +16,7 @@ var briefcaseItem = baseItem.
 	With("ObjectIndex4", 8, 2).As(interpreters.ObjectIndex())
 
 var corpseItem = baseItem.
+	With("Unknown0000", 0, 2).As(interpreters.SpecialValue("Unknown")).
 	With("ObjectIndex1", 2, 2).As(interpreters.ObjectIndex()).
 	With("ObjectIndex2", 4, 2).As(interpreters.ObjectIndex()).
 	With("ObjectIndex3", 6, 2).As(interpreters.ObjectIndex()).
@@ -24,11 +25,48 @@ var corpseItem = baseItem.
 var severedHeadItem = baseItem.
 	With("ImageIndex", 2, 1)
 
+var accessMaskDescription = interpreters.Bitfield(map[uint32]string{
+	0x00000001: "None",
+	0x00000002: "Generic1",
+	0x00000004: "Generic2",
+	0x00000008: "Generic3",
+	0x00000010: "Generic4",
+	0x00000020: "Generic5",
+	0x00000040: "Generic6",
+	0x00000080: "Generic7",
+
+	0x00000100: "Group1",
+	0x00000200: "Group2",
+	0x00000400: "Group3",
+	0x00000800: "Group4",
+	0x00001000: "Group5",
+	0x00002000: "Group6",
+	0x00004000: "Group7",
+	0x00008000: "Group8",
+
+	0x00010000: "Group9",
+	0x00020000: "Group10",
+	0x00040000: "Group11",
+	0x00080000: "Group12",
+	0x00100000: "Group13",
+	0x00200000: "Group14",
+	0x00400000: "Group15",
+	0x00800000: "Group16",
+
+	0x01000000: "Personal1",
+	0x02000000: "Personal2",
+	0x04000000: "Personal3",
+	0x08000000: "Personal4",
+	0x10000000: "Personal5",
+	0x20000000: "Personal6",
+	0x40000000: "Personal7"})
+
 var accessCardItem = baseItem.
-	With("AccessMask", 2, 4)
+	With("Ignored0000", 0, 2).As(interpreters.SpecialValue("Ignored")).
+	With("AccessMask", 2, 4).As(accessMaskDescription)
 
 var securityIDModuleItem = baseItem.
-	With("AccessMask", 2, 4)
+	With("AccessMask", 2, 4).As(accessMaskDescription)
 
 var cyberInfoNodeItem = baseItem.
 	With("TextIndex", 2, 1)

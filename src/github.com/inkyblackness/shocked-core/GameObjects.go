@@ -124,6 +124,8 @@ func (gameObjects *GameObjects) Objects() []model.GameObject {
 					modelData.Properties.ShortName[i] = gameObjects.decodeString(shortName.BlockData(linearIndex))
 					modelData.Properties.LongName[i] = gameObjects.decodeString(longName.BlockData(linearIndex))
 				}
+				modelData.Properties.Data = gameObjects.objProperties.Get(res.MakeObjectID(
+					res.ObjectClass(classIndex), res.ObjectSubclass(subclassIndex), res.ObjectType(typeIndex)))
 
 				result = append(result, modelData)
 				linearIndex++
@@ -131,6 +133,25 @@ func (gameObjects *GameObjects) Objects() []model.GameObject {
 		}
 	}
 	return result
+}
+
+// SetObjectData stores new object data
+func (gameObjects *GameObjects) SetObjectData(id res.ObjectID, newData objprop.ObjectData) objprop.ObjectData {
+	oldData := gameObjects.objProperties.Get(id)
+	fusedData := oldData
+
+	if newData.Common != nil {
+		fusedData.Common = newData.Common
+	}
+	if newData.Generic != nil {
+		fusedData.Generic = newData.Generic
+	}
+	if newData.Specific != nil {
+		fusedData.Specific = newData.Specific
+	}
+	gameObjects.objProperties.Put(id, fusedData)
+
+	return fusedData
 }
 
 func (gameObjects *GameObjects) decodeString(data []byte) *string {

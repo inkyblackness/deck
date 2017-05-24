@@ -5,7 +5,7 @@ import (
 )
 
 var baseBarrier = interpreters.New().
-	With("LockVariableIndex", 0, 2).
+	With("LockVariableIndex", 0, 2).As(interpreters.RangedValue(0, 0x1FF)).
 	With("LockMessageIndex", 2, 1).
 	With("ForceDoorColor", 3, 1).
 	With("RequiredAccessLevel", 4, 1).

@@ -5,7 +5,7 @@ import (
 )
 
 var gameVariable = interpreters.New().
-	With("VariableKey", 0, 2).
+	With("VariableKey", 0, 2).As(interpreters.SpecialValue("VariableCondition")).
 	With("Value", 2, 1).
 	With("MessageIndex", 3, 1)
 

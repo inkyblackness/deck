@@ -9,12 +9,18 @@ import (
 var baseMarker = interpreters.New()
 
 var repulsor = baseMarker.
-	With("StartHeight", 10, 4).
-	With("EndHeight", 14, 4).
-	With("Flags", 18, 4)
+	With("Ignored0000", 0, 1).As(interpreters.SpecialValue("Ignored")).
+	With("StartHeightFraction", 10, 2).As(interpreters.RangedValue(0, 65536)).
+	With("StartHeight", 12, 2).As(interpreters.RangedValue(0, 63)).
+	With("EndHeightFraction", 14, 2).As(interpreters.RangedValue(0, 65536)).
+	With("EndHeight", 16, 2).As(interpreters.RangedValue(0, 63)).
+	With("Flags", 18, 4).As(interpreters.Bitfield(map[uint32]string{0x00000001: "Disabled", 0x00000008: "Strong"}))
 
 var aiHint = baseMarker.
-	With("NextObjectIndex", 6, 2).As(interpreters.ObjectIndex())
+	With("Ignored0000", 0, 1).As(interpreters.SpecialValue("Ignored")).
+	With("NextObjectIndex", 6, 2).As(interpreters.ObjectIndex()).
+	With("TriggerObjectFlag", 18, 2).As(interpreters.EnumValue(map[uint32]string{0: "Off", 1: "On"})).
+	With("TriggerObjectIndex", 20, 2).As(interpreters.ObjectIndex())
 
 var baseTrigger = baseMarker.
 	Refining("Action", 0, 22, actions.Unconditional(), interpreters.Always)
@@ -32,7 +38,7 @@ var nullTrigger = baseMarker.
 	Refining("Condition", 2, 4, conditions.GameVariable(), interpreters.Always)
 
 var deathWatchTrigger = baseTrigger.
-	With("ConditionType", 5, 1).
+	With("ConditionType", 5, 1).As(interpreters.EnumValue(map[uint32]string{0: "Object Type", 1: "Object Index"})).
 	Refining("TypeCondition", 2, 4, conditions.ObjectType(), func(inst *interpreters.Instance) bool {
 		return inst.Get("ConditionType") == 0
 	}).
@@ -46,6 +52,9 @@ var ecologyTrigger = baseTrigger.
 
 var mapNote = baseMarker.
 	With("EntryOffset", 18, 4)
+
+var musicVoodoo = baseMarker.
+	With("MusicFlavour", 6, 1).As(interpreters.RangedValue(0, 4))
 
 func initMarkers() interpreterRetriever {
 
@@ -65,6 +74,7 @@ func initMarkers() interpreterRetriever {
 
 	mapMarker := newInterpreterEntry(baseMarker)
 	mapMarker.set(3, newInterpreterLeaf(mapNote))
+	mapMarker.set(4, newInterpreterLeaf(musicVoodoo))
 
 	class := newInterpreterEntry(baseMarker)
 	class.set(0, trigger)

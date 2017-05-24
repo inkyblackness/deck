@@ -19,7 +19,7 @@ var recepticlePanel = basePanel
 
 var standardRecepticle = recepticlePanel.
 	Refining("Action", 0, 22, actions.Unconditional(), interpreters.Always).
-	Refining("Condition", 2, 4, conditions.ObjectType(), interpreters.Always)
+	Refining("TypeCondition", 2, 4, conditions.ObjectType(), interpreters.Always)
 
 var antennaRelayPanel = recepticlePanel.
 	With("TriggerObjectIndex1", 6, 2).As(interpreters.ObjectIndex()).
@@ -44,18 +44,40 @@ var energyChargeStation = gameVariablePanel.
 
 var inputPanel = gameVariablePanel
 
+var wirePuzzleStateDescription = interpreters.Bitfield(map[uint32]string{
+	0x00000007: "Wire 1 Left",
+	0x00000038: "Wire 1 Right",
+	0x000001C0: "Wire 2 Left",
+	0x00000E00: "Wire 2 Right",
+
+	0x00007000: "Wire 3 Left",
+	0x00038000: "Wire 3 Right",
+	0x001C0000: "Wire 4 Left",
+	0x00E00000: "Wire 4 Right",
+
+	0x07000000: "Wire 5 Left",
+	0x38000000: "Wire 5 Right"})
+
 var wirePuzzleData = interpreters.New().
 	With("TargetObjectIndex", 0, 4).As(interpreters.ObjectIndex()).
-	With("Layout", 4, 1).
+	With("Layout", 4, 1).As(interpreters.Bitfield(map[uint32]string{0x0F: "Wires", 0xF0: "Connectors"})).
 	With("TargetPowerLevel", 5, 1).
 	With("CurrentPowerLevel", 6, 1).
-	With("TargetState", 8, 4).
-	With("CurrentState", 12, 4)
+	With("TargetState", 8, 4).As(wirePuzzleStateDescription).
+	With("CurrentState", 12, 4).As(wirePuzzleStateDescription)
 
 var blockPuzzleData = interpreters.New().
 	With("TargetObjectIndex", 0, 4).As(interpreters.ObjectIndex()).
 	With("StateStoreObjectIndex", 4, 2).As(interpreters.ObjectIndex()).
-	With("Layout", 8, 4)
+	With("Layout", 8, 4).As(interpreters.Bitfield(map[uint32]string{
+	0x00000001: "PuzzleSolved",
+	0x00000070: "SourceCoordinate",
+	0x00000180: "SourceLocation",
+	0x00007000: "DestCoordinate",
+	0x00018000: "DestLocation",
+	0x00700000: "Width",
+	0x07000000: "Height",
+	0x70000000: "SideEffectType"}))
 
 var puzzleSpecificData = interpreters.New().
 	With("Type", 7, 1).As(interpreters.EnumValue(map[uint32]string{0: "WirePuzzle", 0x10: "BlockPuzzle"})).
@@ -76,17 +98,49 @@ var elevatorPanel = inputPanel.
 	With("DestinationObjectIndex3", 12, 2).As(interpreters.RangedValue(0, 871)).
 	With("DestinationObjectIndex6", 14, 2).As(interpreters.RangedValue(0, 871)).
 	With("DestinationObjectIndex5", 16, 2).As(interpreters.RangedValue(0, 871)).
-	With("AccessibleBitmask", 18, 2).
-	With("ElevatorShaftBitmask", 20, 2)
+	With("AccessibleBitmask", 18, 2).As(interpreters.Bitfield(map[uint32]string{
+	0x0001: "Level  0",
+	0x0002: "Level  1",
+	0x0004: "Level  2",
+	0x0008: "Level  3",
+	0x0010: "Level  4",
+	0x0020: "Level  5",
+	0x0040: "Level  6",
+	0x0080: "Level  7",
+	0x0100: "Level  8",
+	0x0200: "Level  9",
+	0x0400: "Level 10",
+	0x0800: "Level 11",
+	0x1000: "Level 12",
+	0x2000: "Level 13",
+	0x4000: "Level 14",
+	0x8000: "Level 15"})).
+	With("ElevatorShaftBitmask", 20, 2).As(interpreters.Bitfield(map[uint32]string{
+	0x0001: "Level  0",
+	0x0002: "Level  1",
+	0x0004: "Level  2",
+	0x0008: "Level  3",
+	0x0010: "Level  4",
+	0x0020: "Level  5",
+	0x0040: "Level  6",
+	0x0080: "Level  7",
+	0x0100: "Level  8",
+	0x0200: "Level  9",
+	0x0400: "Level 10",
+	0x0800: "Level 11",
+	0x1000: "Level 12",
+	0x2000: "Level 13",
+	0x4000: "Level 14",
+	0x8000: "Level 15"}))
 
 var numberPad = inputPanel.
-	With("Combination1", 6, 2).
+	With("Combination1", 6, 2).As(interpreters.SpecialValue("BinaryCodedDecimal")).
 	With("TriggerObjectIndex1", 8, 2).As(interpreters.ObjectIndex()).
-	With("Combination2", 10, 2).
+	With("Combination2", 10, 2).As(interpreters.SpecialValue("BinaryCodedDecimal")).
 	With("TriggerObjectIndex2", 12, 2).As(interpreters.ObjectIndex()).
-	With("Combination3", 14, 2).
+	With("Combination3", 14, 2).As(interpreters.SpecialValue("BinaryCodedDecimal")).
 	With("TriggerObjectIndex3", 16, 2).As(interpreters.ObjectIndex()).
-	With("FailObjectIndex", 18, 2)
+	With("FailObjectIndex", 18, 2).As(interpreters.ObjectIndex())
 
 var inactiveCyberspaceSwitch = gameVariablePanel.
 	Refining("Action", 0, 22, actions.Unconditional(), interpreters.Always)

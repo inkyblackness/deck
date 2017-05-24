@@ -7,7 +7,7 @@ import (
 var baseSoftware = interpreters.New()
 
 var multimediaFile = baseSoftware.
-	With("ID", 1, 1).
+	With("ID", 1, 1).As(interpreters.Bitfield(map[uint32]string{0x0F: "Index", 0xF0: "Level"})).
 	With("Type", 2, 1).As(interpreters.EnumValue(map[uint32]string{0: "E-Mail", 1: "Log", 2: "Data"}))
 
 var cyberspaceProgram = baseSoftware.

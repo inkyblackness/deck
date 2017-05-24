@@ -138,6 +138,26 @@ func (inplace *InplaceDataStore) GameObjectIcon(projectID string, class, subclas
 	})
 }
 
+// SetGameObject implements the model.DataStore interface
+func (inplace *InplaceDataStore) SetGameObject(projectID string, class, subclass, objType int, properties *model.GameObjectProperties,
+	onSuccess func(properties *model.GameObjectProperties), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			gameObjects := project.GameObjects()
+			objID := res.MakeObjectID(res.ObjectClass(class), res.ObjectSubclass(subclass), res.ObjectType(objType))
+			var entity model.GameObjectProperties
+
+			entity.Data = gameObjects.SetObjectData(objID, properties.Data)
+			inplace.out(func() { onSuccess(&entity) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
 // Palette implements the model.DataStore interface
 func (inplace *InplaceDataStore) Palette(projectID string, paletteID string,
 	onSuccess func(colors [256]model.Color), onFailure model.FailureFunc) {

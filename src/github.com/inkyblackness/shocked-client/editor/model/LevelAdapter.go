@@ -10,8 +10,9 @@ import (
 
 // LevelAdapter is the entry point for a level.
 type LevelAdapter struct {
-	context archiveContext
-	store   model.DataStore
+	context        archiveContext
+	store          model.DataStore
+	objectsAdapter *ObjectsAdapter
 
 	id           *observable
 	isCyberspace bool
@@ -22,10 +23,11 @@ type LevelAdapter struct {
 	levelObjects *observable
 }
 
-func newLevelAdapter(context archiveContext, store model.DataStore) *LevelAdapter {
+func newLevelAdapter(context archiveContext, store model.DataStore, objectsAdapter *ObjectsAdapter) *LevelAdapter {
 	adapter := &LevelAdapter{
-		context: context,
-		store:   store,
+		context:        context,
+		store:          store,
+		objectsAdapter: objectsAdapter,
 
 		id:      newObservable(),
 		tileMap: NewTileMap(64, 64),
@@ -192,7 +194,9 @@ func (adapter *LevelAdapter) RequestNewObject(worldX, worldY float32, objectID O
 			FineX: fineX,
 			TileY: tileY,
 			FineY: fineY,
-			Z:     z}
+			Z:     z,
+
+			Hitpoints: adapter.objectsAdapter.Object(objectID).CommonHitpoints()}
 
 		adapter.store.AddLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), adapter.storeLevelID(),
 			template, adapter.onLevelObjectAdded,
