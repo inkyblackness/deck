@@ -11,11 +11,17 @@ import (
 // Write serializes given bitmap. The provided type specifies whether the pixel data
 // shall be compressed. The start offset is used for images with a private palette.
 // The start offset specifies the byte length of the blocks before the current one.
-func Write(writer io.Writer, bmp Bitmap, bmpType BitmapType, startOffset int) {
+// Force transparency indicates that palette index 0x00 is meant to be treated as
+// transparent. Some usages of bitmaps imply transparency and don't require
+// this flag to be set.
+func Write(writer io.Writer, bmp Bitmap, bmpType BitmapType, forceTransparency bool, startOffset int) {
 	var header BitmapHeader
 	pixelData := writePixel(bmp, bmpType)
 
 	header.Type = bmpType
+	if forceTransparency {
+		header.TransparencyFlag = 1
+	}
 	header.Width = bmp.ImageWidth()
 	header.Height = bmp.ImageHeight()
 	header.Stride = header.Width

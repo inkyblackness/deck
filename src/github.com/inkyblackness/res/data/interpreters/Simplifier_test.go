@@ -22,7 +22,7 @@ func (suite *SimplifierSuite) TestRawValueCallsHandler(c *check.C) {
 
 	simpl.rawValue(&entry{count: 2})
 
-	c.Check(calledMinValue, check.Equals, int64(-32768))
+	c.Check(calledMinValue, check.Equals, int64(-1))
 	c.Check(calledMaxValue, check.Equals, int64(32767))
 }
 

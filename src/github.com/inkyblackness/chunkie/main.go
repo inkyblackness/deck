@@ -41,7 +41,7 @@ func usage() string {
 
 Usage:
   chunkie export <resource-file> <chunk-id> [--block=<block-id>] [--raw] [--pal=<palette-file>] [--pal-id=<palette-id>] [--fps=<framerate>] [<folder>]
-  chunkie import <resource-file> <chunk-id> [--block=<block-id>] [--data-type=<id>] [--compressed] <source-file>
+  chunkie import <resource-file> <chunk-id> [--block=<block-id>] [--data-type=<id>] [--compressed] [--force-transparency] <source-file>
   chunkie -h | --help
   chunkie --version
 
@@ -51,6 +51,7 @@ Options:
   --block=<block-id>     The block identifier. Defaults to decimal, use "0x" as prefix for hexadecimal. [default: 0]
   --raw                  With this flag, the chunk will be exported without conversion to a common file format.
   --compressed           With this flag, imported bitmaps will be compressed.
+  --force-transparency   With this flag, imported bitmaps will be marked to have transparency. [default: false]
   --pal=<palette-file>   For handling bitmaps & models, use this palette file to write color information
   --pal-id=<palette-id>  Optional palette chunk identifier. If not provided, uses first palette found in palette-file.
   --fps=<framerate>      The frames per second to emulate when exporting movies. 0 names files after timestamp. [default: 0]
@@ -76,17 +77,17 @@ func main() {
 		framesPerSecond, _ := strconv.ParseFloat(arguments["--fps"].(string), 32)
 		raw := arguments["--raw"].(bool)
 		palArgument := arguments["--pal"]
-		palIdArgument := arguments["--pal-id"]
+		palIDArgument := arguments["--pal-id"]
 		var palette color.Palette
-		paletteId := uint64(0)
+		paletteID := uint64(0)
 		folderArgument := arguments["<folder>"]
 		folder := "."
 
-		if palIdArgument != nil {
-			paletteId, _ = strconv.ParseUint(palIdArgument.(string), 0, 16)
+		if palIDArgument != nil {
+			paletteID, _ = strconv.ParseUint(palIDArgument.(string), 0, 16)
 		}
 		if palArgument != nil {
-			palette = loadPalette(palArgument.(string), res.ResourceID(paletteId))
+			palette = loadPalette(palArgument.(string), res.ResourceID(paletteID))
 		}
 		if folderArgument != nil {
 			folder = folderArgument.(string)
@@ -102,6 +103,7 @@ func main() {
 		blockID, _ := strconv.ParseUint(arguments["--block"].(string), 0, 16)
 		sourceFile := arguments["<source-file>"].(string)
 		compressed := arguments["--compressed"].(bool)
+		forceTransparency := arguments["--force-transparency"].(bool)
 		dataType := -1
 		dataTypeArgument := arguments["--data-type"]
 		if dataTypeArgument != nil {
@@ -109,7 +111,7 @@ func main() {
 			dataType = int(result)
 		}
 
-		importData(resourceFile, res.ResourceID(chunkID), uint16(blockID), dataType, sourceFile, compressed)
+		importData(resourceFile, res.ResourceID(chunkID), uint16(blockID), dataType, sourceFile, compressed, forceTransparency)
 	}
 }
 
@@ -142,7 +144,7 @@ func exportFile(provider chunk.Provider, holder chunk.BlockHolder, blockID uint1
 	}
 }
 
-func loadPalette(fileName string, paletteId res.ResourceID) (pal color.Palette) {
+func loadPalette(fileName string, paletteID res.ResourceID) (pal color.Palette) {
 	if len(fileName) > 0 {
 		inFile, _ := os.Open(fileName)
 		defer inFile.Close()
@@ -156,7 +158,7 @@ func loadPalette(fileName string, paletteId res.ResourceID) (pal color.Palette) 
 			}
 		}
 
-		tryLoad(paletteId)
+		tryLoad(paletteID)
 		if pal == nil {
 			ids := provider.IDs()
 			for _, id := range ids {
@@ -200,7 +202,7 @@ func exportVideoClip(provider chunk.Provider, blockData []byte, fileBaseName str
 
 	serial.MapData(sequence, serial.NewDecoder(reader))
 	{
-		times := make([]float32, 0)
+		var times []float32
 		mediaDuration := float32(0.0)
 		for _, entry := range sequence.Entries {
 			frameTime := float32(entry.FrameTime) / 1000.0
@@ -215,13 +217,13 @@ func exportVideoClip(provider chunk.Provider, blockData []byte, fileBaseName str
 		imageRect := goImage.Rect(0, 0, int(sequence.Width), int(sequence.Height))
 		img := goImage.NewPaletted(imageRect, clipPalette)
 		handler := newExportingMediaHandler(fileBaseName, mediaDuration, framesPerSecond, 0.0)
-		for frameId := uint16(0); frameId < framesData.BlockCount() && err == nil; frameId++ {
-			frameReader := bytes.NewReader(framesData.BlockData(frameId))
+		for frameID := uint16(0); frameID < framesData.BlockCount() && err == nil; frameID++ {
+			frameReader := bytes.NewReader(framesData.BlockData(frameID))
 			var header image.BitmapHeader
 
 			binary.Read(frameReader, binary.LittleEndian, &header)
 			err = rle.Decompress(frameReader, img.Pix)
-			handler.OnVideo(times[int(frameId)], img)
+			handler.OnVideo(times[int(frameID)], img)
 		}
 		handler.finish()
 	}
@@ -233,7 +235,8 @@ func exportVideoClip(provider chunk.Provider, blockData []byte, fileBaseName str
 	return
 }
 
-func importData(resourceFile string, chunkID res.ResourceID, blockID uint16, dataType int, sourceFile string, compressed bool) {
+func importData(resourceFile string, chunkID res.ResourceID, blockID uint16, dataType int, sourceFile string,
+	compressed, forceTransparency bool) {
 	buffer := serial.NewByteStore()
 	writer := dos.NewChunkConsumer(buffer)
 
@@ -249,7 +252,7 @@ func importData(resourceFile string, chunkID res.ResourceID, blockID uint16, dat
 			blocks := make([][]byte, blockCount)
 			for block := uint16(0); block < blockCount; block++ {
 				if id == chunkID && block == blockID {
-					blocks[block] = importFile(sourceFile, sourceChunk.ContentType(), compressed)
+					blocks[block] = importFile(sourceFile, sourceChunk.ContentType(), compressed, forceTransparency)
 				} else {
 					blocks[block] = sourceChunk.BlockData(block)
 				}
@@ -267,7 +270,7 @@ func importData(resourceFile string, chunkID res.ResourceID, blockID uint16, dat
 	}
 }
 
-func importFile(sourceFile string, dataType res.DataTypeID, compressed bool) (data []byte) {
+func importFile(sourceFile string, dataType res.DataTypeID, compressed, forceTransparency bool) (data []byte) {
 	extension := path.Ext(sourceFile)
 	switch extension {
 	case ".wav":
@@ -282,7 +285,7 @@ func importFile(sourceFile string, dataType res.DataTypeID, compressed bool) (da
 	case ".png":
 		{
 			if dataType == res.Bitmap {
-				data = convert.FromPng(sourceFile, false, compressed)
+				data = convert.FromPng(sourceFile, false, compressed, forceTransparency)
 			}
 		}
 	default:

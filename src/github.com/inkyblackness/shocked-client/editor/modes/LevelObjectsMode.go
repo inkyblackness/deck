@@ -94,12 +94,6 @@ type LevelObjectsMode struct {
 	selectedObjectsPropertiesPanel      *propertyPanel
 }
 
-func intAsPointer(value int) (ptr *int) {
-	ptr = new(int)
-	*ptr = value
-	return
-}
-
 // NewLevelObjectsMode returns a new instance.
 func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.MapDisplay) *LevelObjectsMode {
 	mode := &LevelObjectsMode{
@@ -264,7 +258,8 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 			panelBuilder.addDynamicSection(true, classPropertiesBottomResolver)
 		mode.selectedObjectsPropertiesHeaderArea, _ = mainClassPanelBuilder.addSection(true)
 
-		mode.selectedObjectsPropertiesPanel = newPropertyPanel(mainClassPanelBuilder, mode.updateSelectedObjectsClassPropertiesFiltered)
+		mode.selectedObjectsPropertiesPanel = newPropertyPanel(mainClassPanelBuilder,
+			mode.updateSelectedObjectsClassPropertiesFiltered, mode.objectItemsForClass)
 
 		mode.selectedObjectsBasePropertiesItem = &tabItem{mode.selectedObjectsBasePropertiesArea, "Base Properties"}
 		mode.selectedObjectsClassPropertiesItem = &tabItem{mode.selectedObjectsPropertiesMainArea, "Class Properties"}
@@ -687,7 +682,26 @@ func (mode *LevelObjectsMode) createPropertyControls(key string, unifiedValue in
 		}
 	})
 
+	simplifier.SetSpecialHandler("LevelTexture", func() {
+		selector := mode.selectedObjectsPropertiesPanel.NewTextureSelector(key, "", setUpdate(), mode.levelTextures)
+		if unifiedValue != math.MinInt64 {
+			selector.SetSelectedIndex(int(unifiedValue))
+		}
+	})
+
 	describer(simplifier)
+}
+
+func (mode *LevelObjectsMode) levelTextures() []*graphics.BitmapTexture {
+	ids := mode.levelAdapter.LevelTextureIDs()
+	textures := make([]*graphics.BitmapTexture, len(ids))
+	store := mode.context.ForGraphics().WorldTextureStore(dataModel.TextureLarge)
+
+	for index, id := range ids {
+		textures[index] = store.Texture(graphics.TextureKeyFromInt(id))
+	}
+
+	return textures
 }
 
 func (mode *LevelObjectsMode) selectedObjectIndices() []int {

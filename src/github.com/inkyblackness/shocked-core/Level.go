@@ -14,6 +14,8 @@ import (
 	model "github.com/inkyblackness/shocked-model"
 )
 
+const surveillanceSources = 8
+
 var tileTypes = map[data.TileType]model.TileType{
 	data.Solid: model.Solid,
 	data.Open:  model.Open,
@@ -75,8 +77,6 @@ type Level struct {
 
 	mutex sync.Mutex
 
-	isCyberspace bool
-
 	tileMapStore chunk.BlockStore
 	tileMap      *logic.TileMap
 
@@ -86,6 +86,9 @@ type Level struct {
 
 	crossrefListStore chunk.BlockStore
 	crossrefList      *logic.CrossReferenceList
+
+	surveillanceSourceStore     chunk.BlockStore
+	surveillanceDeathwatchStore chunk.BlockStore
 }
 
 // NewLevel returns a new instance of a Level structure.
@@ -100,7 +103,10 @@ func NewLevel(store chunk.Store, id int) *Level {
 
 		objectListStore: store.Get(res.ResourceID(baseStoreID + 8)),
 
-		crossrefListStore: store.Get(res.ResourceID(baseStoreID + 9))}
+		crossrefListStore: store.Get(res.ResourceID(baseStoreID + 9)),
+
+		surveillanceSourceStore:     store.Get(res.ResourceID(baseStoreID + 43)),
+		surveillanceDeathwatchStore: store.Get(res.ResourceID(baseStoreID + 44))}
 
 	level.tileMap = logic.DecodeTileMap(level.tileMapStore.BlockData(0), 64, 64)
 	level.crossrefList = logic.DecodeCrossReferenceList(level.crossrefListStore.BlockData(0))
@@ -116,9 +122,6 @@ func NewLevel(store chunk.Store, id int) *Level {
 				return &level.objectList[index]
 			})
 	}
-
-	info := level.information()
-	level.isCyberspace = info.IsCyberspace()
 
 	return level
 }
@@ -142,14 +145,94 @@ func (level *Level) information() data.LevelInformation {
 	return info
 }
 
+func (level *Level) variables() data.LevelVariables {
+	blockData := level.store.Get(res.ResourceID(4000 + level.id*100 + 45)).BlockData(0)
+	reader := bytes.NewReader(blockData)
+	var info data.LevelVariables
+
+	binary.Read(reader, binary.LittleEndian, &info)
+
+	return info
+}
+
+func (level *Level) isCyberspace() bool {
+	info := level.information()
+	return info.IsCyberspace()
+}
+
 // Properties returns the properties of the level.
 func (level *Level) Properties() (result model.LevelProperties) {
 	info := level.information()
+	vars := level.variables()
 
-	result.CyberspaceFlag = info.IsCyberspace()
-	result.HeightShift = int(info.HeightShift)
+	result.CyberspaceFlag = boolAsPointer(info.IsCyberspace())
+	result.HeightShift = intAsPointer(int(info.HeightShift))
+	result.CeilingHasRadiation = boolAsPointer(vars.RadiationRegister > 1)
+	result.CeilingEffectLevel = intAsPointer(int(vars.Radiation))
+	result.FloorHasBiohazard = boolAsPointer(vars.BioRegister > 1)
+	result.FloorHasGravity = boolAsPointer(vars.GravitySwitch != 0)
+	result.FloorEffectLevel = intAsPointer(int(vars.BioOrGravity))
 
 	return
+}
+
+// SetProperties updates the properties of a level.
+func (level *Level) SetProperties(properties model.LevelProperties) {
+	{
+		infoStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 4))
+		infoData := infoStore.BlockData(0)
+		infoReader := bytes.NewReader(infoData)
+		infoWriter := bytes.NewBuffer(nil)
+		var info data.LevelInformation
+
+		binary.Read(infoReader, binary.LittleEndian, &info)
+		if properties.CyberspaceFlag != nil {
+			info.CyberspaceFlag = 0
+			if *properties.CyberspaceFlag {
+				info.CyberspaceFlag = 1
+			}
+		}
+		if properties.HeightShift != nil {
+			info.HeightShift = uint32(*properties.HeightShift)
+		}
+		binary.Write(infoWriter, binary.LittleEndian, &info)
+		infoStore.SetBlockData(0, infoWriter.Bytes())
+	}
+	{
+		varsStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 45))
+		varsData := varsStore.BlockData(0)
+		varsReader := bytes.NewReader(varsData)
+		varsWriter := bytes.NewBuffer(nil)
+		var vars data.LevelVariables
+
+		binary.Read(varsReader, binary.LittleEndian, &vars)
+		if properties.CeilingHasRadiation != nil {
+			vars.RadiationRegister = 0
+			if *properties.CeilingHasRadiation {
+				vars.RadiationRegister = 2
+			}
+		}
+		if properties.CeilingEffectLevel != nil {
+			vars.Radiation = byte(*properties.CeilingEffectLevel)
+		}
+		if properties.FloorHasBiohazard != nil {
+			vars.BioRegister = 0
+			if *properties.FloorHasBiohazard {
+				vars.BioRegister = 2
+			}
+		}
+		if properties.FloorHasGravity != nil {
+			vars.GravitySwitch = 0
+			if *properties.FloorHasGravity {
+				vars.GravitySwitch = 1
+			}
+		}
+		if properties.FloorEffectLevel != nil {
+			vars.BioOrGravity = byte(*properties.FloorEffectLevel)
+		}
+		binary.Write(varsWriter, binary.LittleEndian, &vars)
+		varsStore.SetBlockData(0, varsWriter.Bytes())
+	}
 }
 
 // Textures returns the texture identifier used in this level.
@@ -182,6 +265,46 @@ func (level *Level) SetTextures(newIds []int) {
 	buffer := bytes.NewBuffer(nil)
 	binary.Write(buffer, binary.LittleEndian, &ids)
 	blockStore.SetBlockData(0, buffer.Bytes())
+}
+
+// TextureAnimations returns the properties of the animation groups.
+func (level *Level) TextureAnimations() (result []model.TextureAnimation) {
+	level.mutex.Lock()
+	defer level.mutex.Unlock()
+	var rawEntries [4]data.TextureAnimationEntry
+
+	result = make([]model.TextureAnimation, len(rawEntries))
+	level.readTable(42, &rawEntries)
+	for index := 0; index < len(rawEntries); index++ {
+		resultEntry := &result[index]
+		rawEntry := &rawEntries[index]
+
+		resultEntry.FrameCount = intAsPointer(int(rawEntry.FrameCount))
+		resultEntry.FrameTime = intAsPointer(int(rawEntry.FrameTime))
+		resultEntry.LoopType = intAsPointer(int(rawEntry.LoopType))
+	}
+	return
+}
+
+// SetTextureAnimation modifies the properties of identified animation group.
+func (level *Level) SetTextureAnimation(animationGroup int, properties model.TextureAnimation) {
+	level.mutex.Lock()
+	defer level.mutex.Unlock()
+
+	var rawEntries [4]data.TextureAnimationEntry
+	rawEntry := &rawEntries[animationGroup]
+
+	level.readTable(42, &rawEntries)
+	if properties.FrameCount != nil {
+		rawEntry.FrameCount = byte(*properties.FrameCount)
+	}
+	if properties.FrameTime != nil {
+		rawEntry.FrameTime = uint16(*properties.FrameTime)
+	}
+	if properties.LoopType != nil {
+		rawEntry.LoopType = data.TextureAnimationLoopType(*properties.LoopType)
+	}
+	level.writeTable(42, &rawEntries)
 }
 
 // Objects returns an array of all used objects.
@@ -452,6 +575,13 @@ func (level *Level) readTable(levelBlockID int, value interface{}) {
 	binary.Read(reader, binary.LittleEndian, value)
 }
 
+func (level *Level) writeTable(levelBlockID int, value interface{}) {
+	writer := bytes.NewBuffer(nil)
+
+	binary.Write(writer, binary.LittleEndian, value)
+	level.store.Get(res.ResourceID(4000+level.id*100+levelBlockID)).SetBlockData(0, writer.Bytes())
+}
+
 func (level *Level) isTileTypeValley(tileType data.TileType) bool {
 	return tileType == data.ValleyNorthEastToSouthWest || tileType == data.ValleyNorthWestToSouthEast ||
 		tileType == data.ValleySouthEastToNorthWest || tileType == data.ValleySouthWestToNorthEast
@@ -676,7 +806,7 @@ func (level *Level) TileProperties(x, y int) (result model.TileProperties) {
 
 	result.MusicIndex = intAsPointer(entry.Flags.MusicIndex())
 
-	if !level.isCyberspace {
+	if !level.isCyberspace() {
 		var properties model.RealWorldTileProperties
 		var textureIDs = uint16(entry.Textures)
 
@@ -689,6 +819,7 @@ func (level *Level) TileProperties(x, y int) (result model.TileProperties) {
 		properties.UseAdjacentWallTexture = boolAsPointer((entry.Flags & 0x00000100) != 0)
 		properties.WallTextureOffset = new(model.HeightUnit)
 		*properties.WallTextureOffset = model.HeightUnit(entry.Flags & 0x0000001F)
+		properties.WallTexturePattern = intAsPointer(int((entry.Flags >> 5) & 0x00000003))
 
 		properties.FloorHazard = boolAsPointer((entry.Floor & 0x80) != 0)
 		properties.CeilingHazard = boolAsPointer((entry.Ceiling & 0x80) != 0)
@@ -696,7 +827,20 @@ func (level *Level) TileProperties(x, y int) (result model.TileProperties) {
 		properties.FloorShadow = intAsPointer(entry.Flags.FloorShadow())
 		properties.CeilingShadow = intAsPointer(entry.Flags.CeilingShadow())
 
+		properties.SpookyMusic = boolAsPointer((entry.Flags & 0x00000200) != 0)
+
 		result.RealWorld = &properties
+	} else {
+		var properties model.CyberspaceTileProperties
+		var colors = uint16(entry.Textures)
+
+		properties.FloorColorIndex = intAsPointer(int((colors >> 0) & 0x00FF))
+		properties.CeilingColorIndex = intAsPointer(int((colors >> 8) & 0x00FF))
+
+		properties.FlightPullType = intAsPointer(int((entry.Flags>>16)&0xF) + int((entry.Flags>>20)&0x10))
+		properties.GameOfLifeSet = boolAsPointer((entry.Flags & 0x00000040) != 0)
+
+		result.Cyberspace = &properties
 	}
 
 	return
@@ -706,6 +850,7 @@ func (level *Level) TileProperties(x, y int) (result model.TileProperties) {
 func (level *Level) SetTileProperties(x, y int, properties model.TileProperties) {
 	level.mutex.Lock()
 	defer level.mutex.Unlock()
+	isCyberspace := level.isCyberspace()
 
 	entry := level.tileMap.Entry(logic.AtTile(uint16(x), uint16(y)))
 	flags := uint32(entry.Flags)
@@ -727,7 +872,7 @@ func (level *Level) SetTileProperties(x, y int, properties model.TileProperties)
 	if properties.MusicIndex != nil {
 		flags = uint32(data.TileFlag(flags).WithMusicIndex(*properties.MusicIndex))
 	}
-	if !level.isCyberspace && (properties.RealWorld != nil) {
+	if !isCyberspace && (properties.RealWorld != nil) {
 		var textureIDs = uint16(entry.Textures)
 
 		if properties.RealWorld.FloorTexture != nil && (*properties.RealWorld.FloorTexture < 0x20) {
@@ -754,6 +899,9 @@ func (level *Level) SetTileProperties(x, y int, properties model.TileProperties)
 		if properties.RealWorld.WallTextureOffset != nil && *properties.RealWorld.WallTextureOffset < 0x20 {
 			flags = (flags & ^uint32(0x0000001F)) | uint32(*properties.RealWorld.WallTextureOffset)
 		}
+		if properties.RealWorld.WallTexturePattern != nil {
+			flags = (flags & ^uint32(0x00000060) | (uint32(*properties.RealWorld.WallTexturePattern) << 5))
+		}
 		if properties.RealWorld.FloorHazard != nil {
 			entry.Floor &= 0x7F
 			if *properties.RealWorld.FloorHazard {
@@ -772,10 +920,96 @@ func (level *Level) SetTileProperties(x, y int, properties model.TileProperties)
 		if properties.RealWorld.CeilingShadow != nil {
 			flags = uint32(data.TileFlag(flags).WithCeilingShadow(*properties.RealWorld.CeilingShadow))
 		}
+		if properties.RealWorld.SpookyMusic != nil {
+			flags = flags & ^uint32(0x00000200)
+			if *properties.RealWorld.SpookyMusic {
+				flags |= 0x00000200
+			}
+		}
 
 		entry.Textures = data.TileTextureInfo(textureIDs)
+	} else if isCyberspace && properties.Cyberspace != nil {
+		var colors = uint16(entry.Textures)
+
+		if properties.Cyberspace.FloorColorIndex != nil {
+			colors = (colors & 0xFF00) | (uint16(*properties.Cyberspace.FloorColorIndex) << 0)
+		}
+		if properties.Cyberspace.CeilingColorIndex != nil {
+			colors = (colors & 0x00FF) | (uint16(*properties.Cyberspace.CeilingColorIndex) << 8)
+		}
+		if properties.Cyberspace.FlightPullType != nil {
+			flags = (flags & ^uint32(0x010F0000)) |
+				((uint32(*properties.Cyberspace.FlightPullType) & 0xF) << 16) |
+				((uint32(*properties.Cyberspace.FlightPullType) & 0x10) << 20)
+		}
+		if properties.Cyberspace.GameOfLifeSet != nil {
+			flags = flags & ^uint32(0x00000040)
+			if *properties.Cyberspace.GameOfLifeSet {
+				flags |= 0x00000040
+			}
+		}
+
+		entry.Textures = data.TileTextureInfo(colors)
 	}
 	entry.Flags = data.TileFlag(flags)
 
 	level.onTileDataChanged()
+}
+
+// LevelSurveillanceObjects returns the surveillance objects of this level
+func (level *Level) LevelSurveillanceObjects() []model.SurveillanceObject {
+	level.mutex.Lock()
+	defer level.mutex.Unlock()
+
+	return level.makeSurveillanceObjects(level.readSurveillanceObjects())
+}
+
+// SetLevelSurveillanceObject updates one surveillance object
+func (level *Level) SetLevelSurveillanceObject(index int, data model.SurveillanceObject) []model.SurveillanceObject {
+	level.mutex.Lock()
+	defer level.mutex.Unlock()
+
+	sources, deathwatches := level.readSurveillanceObjects()
+
+	if (index >= 0) && (index < len(sources)) {
+		if data.SourceIndex != nil {
+			sources[index] = int16(*data.SourceIndex)
+		}
+		if data.DeathwatchIndex != nil {
+			deathwatches[index] = int16(*data.DeathwatchIndex)
+		}
+
+		storeArray := func(store chunk.BlockStore, data []int16) {
+			writer := bytes.NewBuffer(nil)
+			binary.Write(writer, binary.LittleEndian, data)
+			store.SetBlockData(0, writer.Bytes())
+		}
+		storeArray(level.surveillanceSourceStore, sources)
+		storeArray(level.surveillanceDeathwatchStore, deathwatches)
+	}
+
+	return level.makeSurveillanceObjects(sources, deathwatches)
+}
+
+func (level *Level) readSurveillanceObjects() (sources []int16, deathwatches []int16) {
+	sources = make([]int16, surveillanceSources)
+	deathwatches = make([]int16, surveillanceSources)
+	sourceData := level.surveillanceSourceStore.BlockData(0)
+	deathwatchData := level.surveillanceDeathwatchStore.BlockData(0)
+
+	binary.Read(bytes.NewReader(sourceData), binary.LittleEndian, &sources)
+	binary.Read(bytes.NewReader(deathwatchData), binary.LittleEndian, &deathwatches)
+
+	return
+}
+
+func (level *Level) makeSurveillanceObjects(sources []int16, deathwatches []int16) []model.SurveillanceObject {
+	objects := make([]model.SurveillanceObject, len(sources))
+
+	for index := 0; index < len(sources); index++ {
+		objects[index].SourceIndex = intAsPointer(int(sources[index]))
+		objects[index].DeathwatchIndex = intAsPointer(int(deathwatches[index]))
+	}
+
+	return objects
 }

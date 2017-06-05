@@ -130,6 +130,11 @@ func (display *MapDisplay) SetVisible(visible bool) {
 	display.area.SetVisible(visible)
 }
 
+// SetTextureIndexQuery sets which texture shall be shown.
+func (display *MapDisplay) SetTextureIndexQuery(query TextureIndexQuery) {
+	display.textures.SetTextureIndexQuery(query)
+}
+
 // SetHighlightedTile requests to highlight the identified tile.
 func (display *MapDisplay) SetHighlightedTile(coord model.TileCoordinate) {
 	tileX, tileY := coord.XY()

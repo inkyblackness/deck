@@ -15,6 +15,15 @@ import (
 	dataModel "github.com/inkyblackness/shocked-model"
 )
 
+type textureViewItem struct {
+	displayString string
+	query         display.TextureIndexQuery
+}
+
+func (item *textureViewItem) String() string {
+	return item.displayString
+}
+
 type tilePropertySetter func(properties *dataModel.TileProperties, value interface{})
 type tilePropertyItem struct {
 	value  interface{}
@@ -54,7 +63,13 @@ type LevelMapMode struct {
 	slopeControlBox    *controls.ComboBox
 	slopeControlItems  map[dataModel.SlopeControl]*tilePropertyItem
 
+	musicIndexLabel *controls.Label
+	musicIndexBox   *controls.ComboBox
+	musicIndexItems map[int]*tilePropertyItem
+
 	realWorldArea                *ui.Area
+	textureViewLabel             *controls.Label
+	textureViewBox               *controls.ComboBox
 	floorTextureLabel            *controls.Label
 	floorTextureSelector         *controls.TextureSelector
 	floorTextureRotationsLabel   *controls.Label
@@ -72,18 +87,21 @@ type LevelMapMode struct {
 	wallTextureOffsetItems       map[dataModel.HeightUnit]*tilePropertyItem
 	useAdjacentWallTextureLabel  *controls.Label
 	useAdjacentWallTextureBox    *controls.ComboBox
-	useAdjacentWallTextureItems  map[string]*tilePropertyItem
+	useAdjacentWallTextureItems  map[string]controls.ComboBoxItem
+	wallTexturePatternLabel      *controls.Label
+	wallTexturePatternBox        *controls.ComboBox
+	wallTexturePatternItems      map[int]*tilePropertyItem
 
-	musicIndexLabel *controls.Label
-	musicIndexBox   *controls.ComboBox
-	musicIndexItems map[int]*tilePropertyItem
+	spookyMusicLabel *controls.Label
+	spookyMusicBox   *controls.ComboBox
+	spookyMusicItems map[string]controls.ComboBoxItem
 
 	floorHazardLabel   *controls.Label
 	floorHazardBox     *controls.ComboBox
-	floorHazardItems   map[string]*tilePropertyItem
+	floorHazardItems   map[string]controls.ComboBoxItem
 	ceilingHazardLabel *controls.Label
 	ceilingHazardBox   *controls.ComboBox
-	ceilingHazardItems map[string]*tilePropertyItem
+	ceilingHazardItems map[string]controls.ComboBoxItem
 
 	floorShadowLabel    *controls.Label
 	floorShadowSlider   *controls.Slider
@@ -91,6 +109,18 @@ type LevelMapMode struct {
 	ceilingShadowSlider *controls.Slider
 
 	cyberspaceArea *ui.Area
+
+	floorColorLabel    *controls.Label
+	floorColorSlider   *controls.Slider
+	ceilingColorLabel  *controls.Label
+	ceilingColorSlider *controls.Slider
+
+	flightPullTypeLabel *controls.Label
+	flightPullTypeBox   *controls.ComboBox
+	flightPullTypeItems map[int]controls.ComboBoxItem
+	gameOfLifeSetLabel  *controls.Label
+	gameOfLifeSetBox    *controls.ComboBox
+	gameOfLifeSetItems  map[string]controls.ComboBoxItem
 }
 
 // NewLevelMapMode returns a new instance.
@@ -206,13 +236,13 @@ func NewLevelMapMode(context Context, parent *ui.Area, mapDisplay *display.MapDi
 		}
 
 		setupBooleanCollections := func(
-			setter func(*dataModel.TileProperties, bool)) ([]controls.ComboBoxItem, map[string]*tilePropertyItem) {
+			setter func(*dataModel.TileProperties, bool)) ([]controls.ComboBoxItem, map[string]controls.ComboBoxItem) {
 			mappingSetter := func(properties *dataModel.TileProperties, value interface{}) {
 				mappedValue := value.(bool)
 				setter(properties, mappedValue)
 			}
 			itemsSlice := make([]controls.ComboBoxItem, 2)
-			keyedItems := make(map[string]*tilePropertyItem)
+			keyedItems := make(map[string]controls.ComboBoxItem)
 			falseItem := &tilePropertyItem{false, mappingSetter}
 			itemsSlice[0] = falseItem
 			keyedItems["false"] = falseItem
@@ -283,6 +313,17 @@ func NewLevelMapMode(context Context, parent *ui.Area, mapDisplay *display.MapDi
 			mode.realWorldArea, realWorldPanelBuilder = panelBuilder.addSection(false)
 
 			{
+				mode.textureViewLabel, mode.textureViewBox = realWorldPanelBuilder.addComboProperty("Map Texture View", mode.onTextureViewChanged)
+				items := make([]controls.ComboBoxItem, 3)
+
+				items[0] = &textureViewItem{"Floor", display.FloorTexture}
+				items[1] = &textureViewItem{"Ceiling", display.CeilingTexture}
+				items[2] = &textureViewItem{"Wall", display.WallTexture}
+
+				mode.textureViewBox.SetItems(items)
+				mode.textureViewBox.SetSelectedItem(items[0])
+			}
+			{
 				setupRotations := func(setter func(*dataModel.TileProperties, int)) ([]controls.ComboBoxItem, map[int]*tilePropertyItem) {
 					mappingSetter := func(properties *dataModel.TileProperties, value interface{}) {
 						setter(properties, value.(int))
@@ -342,6 +383,25 @@ func NewLevelMapMode(context Context, parent *ui.Area, mapDisplay *display.MapDi
 				mode.useAdjacentWallTextureBox.SetItems(useAdjacentWallTextureSlice)
 			}
 			{
+				patternNames := []string{"Regular", "Flip Horizontal", "Flip Alternating", "Flip Alternating Inverted"}
+				mode.wallTexturePatternLabel, mode.wallTexturePatternBox = realWorldPanelBuilder.addComboProperty("Wall Texture Pattern", mode.onTilePropertyChangeRequested)
+				makeSetter := func(patternIndex int) func(properties *dataModel.TileProperties, value interface{}) {
+					return func(properties *dataModel.TileProperties, value interface{}) {
+						properties.RealWorld.WallTexturePattern = intAsPointer(patternIndex)
+					}
+				}
+				wallTexturePatternItems := make([]controls.ComboBoxItem, 4)
+				mode.wallTexturePatternItems = make(map[int]*tilePropertyItem)
+
+				for patternIndex := 0; patternIndex < len(wallTexturePatternItems); patternIndex++ {
+					item := &tilePropertyItem{patternNames[patternIndex], makeSetter(patternIndex)}
+					wallTexturePatternItems[patternIndex] = item
+					mode.wallTexturePatternItems[patternIndex] = item
+				}
+
+				mode.wallTexturePatternBox.SetItems(wallTexturePatternItems)
+			}
+			{
 				mode.floorShadowLabel, mode.floorShadowSlider = realWorldPanelBuilder.addSliderProperty("Floor Shadow", func(value int64) {
 					mode.changeSelectedTileProperties(func(properties *dataModel.TileProperties) {
 						properties.RealWorld.FloorShadow = intAsPointer(int(value))
@@ -354,6 +414,16 @@ func NewLevelMapMode(context Context, parent *ui.Area, mapDisplay *display.MapDi
 					})
 				})
 				mode.ceilingShadowSlider.SetRange(0, 15)
+			}
+			{
+				var boxItems []controls.ComboBoxItem
+				boxItems, mode.spookyMusicItems = setupBooleanCollections(
+					func(properties *dataModel.TileProperties, value bool) {
+						properties.RealWorld.SpookyMusic = &value
+					})
+
+				mode.spookyMusicLabel, mode.spookyMusicBox = realWorldPanelBuilder.addComboProperty("Spooky Music", mode.onTilePropertyChangeRequested)
+				mode.spookyMusicBox.SetItems(boxItems)
 			}
 			{
 				var boxItems []controls.ComboBoxItem
@@ -377,10 +447,60 @@ func NewLevelMapMode(context Context, parent *ui.Area, mapDisplay *display.MapDi
 			}
 		}
 		{
-			mode.cyberspaceArea, _ = panelBuilder.addSection(false)
+			var cyberspacePanelBuilder *controlPanelBuilder
+			mode.cyberspaceArea, cyberspacePanelBuilder = panelBuilder.addSection(false)
 
+			{
+				mode.floorColorLabel, mode.floorColorSlider = cyberspacePanelBuilder.addSliderProperty("Floor Color", func(value int64) {
+					mode.changeSelectedTileProperties(func(properties *dataModel.TileProperties) {
+						properties.Cyberspace.FloorColorIndex = intAsPointer(int(value))
+					})
+				})
+				mode.floorColorSlider.SetRange(0, 255)
+				mode.ceilingColorLabel, mode.ceilingColorSlider = cyberspacePanelBuilder.addSliderProperty("Ceiling Color", func(value int64) {
+					mode.changeSelectedTileProperties(func(properties *dataModel.TileProperties) {
+						properties.Cyberspace.CeilingColorIndex = intAsPointer(int(value))
+					})
+				})
+				mode.ceilingColorSlider.SetRange(0, 255)
+			}
+			{
+				typeNames := []string{
+					"None",
+					"Weak East", "Weak West", "Weak North", "Weak South",
+					"Medium East", "Medium West", "Medium North", "Medium South",
+					"Strong East", "Strong West", "Strong North", "Strong South",
+					"Medium Ceiling", "Medium Floor", "Strong Ceiling", "Strong Floor"}
+
+				mode.flightPullTypeLabel, mode.flightPullTypeBox = cyberspacePanelBuilder.addComboProperty("Flight Pull Type", func(boxItem controls.ComboBoxItem) {
+					item := boxItem.(*enumItem)
+					mode.changeSelectedTileProperties(func(properties *dataModel.TileProperties) {
+						properties.Cyberspace.FlightPullType = intAsPointer(int(item.value))
+					})
+				})
+
+				flightPullTypeItems := make([]controls.ComboBoxItem, len(typeNames))
+				mode.flightPullTypeItems = make(map[int]controls.ComboBoxItem)
+
+				for typeIndex := 0; typeIndex < len(flightPullTypeItems); typeIndex++ {
+					item := &enumItem{uint32(typeIndex), typeNames[typeIndex]}
+					flightPullTypeItems[typeIndex] = item
+					mode.flightPullTypeItems[typeIndex] = item
+				}
+				mode.flightPullTypeBox.SetItems(flightPullTypeItems)
+			}
+			{
+				var boxItems []controls.ComboBoxItem
+				boxItems, mode.gameOfLifeSetItems = setupBooleanCollections(
+					func(properties *dataModel.TileProperties, value bool) {
+						properties.Cyberspace.GameOfLifeSet = &value
+					})
+
+				mode.gameOfLifeSetLabel, mode.gameOfLifeSetBox = cyberspacePanelBuilder.addComboProperty("Game Of Life Set", mode.onTilePropertyChangeRequested)
+				mode.gameOfLifeSetBox.SetItems(boxItems)
+			}
 		}
-		mode.levelAdapter.OnIDChanged(func() {
+		mode.levelAdapter.OnLevelPropertiesChanged(func() {
 			mode.realWorldArea.SetVisible(!mode.levelAdapter.IsCyberspace())
 			mode.cyberspaceArea.SetVisible(mode.levelAdapter.IsCyberspace())
 		})
@@ -492,11 +612,17 @@ func (mode *LevelMapMode) onSelectedTilesChanged() {
 	wallTextureUnifier := util.NewValueUnifier(-1)
 	wallTextureOffsetUnifier := util.NewValueUnifier(dataModel.HeightUnit(-1))
 	useAdjacentWallTextureUnifier := util.NewValueUnifier("")
+	wallTexturePatternUnifier := util.NewValueUnifier(-1)
+	spookyMusicUnifier := util.NewValueUnifier("")
 	floorShadowUnifier := util.NewValueUnifier(-1)
 	ceilingShadowUnifier := util.NewValueUnifier(-1)
 	musicIndexUnifier := util.NewValueUnifier(-1)
 	floorHazardUnifier := util.NewValueUnifier("")
 	ceilingHazardUnifier := util.NewValueUnifier("")
+	floorColorUnifier := util.NewValueUnifier(-1)
+	ceilingColorUnifier := util.NewValueUnifier(-1)
+	flightPullTypeUnifier := util.NewValueUnifier(-1)
+	gameOfLifeSetUnifier := util.NewValueUnifier("")
 
 	for _, coord := range mode.selectedTiles {
 		tile := tileMap.Tile(coord)
@@ -516,10 +642,17 @@ func (mode *LevelMapMode) onSelectedTilesChanged() {
 				wallTextureUnifier.Add(*properties.RealWorld.WallTexture)
 				wallTextureOffsetUnifier.Add(*properties.RealWorld.WallTextureOffset)
 				useAdjacentWallTextureUnifier.Add(fmt.Sprintf("%v", *properties.RealWorld.UseAdjacentWallTexture))
+				wallTexturePatternUnifier.Add(*properties.RealWorld.WallTexturePattern)
+				spookyMusicUnifier.Add(fmt.Sprintf("%v", *properties.RealWorld.SpookyMusic))
 				floorShadowUnifier.Add(*properties.RealWorld.FloorShadow)
 				ceilingShadowUnifier.Add(*properties.RealWorld.CeilingShadow)
 				floorHazardUnifier.Add(fmt.Sprintf("%v", *properties.RealWorld.FloorHazard))
 				ceilingHazardUnifier.Add(fmt.Sprintf("%v", *properties.RealWorld.CeilingHazard))
+			} else if properties.Cyberspace != nil {
+				floorColorUnifier.Add(*properties.Cyberspace.FloorColorIndex)
+				ceilingColorUnifier.Add(*properties.Cyberspace.CeilingColorIndex)
+				flightPullTypeUnifier.Add(*properties.Cyberspace.FlightPullType)
+				gameOfLifeSetUnifier.Add(fmt.Sprintf("%v", *properties.Cyberspace.GameOfLifeSet))
 			}
 		}
 	}
@@ -535,9 +668,13 @@ func (mode *LevelMapMode) onSelectedTilesChanged() {
 	mode.ceilingTextureRotationsBox.SetSelectedItem(mode.floorTextureRotationsItems[ceilingTextureRotationsUnifier.Value().(int)])
 	mode.wallTextureSelector.SetSelectedIndex(wallTextureUnifier.Value().(int))
 	mode.wallTextureOffsetBox.SetSelectedItem(mode.wallTextureOffsetItems[wallTextureOffsetUnifier.Value().(dataModel.HeightUnit)])
+	mode.wallTexturePatternBox.SetSelectedItem(mode.wallTexturePatternItems[wallTexturePatternUnifier.Value().(int)])
+	mode.spookyMusicBox.SetSelectedItem(mode.spookyMusicItems[spookyMusicUnifier.Value().(string)])
 	mode.useAdjacentWallTextureBox.SetSelectedItem(mode.useAdjacentWallTextureItems[useAdjacentWallTextureUnifier.Value().(string)])
 	mode.floorHazardBox.SetSelectedItem(mode.floorHazardItems[floorHazardUnifier.Value().(string)])
 	mode.ceilingHazardBox.SetSelectedItem(mode.ceilingHazardItems[ceilingHazardUnifier.Value().(string)])
+	mode.flightPullTypeBox.SetSelectedItem(mode.flightPullTypeItems[flightPullTypeUnifier.Value().(int)])
+	mode.gameOfLifeSetBox.SetSelectedItem(mode.gameOfLifeSetItems[gameOfLifeSetUnifier.Value().(string)])
 
 	setSlider := func(slider *controls.Slider, unifier *util.ValueUnifier) {
 		value := unifier.Value().(int)
@@ -549,6 +686,8 @@ func (mode *LevelMapMode) onSelectedTilesChanged() {
 	}
 	setSlider(mode.floorShadowSlider, floorShadowUnifier)
 	setSlider(mode.ceilingShadowSlider, ceilingShadowUnifier)
+	setSlider(mode.floorColorSlider, floorColorUnifier)
+	setSlider(mode.ceilingColorSlider, ceilingColorUnifier)
 }
 
 func (mode *LevelMapMode) changeSelectedTileProperties(modifier func(*dataModel.TileProperties)) {
@@ -556,6 +695,8 @@ func (mode *LevelMapMode) changeSelectedTileProperties(modifier func(*dataModel.
 
 	if !mode.levelAdapter.IsCyberspace() {
 		properties.RealWorld = &dataModel.RealWorldTileProperties{}
+	} else {
+		properties.Cyberspace = &dataModel.CyberspaceTileProperties{}
 	}
 	modifier(properties)
 	mode.levelAdapter.RequestTilePropertyChange(mode.selectedTiles, properties)
@@ -566,6 +707,11 @@ func (mode *LevelMapMode) onTilePropertyChangeRequested(item controls.ComboBoxIt
 	mode.changeSelectedTileProperties(func(properties *dataModel.TileProperties) {
 		propertyItem.setter(properties, propertyItem.value)
 	})
+}
+
+func (mode *LevelMapMode) onTextureViewChanged(boxItem controls.ComboBoxItem) {
+	item := boxItem.(*textureViewItem)
+	mode.mapDisplay.SetTextureIndexQuery(item.query)
 }
 
 func (mode *LevelMapMode) onFloorTextureChanged(index int) {

@@ -57,6 +57,17 @@ func (suite *DynamicTextPropStoreSuite) TestPutInsertsToWrapped(c *check.C) {
 	c.Check(wrappedData, check.DeepEquals, newData)
 }
 
+func (suite *DynamicTextPropStoreSuite) TestEntryCountReturnsNumberFromWrapped(c *check.C) {
+	provider := suite.createProvider(func(consumer textprop.Consumer) {})
+
+	wrappedStore := store.NewProviderBacked(provider, func() {})
+	testStore := NewDynamicTextPropStore(wrappedStore)
+
+	retrieved := testStore.EntryCount()
+
+	c.Check(retrieved, check.Equals, uint32(363)) // as per default sizing
+}
+
 func (suite *DynamicTextPropStoreSuite) TestGetReturnsBlockFromWrapped(c *check.C) {
 	initData := suite.testData(4)
 	provider := suite.createProvider(func(consumer textprop.Consumer) {

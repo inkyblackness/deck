@@ -30,6 +30,14 @@ func (store *DynamicTextPropStore) Swap(factory func(oldStore textprop.Store) te
 	store.wrapped = factory(store.wrapped)
 }
 
+// EntryCount returns the number of currently stored properties.
+func (store *DynamicTextPropStore) EntryCount() uint32 {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+
+	return store.wrapped.EntryCount()
+}
+
 // Get returns the data for the requested id.
 func (store *DynamicTextPropStore) Get(id uint32) []byte {
 	store.mutex.Lock()

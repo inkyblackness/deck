@@ -12,6 +12,9 @@ import (
 	dosObjprop "github.com/inkyblackness/res/objprop/dos"
 	storeObjprop "github.com/inkyblackness/res/objprop/store"
 	"github.com/inkyblackness/res/serial"
+	"github.com/inkyblackness/res/textprop"
+	dosTextprop "github.com/inkyblackness/res/textprop/dos"
+	storeTextprop "github.com/inkyblackness/res/textprop/store"
 	"github.com/inkyblackness/shocked-core/release"
 )
 
@@ -26,6 +29,8 @@ type ReleaseStoreLibrary struct {
 
 	descriptors   []objprop.ClassDescriptor
 	objpropStores map[string]objprop.Store
+
+	textpropStores map[string]textprop.Store
 }
 
 // NewReleaseStoreLibrary returns a StoreLibrary that covers two Release container.
@@ -38,7 +43,9 @@ func NewReleaseStoreLibrary(source release.Release, sink release.Release, timeou
 		chunkStores: make(map[string]chunk.Store),
 
 		descriptors:   objprop.StandardProperties(),
-		objpropStores: make(map[string]objprop.Store)}
+		objpropStores: make(map[string]objprop.Store),
+
+		textpropStores: make(map[string]textprop.Store)}
 
 	return library
 }
@@ -83,6 +90,26 @@ func (library *ReleaseStoreLibrary) ObjpropStore(name string) (objpropStore objp
 	return
 }
 
+// TextpropStore implements the StoreLibrary interface.
+func (library *ReleaseStoreLibrary) TextpropStore(name string) (textpropStore textprop.Store, err error) {
+	textpropStore, exists := library.textpropStores[name]
+
+	if !exists {
+		if library.sink.HasResource(name) {
+			textpropStore, err = library.openTextpropStoreFrom(library.sink, name)
+		} else if library.source.HasResource(name) {
+			textpropStore, err = library.openTextpropStoreFrom(library.source, name)
+		} else {
+			textpropStore = library.createSavingTextpropStore(textprop.NullProvider(), "", name, func() {})
+		}
+		if err == nil {
+			library.textpropStores[name] = textpropStore
+		}
+	}
+
+	return
+}
+
 func (library *ReleaseStoreLibrary) openChunkStoreFrom(rel release.Release, name string) (chunkStore chunk.Store, err error) {
 	resource, err := rel.GetResource(name)
 
@@ -112,6 +139,24 @@ func (library *ReleaseStoreLibrary) openObjpropStoreFrom(rel release.Release, na
 			provider, err = dosObjprop.NewProvider(reader, library.descriptors)
 			if err == nil {
 				objpropStore = library.createSavingObjpropStore(provider, resource.Path(), name, func() { reader.Close() })
+			}
+		}
+	}
+
+	return
+}
+
+func (library *ReleaseStoreLibrary) openTextpropStoreFrom(rel release.Release, name string) (textpropStore textprop.Store, err error) {
+	resource, err := rel.GetResource(name)
+
+	if err == nil {
+		var reader serial.SeekingReadCloser
+		reader, err = resource.AsSource()
+		if err == nil {
+			var provider textprop.Provider
+			provider, err = dosTextprop.NewProvider(reader)
+			if err == nil {
+				textpropStore = library.createSavingTextpropStore(provider, resource.Path(), name, func() { reader.Close() })
 			}
 		}
 	}
@@ -182,11 +227,11 @@ func (library *ReleaseStoreLibrary) saveAndReloadChunkData(data []byte, path str
 func (library *ReleaseStoreLibrary) createSavingObjpropStore(provider objprop.Provider, path string, name string, closer func()) objprop.Store {
 	storeChanged := make(chan interface{})
 	onStoreChanged := func() { storeChanged <- nil }
-	chunkStore := NewDynamicObjPropStore(storeObjprop.NewProviderBacked(provider, onStoreChanged))
+	propStore := NewDynamicObjPropStore(storeObjprop.NewProviderBacked(provider, onStoreChanged))
 
 	closeLastReader := closer
 	saveAndSwap := func() {
-		chunkStore.Swap(func(oldStore objprop.Store) objprop.Store {
+		propStore.Swap(func(oldStore objprop.Store) objprop.Store {
 			log.Printf("Saving resource <%s>/<%s>\n", path, name)
 			data := library.serializeObjpropStore(oldStore)
 			log.Printf("Serialized previous data, closing old reader")
@@ -201,7 +246,7 @@ func (library *ReleaseStoreLibrary) createSavingObjpropStore(provider objprop.Pr
 	}
 	library.startSaverRoutine(storeChanged, saveAndSwap)
 
-	return chunkStore
+	return propStore
 }
 
 func (library *ReleaseStoreLibrary) serializeObjpropStore(store objprop.Store) []byte {
@@ -238,6 +283,65 @@ func (library *ReleaseStoreLibrary) saveAndReloadObjpropData(data []byte, path s
 		log.Printf("Failed to store in sink, buffering: %v\n", err)
 		reader = serial.NewByteStoreFromData(data, func([]byte) {})
 		provider, _ = dosObjprop.NewProvider(reader, library.descriptors)
+	}
+
+	return
+}
+
+func (library *ReleaseStoreLibrary) createSavingTextpropStore(provider textprop.Provider, path string, name string, closer func()) textprop.Store {
+	storeChanged := make(chan interface{})
+	onStoreChanged := func() { storeChanged <- nil }
+	propStore := NewDynamicTextPropStore(storeTextprop.NewProviderBacked(provider, onStoreChanged))
+
+	closeLastReader := closer
+	saveAndSwap := func() {
+		propStore.Swap(func(oldStore textprop.Store) textprop.Store {
+			log.Printf("Saving resource <%s>/<%s>\n", path, name)
+			data := library.serializeTextpropStore(oldStore)
+			log.Printf("Serialized previous data, closing old reader")
+			closeLastReader()
+
+			log.Printf("Recreating new reader for new data")
+			newProvider, newReader := library.saveAndReloadTextpropData(data, path, name)
+			closeLastReader = func() { newReader.Close() }
+
+			return storeTextprop.NewProviderBacked(newProvider, onStoreChanged)
+		})
+	}
+	library.startSaverRoutine(storeChanged, saveAndSwap)
+
+	return propStore
+}
+
+func (library *ReleaseStoreLibrary) serializeTextpropStore(store textprop.Store) []byte {
+	buffer := serial.NewByteStore()
+	consumer := dosTextprop.NewConsumer(buffer)
+
+	for textureIndex := uint32(0); textureIndex < store.EntryCount(); textureIndex++ {
+		data := store.Get(textureIndex)
+		consumer.Consume(textureIndex, data)
+	}
+	consumer.Finish()
+
+	return buffer.Data()
+}
+
+func (library *ReleaseStoreLibrary) saveAndReloadTextpropData(data []byte, path string, name string) (provider textprop.Provider, reader serial.SeekingReadCloser) {
+	newResource, err := library.saveResource(data, path, name)
+
+	if err == nil {
+		reader, err = newResource.AsSource()
+	}
+	if err == nil {
+		provider, err = dosTextprop.NewProvider(reader)
+		if err != nil {
+			reader.Close()
+		}
+	}
+	if err != nil {
+		log.Printf("Failed to store in sink, buffering: %v\n", err)
+		reader = serial.NewByteStoreFromData(data, func([]byte) {})
+		provider, _ = dosTextprop.NewProvider(reader)
 	}
 
 	return

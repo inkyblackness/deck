@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/inkyblackness/res/data/interpreters"
+	"github.com/inkyblackness/shocked-client/editor/model"
 	"github.com/inkyblackness/shocked-client/graphics/controls"
 	"github.com/inkyblackness/shocked-client/ui"
 )
@@ -52,21 +53,27 @@ func maskedUpdate(shift, mask uint32) propertyUpdateFunction {
 
 type propertyChangeHandler func(key string, parameter uint32, update propertyUpdateFunction)
 
+type objectTypeItemsRetriever func(objectClass int) []controls.ComboBoxItem
+
 type propertyPanel struct {
 	area          *ui.Area
 	builder       *controlPanelBuilder
 	changeHandler propertyChangeHandler
 	entries       []*propertyEntry
 
+	objectItemsForClass objectTypeItemsRetriever
+
 	// selectionCache keeps the most recently selected mask of a bitfield, per key.
 	// This helps re-selecting the same entry on re-creation.
 	selectionCache map[string]uint32
 }
 
-func newPropertyPanel(parentBuilder *controlPanelBuilder, changeHandler propertyChangeHandler) *propertyPanel {
+func newPropertyPanel(parentBuilder *controlPanelBuilder, changeHandler propertyChangeHandler,
+	objectItemsForClass objectTypeItemsRetriever) *propertyPanel {
 	panel := &propertyPanel{
-		changeHandler:  changeHandler,
-		selectionCache: make(map[string]uint32)}
+		changeHandler:       changeHandler,
+		objectItemsForClass: objectItemsForClass,
+		selectionCache:      make(map[string]uint32)}
 
 	panel.area, panel.builder = parentBuilder.addDynamicSection(true, panel.Bottom)
 
@@ -170,6 +177,52 @@ func (panel *propertyPanel) NewSimplifier(key string, unifiedValue int64) *inter
 		onFieldSelectionChanged(selectedItem)
 	})
 
+	simplifier.SetSpecialHandler("ObjectType", func() {
+		var typeBox *controls.ComboBox
+		setTypeBox := func(objectID model.ObjectID) {
+			typeItems := panel.objectItemsForClass(objectID.Class())
+			selectedIndex := -1
+
+			typeBox.SetItems(typeItems)
+			for index, item := range typeItems {
+				typeItem := item.(*objectTypeItem)
+				if typeItem.id == objectID {
+					selectedIndex = index
+				}
+			}
+
+			if selectedIndex >= 0 {
+				typeBox.SetSelectedItem(typeItems[selectedIndex])
+			} else {
+				typeBox.SetSelectedItem(nil)
+			}
+		}
+		classTitle, classBox := panel.builder.addComboProperty(key+"-Class", func(boxItem controls.ComboBoxItem) {
+			classItem := boxItem.(*objectClassItem)
+			objectID := model.MakeObjectID(int(classItem.class), 0, 0)
+			setTypeBox(objectID)
+
+			panel.changeHandler(key, uint32(objectID.ToInt()), setUpdate())
+		})
+		panel.entries = append(panel.entries, &propertyEntry{classTitle, classBox})
+		typeTitle, typeBox := panel.builder.addComboProperty(key+"-Type", func(boxItem controls.ComboBoxItem) {
+			typeItem := boxItem.(*objectTypeItem)
+			panel.changeHandler(key, uint32(typeItem.id.ToInt()), setUpdate())
+		})
+		panel.entries = append(panel.entries, &propertyEntry{typeTitle, typeBox})
+
+		classItems := make([]controls.ComboBoxItem, len(classNames))
+		for index := range classNames {
+			classItems[index] = &objectClassItem{index}
+		}
+		classBox.SetItems(classItems)
+		if unifiedValue != math.MinInt64 {
+			objectID := model.ObjectID(unifiedValue)
+			classBox.SetSelectedItem(classItems[objectID.Class()])
+			setTypeBox(objectID)
+		}
+	})
+
 	return simplifier
 }
 
@@ -197,6 +250,18 @@ func (panel *propertyPanel) NewComboBox(key string, nameSuffix string, update pr
 	title, control := panel.builder.addComboProperty(fullName, func(item controls.ComboBoxItem) {
 		enumItem := item.(*enumItem)
 		panel.changeHandler(key, enumItem.value, update)
+	})
+
+	panel.entries = append(panel.entries, &propertyEntry{title, control})
+
+	return control
+}
+
+func (panel *propertyPanel) NewTextureSelector(key string, nameSuffix string,
+	update propertyUpdateFunction, textureProvider controls.TextureProvider) *controls.TextureSelector {
+	fullName := panel.fullName(key, nameSuffix)
+	title, control := panel.builder.addTextureProperty(fullName, textureProvider, func(newIndex int) {
+		panel.changeHandler(key, uint32(newIndex), update)
 	})
 
 	panel.entries = append(panel.entries, &propertyEntry{title, control})

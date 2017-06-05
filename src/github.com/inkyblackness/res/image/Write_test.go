@@ -17,7 +17,7 @@ func (suite *WriteSuite) TestWriteUncompressedWithoutPalette(c *check.C) {
 	bmp, _ := Read(bytes.NewReader(sourceData))
 
 	buf := bytes.NewBuffer(nil)
-	Write(buf, bmp, UncompressedBitmap, 0)
+	Write(buf, bmp, UncompressedBitmap, false, 0)
 	result := buf.Bytes()
 
 	c.Check(result, check.DeepEquals, sourceData)
@@ -28,7 +28,7 @@ func (suite *WriteSuite) TestWriteCompressedWithoutPalette(c *check.C) {
 	bmp, _ := Read(bytes.NewReader(sourceData))
 
 	buf := bytes.NewBuffer(nil)
-	Write(buf, bmp, CompressedBitmap, 0)
+	Write(buf, bmp, CompressedBitmap, false, 0)
 	result := buf.Bytes()
 
 	c.Check(result, check.DeepEquals, sourceData)
@@ -39,7 +39,7 @@ func (suite *WriteSuite) TestWriteUncompressedWithPalette(c *check.C) {
 	bmp, _ := Read(bytes.NewReader(sourceData))
 
 	buf := bytes.NewBuffer(nil)
-	Write(buf, bmp, UncompressedBitmap, 0)
+	Write(buf, bmp, UncompressedBitmap, false, 0)
 	result := buf.Bytes()
 
 	c.Check(result, check.DeepEquals, sourceData)
@@ -50,7 +50,19 @@ func (suite *WriteSuite) TestWriteCompressedWithPalette(c *check.C) {
 	bmp, _ := Read(bytes.NewReader(sourceData))
 
 	buf := bytes.NewBuffer(nil)
-	Write(buf, bmp, CompressedBitmap, 0)
+	Write(buf, bmp, CompressedBitmap, false, 0)
+	result := buf.Bytes()
+
+	c.Check(result, check.DeepEquals, sourceData)
+}
+
+func (suite *WriteSuite) TestWriteWithForceTransparency(c *check.C) {
+	sourceData := suite.getTestData(UncompressedBitmap, []byte{0xAA}, false)
+	sourceData[6] = 1
+	bmp, _ := Read(bytes.NewReader(sourceData))
+
+	buf := bytes.NewBuffer(nil)
+	Write(buf, bmp, UncompressedBitmap, true, 0)
 	result := buf.Bytes()
 
 	c.Check(result, check.DeepEquals, sourceData)

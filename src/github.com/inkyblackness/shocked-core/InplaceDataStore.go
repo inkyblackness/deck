@@ -202,17 +202,17 @@ func (inplace *InplaceDataStore) Levels(projectID string, archiveID string,
 		project, err := inplace.workspace.Project(projectID)
 
 		if err == nil {
-			var entity model.Levels
 			archive := project.Archive()
 			levelIDs := archive.LevelIDs()
+			result := []model.Level{}
 
-			for _, id := range levelIDs {
-				entry := inplace.getLevelEntity(project, archive, id)
-
-				entity.List = append(entity.List, entry)
+			for _, levelID := range levelIDs {
+				var entry model.Level
+				entry.ID = levelID
+				result = append(result, entry)
 			}
 
-			inplace.out(func() { onSuccess(entity.List) })
+			inplace.out(func() { onSuccess(result) })
 		}
 		if err != nil {
 			inplace.out(onFailure)
@@ -220,19 +220,42 @@ func (inplace *InplaceDataStore) Levels(projectID string, archiveID string,
 	})
 }
 
-func (inplace *InplaceDataStore) getLevelEntity(project *Project, archive *Archive, levelID int) (entity model.Level) {
-	entity.ID = fmt.Sprintf("%d", levelID)
-	entity.Href = "/projects/" + project.Name() + "/archive/levels/" + entity.ID
-	level := archive.Level(levelID)
-	entity.Properties = level.Properties()
+// LevelProperties implements the model.DataStore interface.
+func (inplace *InplaceDataStore) LevelProperties(projectID string, archiveID string, levelID int,
+	onSuccess func(properties model.LevelProperties), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
 
-	entity.Links = []model.Link{}
-	entity.Links = append(entity.Links, model.Link{Rel: "tiles", Href: entity.Href + "/tiles/{y}/{x}"})
-	if !entity.Properties.CyberspaceFlag {
-		entity.Links = append(entity.Links, model.Link{Rel: "textures", Href: entity.Href + "/textures"})
-	}
+		if err == nil {
+			level := project.Archive().Level(levelID)
+			properties := level.Properties()
 
-	return
+			inplace.out(func() { onSuccess(properties) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetLevelProperties implements the model.DataStore interface.
+func (inplace *InplaceDataStore) SetLevelProperties(projectID string, archiveID string, levelID int, properties model.LevelProperties,
+	onSuccess func(properties model.LevelProperties), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			level := project.Archive().Level(levelID)
+
+			level.SetProperties(properties)
+			result := level.Properties()
+
+			inplace.out(func() { onSuccess(result) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
 }
 
 // LevelTextures implements the model.DataStore interface
@@ -272,23 +295,17 @@ func (inplace *InplaceDataStore) SetLevelTextures(projectID string, archiveID st
 	})
 }
 
-// Textures implements the model.DataStore interface
-func (inplace *InplaceDataStore) Textures(projectID string,
-	onSuccess func(textures []model.Texture), onFailure model.FailureFunc) {
+// LevelTextureAnimations implements the model.DataStore interface
+func (inplace *InplaceDataStore) LevelTextureAnimations(projectID string, archiveID string, levelID int,
+	onSuccess func(animations []model.TextureAnimation), onFailure model.FailureFunc) {
 	inplace.in(func() {
 		project, err := inplace.workspace.Project(projectID)
 
 		if err == nil {
-			textures := project.Textures()
-			limit := textures.TextureCount()
-			var entity model.Textures
+			level := project.Archive().Level(levelID)
+			animations := level.TextureAnimations()
 
-			entity.List = make([]model.Texture, limit)
-			for id := 0; id < limit; id++ {
-				entity.List[id] = inplace.textureEntity(project, id)
-			}
-
-			inplace.out(func() { onSuccess(entity.List) })
+			inplace.out(func() { onSuccess(animations) })
 		}
 		if err != nil {
 			inplace.out(onFailure)
@@ -296,15 +313,67 @@ func (inplace *InplaceDataStore) Textures(projectID string,
 	})
 }
 
-func (inplace *InplaceDataStore) textureEntity(project *Project, textureID int) (entity model.Texture) {
-	entity.ID = fmt.Sprintf("%d", textureID)
-	entity.Href = "/projects/" + project.Name() + "/textures/" + entity.ID
-	entity.Properties = project.Textures().Properties(textureID)
-	for _, size := range model.TextureSizes() {
-		entity.Images = append(entity.Images, model.Link{Rel: string(size), Href: entity.Href + "/" + string(size)})
-	}
+// SetLevelTextureAnimation implements the model.DataStore interface
+func (inplace *InplaceDataStore) SetLevelTextureAnimation(projectID string, archiveID string, levelID int,
+	animationGroup int, properties model.TextureAnimation,
+	onSuccess func(animations []model.TextureAnimation), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
 
-	return
+		if err == nil {
+			level := project.Archive().Level(levelID)
+			level.SetTextureAnimation(animationGroup, properties)
+			animations := level.TextureAnimations()
+
+			inplace.out(func() { onSuccess(animations) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// Textures implements the model.DataStore interface
+func (inplace *InplaceDataStore) Textures(projectID string,
+	onSuccess func(textures []model.TextureProperties), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			textures := project.Textures()
+			limit := textures.TextureCount()
+			result := make([]model.TextureProperties, limit)
+
+			for id := 0; id < limit; id++ {
+				result[id] = textures.Properties(id)
+			}
+
+			inplace.out(func() { onSuccess(result) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetTextureProperties implements the model.DataStore interface.
+func (inplace *InplaceDataStore) SetTextureProperties(projectID string, textureID int, newProperties *model.TextureProperties,
+	onSuccess func(properties *model.TextureProperties), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			textures := project.Textures()
+
+			textures.SetProperties(textureID, *newProperties)
+			result := textures.Properties(textureID)
+
+			inplace.out(func() { onSuccess(&result) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
 }
 
 // TextureBitmap implements the model.DataStore interface
@@ -466,7 +535,7 @@ func (inplace *InplaceDataStore) RemoveLevelObject(projectID string, archiveID s
 	})
 }
 
-// SetLevelObject implements the model.DataStore interface
+// SetLevelObject implements the model.DataStore interface.
 func (inplace *InplaceDataStore) SetLevelObject(projectID string, archiveID string, levelID int, objectID int,
 	properties *model.LevelObjectProperties, onSuccess func(properties *model.LevelObjectProperties), onFailure model.FailureFunc) {
 	inplace.in(func() {
@@ -480,6 +549,45 @@ func (inplace *InplaceDataStore) SetLevelObject(projectID string, archiveID stri
 			if err == nil {
 				inplace.out(func() { onSuccess(&newProperties) })
 			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// LevelSurveillanceObjects implements the model.DataStore interface.
+func (inplace *InplaceDataStore) LevelSurveillanceObjects(projectID string, archiveID string, levelID int,
+	onSuccess func(objects []model.SurveillanceObject), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			level := project.Archive().Level(levelID)
+			objects := level.LevelSurveillanceObjects()
+
+			inplace.out(func() { onSuccess(objects) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetLevelSurveillanceObject implements the model.DataStore interface.
+func (inplace *InplaceDataStore) SetLevelSurveillanceObject(projectID string, archiveID string, levelID int,
+	surveillanceIndex int, data model.SurveillanceObject,
+	onSuccess func(objects []model.SurveillanceObject), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			level := project.Archive().Level(levelID)
+
+			level.SetLevelSurveillanceObject(surveillanceIndex, data)
+			objects := level.LevelSurveillanceObjects()
+
+			inplace.out(func() { onSuccess(objects) })
 		}
 		if err != nil {
 			inplace.out(onFailure)

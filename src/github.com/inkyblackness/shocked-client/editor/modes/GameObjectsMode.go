@@ -15,7 +15,7 @@ import (
 	datamodel "github.com/inkyblackness/shocked-model"
 )
 
-// GameObjectsMode is a mode for archive level control.
+// GameObjectsMode is a mode for game object properties.
 type GameObjectsMode struct {
 	context        Context
 	objectsAdapter *model.ObjectsAdapter
@@ -80,9 +80,9 @@ func NewGameObjectsMode(context Context, parent *ui.Area) *GameObjectsMode {
 
 		mode.selectedPropertiesTitle, mode.selectedPropertiesBox = panelBuilder.addComboProperty("Show Properties", mode.onSelectedPropertiesDisplayChanged)
 
-		mode.commonPropertiesPanel = newPropertyPanel(panelBuilder, mode.updateCommonProperty)
-		mode.genericPropertiesPanel = newPropertyPanel(panelBuilder, mode.updateGenericProperty)
-		mode.specificPropertiesPanel = newPropertyPanel(panelBuilder, mode.updateSpecificProperty)
+		mode.commonPropertiesPanel = newPropertyPanel(panelBuilder, mode.updateCommonProperty, mode.objectItemsForClass)
+		mode.genericPropertiesPanel = newPropertyPanel(panelBuilder, mode.updateGenericProperty, mode.objectItemsForClass)
+		mode.specificPropertiesPanel = newPropertyPanel(panelBuilder, mode.updateSpecificProperty, mode.objectItemsForClass)
 
 		mode.commonPropertiesItem = &tabItem{mode.commonPropertiesPanel, "Common Properties"}
 		mode.genericPropertiesItem = &tabItem{mode.genericPropertiesPanel, "Generic Properties"}

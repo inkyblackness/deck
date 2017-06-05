@@ -13,6 +13,8 @@ type TextureAdapter struct {
 
 	worldTextures               map[model.TextureSize]*Bitmaps
 	worldTextureRequestsPending map[int]int
+
+	gameTextures *observable
 }
 
 func newTextureAdapter(context projectContext, store model.DataStore) *TextureAdapter {
@@ -21,11 +23,14 @@ func newTextureAdapter(context projectContext, store model.DataStore) *TextureAd
 		store:   store,
 
 		worldTextures:               make(map[model.TextureSize]*Bitmaps),
-		worldTextureRequestsPending: make(map[int]int)}
+		worldTextureRequestsPending: make(map[int]int),
+
+		gameTextures: newObservable()}
 
 	for _, size := range model.TextureSizes() {
 		adapter.worldTextures[size] = newBitmaps()
 	}
+	adapter.gameTextures.set(&[]*GameTexture{})
 
 	return adapter
 }
@@ -34,11 +39,54 @@ func (adapter *TextureAdapter) clear() {
 	for _, bitmaps := range adapter.worldTextures {
 		bitmaps.clear()
 	}
+	adapter.gameTextures.set(&[]*GameTexture{})
+}
+
+func (adapter *TextureAdapter) refresh() {
+	adapter.store.Textures(adapter.context.ActiveProjectID(), adapter.onNewGameTextures, adapter.context.simpleStoreFailure("Textures"))
+}
+
+func (adapter *TextureAdapter) onNewGameTextures(properties []model.TextureProperties) {
+	count := len(properties)
+	textures := make([]*GameTexture, count)
+
+	for id := 0; id < count; id++ {
+		texture := newGameTexture(id)
+		texture.properties = properties[id]
+		textures[id] = texture
+	}
+
+	adapter.gameTextures.set(&textures)
+}
+
+// OnGameTexturesChanged registers a callback for updates.
+func (adapter *TextureAdapter) OnGameTexturesChanged(callback func()) {
+	adapter.gameTextures.addObserver(callback)
+}
+
+func (adapter *TextureAdapter) gameTextureList() []*GameTexture {
+	return *adapter.gameTextures.get().(*[]*GameTexture)
 }
 
 // WorldTextureCount returns the number of available textures.
 func (adapter *TextureAdapter) WorldTextureCount() int {
-	return 273
+	return len(adapter.gameTextureList())
+}
+
+// GameTexture returns texture information for identified texture.
+func (adapter *TextureAdapter) GameTexture(id int) *GameTexture {
+	return adapter.gameTextureList()[id]
+}
+
+// RequestTexturePropertiesChange requests to change properties of a single texture.
+func (adapter *TextureAdapter) RequestTexturePropertiesChange(id int, properties *model.TextureProperties) {
+	textures := adapter.gameTextureList()
+
+	adapter.store.SetTextureProperties(adapter.context.ActiveProjectID(), id, properties,
+		func(updatedProperties *model.TextureProperties) {
+			textures[id].properties = *updatedProperties
+			adapter.gameTextures.notifyObservers()
+		}, adapter.context.simpleStoreFailure("SetTextureProperties"))
 }
 
 // RequestWorldTextureBitmaps will load the bitmap data for given world texture.

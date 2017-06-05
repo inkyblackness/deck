@@ -54,6 +54,25 @@ void main(void) {
 // level texture index.
 type TextureQuery func(index int) *graphics.BitmapTexture
 
+// TextureIndexQuery is a getter function to retrieve the texture index and rotations
+// from given tile properties.
+type TextureIndexQuery func(properties *model.RealWorldTileProperties) (textureIndex int, textureRotations int)
+
+// FloorTexture returns the information for the floor.
+func FloorTexture(properties *model.RealWorldTileProperties) (textureIndex int, textureRotations int) {
+	return *properties.FloorTexture, *properties.FloorTextureRotations
+}
+
+// CeilingTexture returns the information for the ceiling.
+func CeilingTexture(properties *model.RealWorldTileProperties) (textureIndex int, textureRotations int) {
+	return *properties.CeilingTexture, *properties.CeilingTextureRotations
+}
+
+// WallTexture returns the information for the wall.
+func WallTexture(properties *model.RealWorldTileProperties) (textureIndex int, textureRotations int) {
+	return *properties.WallTexture, 0
+}
+
 // TileTextureMapRenderable is a renderable for textures.
 type TileTextureMapRenderable struct {
 	context *graphics.RenderContext
@@ -70,8 +89,9 @@ type TileTextureMapRenderable struct {
 	paletteUniform int32
 	bitmapUniform  int32
 
-	paletteTexture graphics.Texture
-	textureQuery   TextureQuery
+	paletteTexture    graphics.Texture
+	textureIndexQuery TextureIndexQuery
+	textureQuery      TextureQuery
 
 	tiles        [][]*model.TileProperties
 	lastTileType model.TileType
@@ -113,6 +133,7 @@ func NewTileTextureMapRenderable(context *graphics.RenderContext, paletteTexture
 		paletteUniform:          gl.GetUniformLocation(program, "palette"),
 		bitmapUniform:           gl.GetUniformLocation(program, "bitmap"),
 		paletteTexture:          paletteTexture,
+		textureIndexQuery:       FloorTexture,
 		textureQuery:            textureQuery,
 		tiles:                   make([][]*model.TileProperties, int(tilesPerMapSide)),
 		lastTileType:            model.Solid}
@@ -137,6 +158,11 @@ func (renderable *TileTextureMapRenderable) Dispose() {
 	renderable.vao.Dispose()
 	gl.DeleteProgram(renderable.program)
 	gl.DeleteBuffers([]uint32{renderable.vertexPositionBuffer})
+}
+
+// SetTextureIndexQuery sets which texture shall be shown.
+func (renderable *TileTextureMapRenderable) SetTextureIndexQuery(query TextureIndexQuery) {
+	renderable.textureIndexQuery = query
 }
 
 // SetTile sets the properties for the specified tile coordinate.
@@ -173,12 +199,13 @@ func (renderable *TileTextureMapRenderable) Render() {
 		for y, row := range renderable.tiles {
 			for x, tile := range row {
 				if tile != nil && *tile.Type != model.Solid && tile.RealWorld != nil {
-					texture := renderable.textureQuery(*tile.RealWorld.FloorTexture)
+					textureIndex, textureRotations := renderable.textureIndexQuery(tile.RealWorld)
+					texture := renderable.textureQuery(textureIndex)
 					if texture != nil {
 						modelMatrix := mgl.Translate3D(float32(x)*fineCoordinatesPerTileSide, float32(y)*fineCoordinatesPerTileSide, 0.0).
 							Mul4(scaling)
 
-						uvMatrix := uvRotations[*tile.RealWorld.FloorTextureRotations]
+						uvMatrix := uvRotations[textureRotations]
 						renderable.uvMatrixUniform.Set(gl, uvMatrix)
 						renderable.modelMatrixUniform.Set(gl, &modelMatrix)
 						verticeCount := renderable.ensureTileType(*tile.Type)

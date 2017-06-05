@@ -14,8 +14,8 @@ type LevelVariables struct {
 	Radiation         byte
 	BioOrGravity      byte
 	GravitySwitch     byte
-	RadiationRegister byte
 	BioRegister       byte
+	RadiationRegister byte
 
 	Unknown0009 [85]byte
 }

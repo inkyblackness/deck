@@ -26,13 +26,28 @@ type DataStore interface {
 	// Levels queries all levels of a project.
 	Levels(projectID string, archiveID string, onSuccess func(levels []Level), onFailure FailureFunc)
 
+	// LevelProperties requests the basic properties of a level.
+	LevelProperties(projectID string, archiveID string, levelID int, onSuccess func(properties LevelProperties), onFailure FailureFunc)
+	// SetLevelProperties requests to update basic properties of a level.
+	SetLevelProperties(projectID string, archiveID string, levelID int, properties LevelProperties,
+		onSuccess func(properties LevelProperties), onFailure FailureFunc)
+
 	// LevelTextures queries the texture IDs for a level.
 	LevelTextures(projectID string, archiveID string, levelID int, onSuccess func(textureIDs []int), onFailure FailureFunc)
 	// SetLevelTextures requests to set the list of textures for a level.
 	SetLevelTextures(projectID string, archiveID string, levelID int, textureIDs []int, onSuccess func(textureIDs []int), onFailure FailureFunc)
+	// LevelTextureAnimations queries the animation properties of texture groups.
+	LevelTextureAnimations(projectID string, archiveID string, levelID int,
+		onSuccess func(animations []TextureAnimation), onFailure FailureFunc)
+	// SetLevelTextureAnimation requests to change the properties of an animated texture group.
+	SetLevelTextureAnimation(projectID string, archiveID string, levelID int, animationGroup int, properties TextureAnimation,
+		onSuccess func(animations []TextureAnimation), onFailure FailureFunc)
 
 	// Textures queries all texture information of a project.
-	Textures(projectID string, onSuccess func(textures []Texture), onFailure FailureFunc)
+	Textures(projectID string, onSuccess func(textures []TextureProperties), onFailure FailureFunc)
+	// SetTextureProperties requests to change properties of a single texture.
+	SetTextureProperties(projectID string, textureID int, newProperties *TextureProperties,
+		onSuccess func(properties *TextureProperties), onFailure FailureFunc)
 	// TextureBitmap queries the texture bitmap of a texture.
 	TextureBitmap(projectID string, textureID int, size string, onSuccess func(bmp *RawBitmap), onFailure FailureFunc)
 
@@ -58,4 +73,11 @@ type DataStore interface {
 	// SetLevelObject requests to update object properties.
 	SetLevelObject(projectID string, archiveID string, levelID int, objectID int, properties *LevelObjectProperties,
 		onSuccess func(properties *LevelObjectProperties), onFailure FailureFunc)
+
+	// LevelSurveillanceObjects requests all surveillance objects of the identified level.
+	LevelSurveillanceObjects(projectID string, archiveID string, levelID int,
+		onSuccess func(objects []SurveillanceObject), onFailure FailureFunc)
+	// SetLevelSurveillanceObject requests to set the properties of one surveillance object.
+	SetLevelSurveillanceObject(projectID string, archiveID string, levelID int, surveillanceIndex int, data SurveillanceObject,
+		onSuccess func(objects []SurveillanceObject), onFailure FailureFunc)
 }

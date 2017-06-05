@@ -34,6 +34,7 @@ func (builder *SliderBuilder) Build() *Slider {
 	slider := &Slider{
 		rectRenderer:        builder.rectRenderer,
 		sliderChangeHandler: builder.sliderChangeHandler,
+		formatter:           DefaultSliderValueFormatter,
 		valueMin:            builder.valueMin,
 		valueMax:            builder.valueMax,
 		valueUndefined:      true}

@@ -166,9 +166,7 @@ var trapMessageDetails = interpreters.New().
 	With("MfdSuppressionFlag", 12, 4).As(interpreters.EnumValue(map[uint32]string{0: "Show in MFD", 1: "Show only in HUD"}))
 
 var spawnObjectsDetails = interpreters.New().
-	With("ObjectClass", 2, 1).As(interpreters.RangedValue(0, 14)).
-	With("ObjectSubclass", 1, 1).As(interpreters.RangedValue(0, 7)).
-	With("ObjectType", 0, 1).As(interpreters.RangedValue(0, 16)).
+	With("ObjectType", 0, 4).As(interpreters.SpecialValue("ObjectType")).
 	With("ReferenceObject1Index", 4, 2).As(interpreters.ObjectIndex()).
 	With("ReferenceObject2Index", 6, 2).As(interpreters.ObjectIndex()).
 	With("NumberOfObjects", 8, 4).As(interpreters.RangedValue(0, 100)).
@@ -214,9 +212,7 @@ var rotateObjectChange = interpreters.New().
 	With("BackwardLimit", 9, 1).As(interpreters.RangedValue(0, 255))
 
 var removeObjectsChange = interpreters.New().
-	With("ObjectClass", 2, 1).As(interpreters.RangedValue(0, 14)).
-	With("ObjectSubclass", 1, 1).As(interpreters.RangedValue(0, 7)).
-	With("ObjectType", 0, 1).As(interpreters.RangedValue(0, 16)).
+	With("ObjectType", 0, 4).As(interpreters.SpecialValue("ObjectType")).
 	With("Amount", 4, 1).As(interpreters.RangedValue(0, 255))
 
 var setConditionChange = interpreters.New().
@@ -236,9 +232,7 @@ var closeDataMfdChange = interpreters.New().
 	With("ObjectIndex", 0, 4).As(interpreters.ObjectIndex())
 
 var changeObjectTypeGlobalChange = interpreters.New().
-	With("ObjectClass", 2, 1).As(interpreters.RangedValue(0, 14)).
-	With("ObjectSubclass", 1, 1).As(interpreters.RangedValue(0, 7)).
-	With("ObjectType", 0, 1).As(interpreters.RangedValue(0, 16)).
+	With("ObjectType", 0, 4).As(interpreters.SpecialValue("ObjectType")).
 	With("NewType", 4, 1).As(interpreters.RangedValue(0, 16))
 
 var changeStateDetails = interpreters.New().

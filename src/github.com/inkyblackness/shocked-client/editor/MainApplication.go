@@ -362,3 +362,8 @@ func (app *MainApplication) ForTextureSelector() *controls.TextureSelectorBuilde
 func (app *MainApplication) ForSlider() *controls.SliderBuilder {
 	return controls.NewSliderBuilder(app.ForLabel(), app.rectRenderer)
 }
+
+// ForImageDisplay implements the controls.Factory interface.
+func (app *MainApplication) ForImageDisplay() *controls.ImageDisplayBuilder {
+	return controls.NewImageDisplayBuilder(app.worldTextureRenderer)
+}

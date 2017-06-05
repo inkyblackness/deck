@@ -14,6 +14,6 @@ type TileProperties struct {
 
 	MusicIndex *int
 
-	RealWorld *RealWorldTileProperties
-	//Cyberspace *CyberspaceTileProperties
+	RealWorld  *RealWorldTileProperties
+	Cyberspace *CyberspaceTileProperties
 }

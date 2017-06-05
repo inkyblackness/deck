@@ -1,9 +1,6 @@
 package model
 
+// Level describes one level of the archive.
 type Level struct {
-	Identifiable
-
-	Properties LevelProperties `json:"properties"`
-
-	Links []Link `json:"links"`
+	ID int
 }

@@ -7,10 +7,10 @@ import (
 )
 
 // FromPng reads a PNG file and encodes it as block.
-func FromPng(fileName string, privatePalette bool, compressed bool) []byte {
+func FromPng(fileName string, privatePalette bool, compressed, forceTransparency bool) []byte {
 	file, _ := os.Open(fileName)
 	defer file.Close()
 	img, _ := png.Decode(file)
 
-	return EncodeImage(img.(*image.Paletted), privatePalette, compressed)
+	return EncodeImage(img.(*image.Paletted), privatePalette, compressed, forceTransparency)
 }

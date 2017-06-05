@@ -11,10 +11,13 @@ type RealWorldTileProperties struct {
 
 	UseAdjacentWallTexture *bool
 	WallTextureOffset      *HeightUnit
+	WallTexturePattern     *int
 
 	FloorHazard   *bool
 	CeilingHazard *bool
 
 	FloorShadow   *int
 	CeilingShadow *int
+
+	SpookyMusic *bool
 }

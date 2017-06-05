@@ -7,4 +7,5 @@ type Factory interface {
 	ForComboBox() *ComboBoxBuilder
 	ForTextureSelector() *TextureSelectorBuilder
 	ForSlider() *SliderBuilder
+	ForImageDisplay() *ImageDisplayBuilder
 }

@@ -12,6 +12,14 @@ import (
 // SliderChangeHandler is a callback for notifying the current value.
 type SliderChangeHandler func(value int64)
 
+// SliderValueFormatter creates a text representation for the current value.
+type SliderValueFormatter func(value int64) string
+
+// DefaultSliderValueFormatter returns the value in string form.
+func DefaultSliderValueFormatter(value int64) string {
+	return fmt.Sprintf("%v", value)
+}
+
 // Slider is a control for selecting a numerical value with a slider.
 type Slider struct {
 	area         *ui.Area
@@ -20,6 +28,7 @@ type Slider struct {
 	valueLabel *Label
 
 	sliderChangeHandler SliderChangeHandler
+	formatter           SliderValueFormatter
 
 	valueMin int64
 	valueMax int64
@@ -50,7 +59,20 @@ func (slider *Slider) SetValueUndefined() {
 func (slider *Slider) SetValue(value int64) {
 	slider.valueUndefined = false
 	slider.value = value
-	slider.valueLabel.SetText(fmt.Sprintf("%v", value))
+	slider.updateValueLabel()
+}
+
+// SetValueFormatter sets the formatter to use. nil resets to default.
+func (slider *Slider) SetValueFormatter(formatter SliderValueFormatter) {
+	slider.formatter = formatter
+	if slider.formatter == nil {
+		slider.formatter = DefaultSliderValueFormatter
+	}
+	slider.updateValueLabel()
+}
+
+func (slider *Slider) updateValueLabel() {
+	slider.valueLabel.SetText(slider.formatter(slider.value))
 }
 
 func (slider *Slider) onRender(area *ui.Area) {
