@@ -42,6 +42,7 @@ type MainApplication struct {
 	rectRenderer       *graphics.RectangleRenderer
 	uiTextRenderer     *graphics.BitmapTextureRenderer
 
+	bitmaps              *graphics.BufferedTextureStore
 	worldTextures        map[dataModel.TextureSize]*graphics.BufferedTextureStore
 	gameObjectIcons      *graphics.BufferedTextureStore
 	worldPalette         *graphics.PaletteTexture
@@ -89,6 +90,7 @@ func (app *MainApplication) setWindow(glWindow env.OpenGlWindow) {
 	glWindow.OnKey(app.onKey)
 	glWindow.OnModifier(app.onModifier)
 	glWindow.OnCharCallback(app.onChar)
+	glWindow.OnFileDropCallback(app.onFileDrop)
 }
 
 func (app *MainApplication) setDebugOpenGl() {
@@ -124,51 +126,49 @@ func (app *MainApplication) initResources() {
 	for _, size := range dataModel.TextureSizes() {
 		app.initWorldTextureBuffer(size)
 	}
+	app.initBitmaps()
 	app.initGameObjectIconsBuffer()
 	app.initWorldPalette()
 }
 
 func (app *MainApplication) initWorldTextureBuffer(size dataModel.TextureSize) {
-	observedTextures := make(map[int]bool)
-	var buffer *graphics.BufferedTextureStore
-
-	buffer = graphics.NewBufferedTextureStore(func(key graphics.TextureKey) {
-		keyAsInt := key.ToInt()
-
-		if !observedTextures[keyAsInt] {
-			textures := app.modelAdapter.TextureAdapter().WorldTextures(size)
-			textures.OnBitmapChanged(keyAsInt, func() {
-				raw := textures.RawBitmap(keyAsInt)
-				bmp := graphics.BitmapFromRaw(*raw)
-				buffer.SetTexture(key, app.Texturize(&bmp))
-			})
-			observedTextures[keyAsInt] = true
-		}
-		app.modelAdapter.TextureAdapter().RequestWorldTextureBitmaps(keyAsInt)
+	textureAdapter := app.modelAdapter.TextureAdapter()
+	app.worldTextures[size] = app.createTextureStore(textureAdapter.WorldTextures(size), func(keyAsInt int) {
+		textureAdapter.RequestWorldTextureBitmaps(keyAsInt)
 	})
-	app.worldTextures[size] = buffer
+}
+
+func (app *MainApplication) initBitmaps() {
+	bitmapsAdapter := app.modelAdapter.BitmapsAdapter()
+	app.bitmaps = app.createTextureStore(bitmapsAdapter.Bitmaps(), func(keyAsInt int) {
+		bitmapsAdapter.RequestBitmap(dataModel.ResourceKeyFromInt(keyAsInt))
+	})
 }
 
 func (app *MainApplication) initGameObjectIconsBuffer() {
-	observedObjectIcons := make(map[int]bool)
-	var buffer *graphics.BufferedTextureStore
+	objectsAdapter := app.modelAdapter.ObjectsAdapter()
+	app.gameObjectIcons = app.createTextureStore(objectsAdapter.Icons(), func(keyAsInt int) {
+		objectsAdapter.RequestIcon(model.ObjectIDFromInt(keyAsInt))
+	})
+}
+
+func (app *MainApplication) createTextureStore(bitmaps *model.Bitmaps, request func(int)) (buffer *graphics.BufferedTextureStore) {
+	observedItems := make(map[int]bool)
 
 	buffer = graphics.NewBufferedTextureStore(func(key graphics.TextureKey) {
 		keyAsInt := key.ToInt()
-		objects := app.modelAdapter.ObjectsAdapter()
 
-		if !observedObjectIcons[keyAsInt] {
-			icons := objects.Icons()
-			icons.OnBitmapChanged(keyAsInt, func() {
-				raw := icons.RawBitmap(keyAsInt)
+		if !observedItems[keyAsInt] {
+			bitmaps.OnBitmapChanged(keyAsInt, func() {
+				raw := bitmaps.RawBitmap(keyAsInt)
 				bmp := graphics.BitmapFromRaw(*raw)
 				buffer.SetTexture(key, app.Texturize(&bmp))
 			})
-			observedObjectIcons[keyAsInt] = true
+			observedItems[keyAsInt] = true
 		}
-		objects.RequestIcon(model.ObjectIDFromInt(keyAsInt))
+		request(keyAsInt)
 	})
-	app.gameObjectIcons = buffer
+	return
 }
 
 func (app *MainApplication) initWorldPalette() {
@@ -272,6 +272,13 @@ func (app *MainApplication) onMouseScroll(dx float32, dy float32) {
 
 func (app *MainApplication) onKey(key keys.Key, modifier keys.Modifier) {
 	app.keyModifier = modifier
+	if key == keys.KeyCopy {
+		app.rootArea.DispatchPositionalEvent(events.NewClipboardEvent(events.ClipboardCopyEventType,
+			app.mouseX, app.mouseY, app.glWindow.Clipboard()))
+	} else if key == keys.KeyPaste {
+		app.rootArea.DispatchPositionalEvent(events.NewClipboardEvent(events.ClipboardPasteEventType,
+			app.mouseX, app.mouseY, app.glWindow.Clipboard()))
+	}
 }
 
 func (app *MainApplication) onModifier(modifier keys.Modifier) {
@@ -279,6 +286,15 @@ func (app *MainApplication) onModifier(modifier keys.Modifier) {
 }
 
 func (app *MainApplication) onChar(char rune) {
+}
+
+func (app *MainApplication) onFileDrop(filePaths []string) {
+	app.sendFileDropEvent(filePaths)
+}
+
+func (app *MainApplication) sendFileDropEvent(filePaths []string) {
+	app.rootArea.DispatchPositionalEvent(events.NewFileDropEvent(
+		app.mouseX, app.mouseY, filePaths))
 }
 
 // ModelAdapter implements the Context interface.
@@ -329,6 +345,11 @@ func (app *MainApplication) WorldTextureStore(size dataModel.TextureSize) *graph
 // GameObjectIconsStore implements the graphics.Context interface.
 func (app *MainApplication) GameObjectIconsStore() *graphics.BufferedTextureStore {
 	return app.gameObjectIcons
+}
+
+// BitmapsStore implements the graphics.Context interface.
+func (app *MainApplication) BitmapsStore() *graphics.BufferedTextureStore {
+	return app.bitmaps
 }
 
 // ControlFactory implements the Context interface.

@@ -1,6 +1,8 @@
 package controls
 
 import (
+	"math"
+
 	mgl "github.com/go-gl/mathgl/mgl32"
 
 	"github.com/inkyblackness/shocked-client/graphics"
@@ -71,19 +73,23 @@ func (selector *TextureSelector) onRender(area *ui.Area) {
 		}
 		if texture != nil {
 			u, v := texture.UV()
+			imageWidth, imageHeight := texture.Size()
 			fromLeft := float32(0.0)
 			fromTop := float32(0.0)
 			fromRight := u
 			fromBottom := v
-			toLeft := runningLeft + padding
-			toTop := areaTop + padding
+			widthFitting := iconSize / imageWidth
+			heightFitting := iconSize / imageHeight
+			scale := float32(math.Min(float64(widthFitting), float64(heightFitting)))
+			toLeft := runningLeft + padding + (iconSize-(imageWidth*scale))/2.0
+			toTop := areaTop + padding + (iconSize-(imageHeight*scale))/2.0
 			toRight := toLeft + iconSize
 			if toRight > areaRight {
 				fromRight -= (u / iconSize) * (toRight - areaRight)
 				toRight = areaRight
 			}
 
-			modelMatrix := mgl.Ident4().Mul4(mgl.Translate3D(toLeft, toTop, 0.0)).Mul4(mgl.Scale3D(toRight-toLeft, iconSize, 1.0))
+			modelMatrix := mgl.Ident4().Mul4(mgl.Translate3D(toLeft, toTop, 0.0)).Mul4(mgl.Scale3D(toRight-toLeft, imageHeight*scale, 1.0))
 			selector.textureRenderer.Render(&modelMatrix, texture, graphics.RectByCoord(fromLeft, fromTop, fromRight, fromBottom))
 		}
 		runningLeft += cellSize

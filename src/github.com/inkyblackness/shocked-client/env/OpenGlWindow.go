@@ -36,6 +36,9 @@ type KeyCallback func(key keys.Key, modifier keys.Modifier)
 // ModifierCallback is called when the currently active modifier changed.
 type ModifierCallback func(modifier keys.Modifier)
 
+// FileDropCallback is called when one or more files were dropped into the window.
+type FileDropCallback func(filePaths []string)
+
 // OpenGlWindow represents an OpenGL render surface.
 type OpenGlWindow interface {
 	// OpenGl returns the OpenGL API wrapper for this window.
@@ -47,6 +50,9 @@ type OpenGlWindow interface {
 	OnResize(callback ResizeCallback)
 	// Size returns the dimensions of the window display area in pixel.
 	Size() (width int, height int)
+
+	// Clipboard returns the clipboard access associated with this window.
+	Clipboard() Clipboard
 
 	// OnMouseMove registers a callback function for mouse move events.
 	OnMouseMove(callback MouseMoveCallback)
@@ -63,4 +69,7 @@ type OpenGlWindow interface {
 	OnModifier(callback ModifierCallback)
 	// OnCharCallback registers a callback function for typed characters.
 	OnCharCallback(callback CharCallback)
+
+	// OnFileDropCallback registers a callback function for dropped files.
+	OnFileDropCallback(callback FileDropCallback)
 }

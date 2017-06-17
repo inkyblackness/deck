@@ -4,11 +4,11 @@ package model
 // the given side is of a tile.
 type CalculatedWallHeights struct {
 	// North side of the tile (up)
-	North float32 `json:"north"`
+	North float32
 	// East side of the tile (right)
-	East float32 `json:"east"`
+	East float32
 	// West side of the tile (left)
-	West float32 `json:"west"`
+	West float32
 	// South side of the tile (down)
-	South float32 `json:"south"`
+	South float32
 }

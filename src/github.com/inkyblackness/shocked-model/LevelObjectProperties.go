@@ -2,16 +2,16 @@ package model
 
 // LevelObjectProperties describe the mutable properties of a level object
 type LevelObjectProperties struct {
-	Subclass *int `json:"subclass"`
-	Type     *int `json:"type"`
+	Subclass *int
+	Type     *int
 
-	TileX *int `json:"tileX"`
-	FineX *int `json:"fineX"`
-	TileY *int `json:"tileY"`
-	FineY *int `json:"fineY"`
-	Z     *int `json:"z"`
+	TileX *int
+	FineX *int
+	TileY *int
+	FineY *int
+	Z     *int
 
-	ClassData []byte `json:"classData"`
+	ClassData []byte
 
 	RotationX *int
 	RotationY *int

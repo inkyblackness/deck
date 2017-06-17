@@ -1,6 +1,8 @@
 package graphics
 
 import (
+	"strings"
+
 	"github.com/inkyblackness/res/text"
 	"github.com/inkyblackness/shocked-model"
 )
@@ -21,9 +23,9 @@ func NewBitmapTextPainter(font model.Font) TextPainter {
 		lastCharacterIndex: font.FirstCharacter + len(font.GlyphXOffsets) - 1}
 }
 
-func (painter *bitmapTextPainter) Paint(text string) TextBitmap {
+func (painter *bitmapTextPainter) Paint(text string, widthLimit int) TextBitmap {
 	var bmp TextBitmap
-	indexLines := painter.mapCharactersToIndex(text)
+	indexLines := painter.mapCharactersToIndex(text, widthLimit)
 
 	bmp.lineHeight = painter.bitmap.Height + 1
 	for _, line := range indexLines {
@@ -62,24 +64,57 @@ func (painter *bitmapTextPainter) Paint(text string) TextBitmap {
 	return bmp
 }
 
-func (painter *bitmapTextPainter) mapCharactersToIndex(text string) [][]int {
-	lines := [][]int{}
-	curLine := []int{}
+type indexWord struct {
+	totalSize int
+	indices   []int
+}
 
-	for _, character := range text {
-		if character == '\n' {
-			lines = append(lines, curLine)
-			curLine = []int{}
-		} else {
-			cpIndex := int(painter.cp.Encode(string(character))[0])
-			if (cpIndex >= painter.font.FirstCharacter) && (cpIndex < painter.lastCharacterIndex) {
-				curLine = append(curLine, cpIndex-painter.font.FirstCharacter)
+func (word indexWord) join(other indexWord) indexWord {
+	joinedIndices := make([]int, len(word.indices)+len(other.indices))
+	copy(joinedIndices, word.indices)
+	copy(joinedIndices[len(word.indices):], other.indices)
+
+	return indexWord{totalSize: word.totalSize + other.totalSize, indices: joinedIndices}
+}
+
+func (painter *bitmapTextPainter) mapCharactersToIndex(text string, widthLimit int) [][]int {
+	result := [][]int{}
+	toIndexWord := func(word string) (result indexWord) {
+		encoded := painter.cp.Encode(word)
+		for _, charIndexByte := range encoded {
+			charIndex := int(charIndexByte)
+			if (charIndex >= painter.font.FirstCharacter) && (charIndex < painter.lastCharacterIndex) {
+				offsetIndex := charIndex - painter.font.FirstCharacter
+				result.indices = append(result.indices, offsetIndex)
+				result.totalSize += painter.font.GlyphXOffsets[offsetIndex+1] - painter.font.GlyphXOffsets[offsetIndex]
 			}
 		}
+		return
 	}
-	lines = append(lines, curLine)
+	textLines := strings.Split(text, "\n")
+	resultLine := toIndexWord("")
+	newLine := func() {
+		result = append(result, resultLine.indices)
+		resultLine = toIndexWord("")
+	}
+	space := toIndexWord(" ")
 
-	return lines
+	for _, textLine := range textLines {
+		words := strings.Split(textLine, " ")
+		for wordIndex, word := range words {
+			iWord := toIndexWord(word)
+			if wordIndex > 0 {
+				resultLine = resultLine.join(space)
+			}
+			if (widthLimit > 0) && ((resultLine.totalSize + iWord.totalSize) > widthLimit) {
+				newLine()
+			}
+			resultLine = resultLine.join(iWord)
+		}
+		newLine()
+	}
+
+	return result
 }
 
 func (painter *bitmapTextPainter) outline(bmp Bitmap) {

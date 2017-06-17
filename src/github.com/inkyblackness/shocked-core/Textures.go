@@ -67,6 +67,23 @@ func (textures *Textures) Image(index int, size model.TextureSize) (bmp image.Bi
 	return
 }
 
+// SetImage requests to set the bitmap of identified & sized texture..
+func (textures *Textures) SetImage(index int, size model.TextureSize, imgBitmap image.Bitmap) {
+	writer := bytes.NewBuffer(nil)
+	image.Write(writer, imgBitmap, image.UncompressedBitmap, false, 0)
+	blockData := writer.Bytes()
+
+	if size == model.TextureLarge {
+		textures.images.Get(res.ResourceID(0x03E8+index)).SetBlockData(0, blockData)
+	} else if size == model.TextureMedium {
+		textures.images.Get(res.ResourceID(0x02C3+index)).SetBlockData(0, blockData)
+	} else if size == model.TextureSmall {
+		textures.images.Get(res.ResourceID(0x004D)).SetBlockData(uint16(index), blockData)
+	} else if size == model.TextureIcon {
+		textures.images.Get(res.ResourceID(0x004C)).SetBlockData(uint16(index), blockData)
+	}
+}
+
 func (textures *Textures) rawProperties(index int) (entry textprop.Entry) {
 	rawProperties := textures.properties.Get(uint32(index))
 	reader := bytes.NewReader(rawProperties)

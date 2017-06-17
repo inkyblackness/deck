@@ -1,8 +1,6 @@
 package model
 
 import (
-	"strconv"
-
 	"github.com/inkyblackness/shocked-model"
 )
 
@@ -15,10 +13,9 @@ type LevelObject struct {
 }
 
 func newLevelObject(data *model.LevelObject) *LevelObject {
-	index, _ := strconv.ParseInt(data.ID, 10, 32)
 	obj := &LevelObject{
 		class: data.Class,
-		index: int(index)}
+		index: data.ID}
 	obj.onPropertiesChanged(&data.Properties)
 
 	return obj

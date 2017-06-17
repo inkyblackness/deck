@@ -1,11 +1,4 @@
-package modes
-
-func cloneBytes(original []byte) []byte {
-	count := len(original)
-	clone := make([]byte, count)
-	copy(clone, original)
-	return clone
-}
+package core
 
 func intAsPointer(value int) (ptr *int) {
 	ptr = new(int)

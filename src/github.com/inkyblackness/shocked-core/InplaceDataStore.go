@@ -6,6 +6,7 @@ import (
 	"image/color"
 
 	"github.com/inkyblackness/res"
+	"github.com/inkyblackness/res/image"
 	"github.com/inkyblackness/shocked-core/release"
 	"github.com/inkyblackness/shocked-model"
 )
@@ -92,6 +93,56 @@ func (inplace *InplaceDataStore) Font(projectID string, fontID int,
 	})
 }
 
+// Bitmap implements the model.DataStore interface
+func (inplace *InplaceDataStore) Bitmap(projectID string, key model.ResourceKey,
+	onSuccess func(model.ResourceKey, *model.RawBitmap), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			var imgBitmap image.Bitmap
+			imgBitmap, err = project.Bitmaps().Image(key)
+
+			if err == nil {
+				rawBitmap := inplace.toRawBitmap(imgBitmap)
+				inplace.out(func() { onSuccess(key, &rawBitmap) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetBitmap implements the model.DataStore interface
+func (inplace *InplaceDataStore) SetBitmap(projectID string, key model.ResourceKey, rawBitmap *model.RawBitmap,
+	onSuccess func(model.ResourceKey, *model.RawBitmap), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			bitmaps := project.Bitmaps()
+			imgBitmap := inplace.fromRawBitmap(rawBitmap)
+			var resultKey model.ResourceKey
+
+			resultKey, err = bitmaps.SetImage(key, imgBitmap)
+
+			if err == nil {
+				var imgResult image.Bitmap
+				imgResult, err = project.Bitmaps().Image(resultKey)
+
+				if err == nil {
+					rawResult := inplace.toRawBitmap(imgResult)
+					inplace.out(func() { onSuccess(resultKey, &rawResult) })
+				}
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
 // GameObjects implements the model.DataStore interface
 func (inplace *InplaceDataStore) GameObjects(projectID string,
 	onSuccess func(objects []model.GameObject), onFailure model.FailureFunc) {
@@ -151,6 +202,50 @@ func (inplace *InplaceDataStore) SetGameObject(projectID string, class, subclass
 
 			entity.Data = gameObjects.SetObjectData(objID, properties.Data)
 			inplace.out(func() { onSuccess(&entity) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// ElectronicMessage implements the model.DataStore interface.
+func (inplace *InplaceDataStore) ElectronicMessage(projectID string, messageType model.ElectronicMessageType, id int,
+	onSuccess func(message model.ElectronicMessage), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			eMessages := project.ElectronicMessages()
+			var message model.ElectronicMessage
+			message, err = eMessages.Message(messageType, id)
+
+			if err == nil {
+				inplace.out(func() { onSuccess(message) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetElectronicMessage implements the model.DataStore interface.
+func (inplace *InplaceDataStore) SetElectronicMessage(projectID string, messageType model.ElectronicMessageType,
+	id int, message model.ElectronicMessage,
+	onSuccess func(message model.ElectronicMessage), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			eMessages := project.ElectronicMessages()
+			eMessages.SetMessage(messageType, id, message)
+			var result model.ElectronicMessage
+			result, err = eMessages.Message(messageType, id)
+
+			if err == nil {
+				inplace.out(func() { onSuccess(result) })
+			}
 		}
 		if err != nil {
 			inplace.out(onFailure)
@@ -376,6 +471,33 @@ func (inplace *InplaceDataStore) SetTextureProperties(projectID string, textureI
 	})
 }
 
+func (inplace *InplaceDataStore) fromRawBitmap(rawBitmap *model.RawBitmap) image.Bitmap {
+	var header image.BitmapHeader
+	data, _ := base64.StdEncoding.DecodeString(rawBitmap.Pixels)
+
+	header.Height = uint16(rawBitmap.Height)
+	header.Width = uint16(rawBitmap.Width)
+	header.Stride = header.Width
+	header.Type = image.CompressedBitmap
+
+	return image.NewMemoryBitmap(&header, data, nil)
+}
+
+func (inplace *InplaceDataStore) toRawBitmap(imgBitmap image.Bitmap) model.RawBitmap {
+	var rawBitmap model.RawBitmap
+
+	rawBitmap.Width = int(imgBitmap.ImageWidth())
+	rawBitmap.Height = int(imgBitmap.ImageHeight())
+	var pixel []byte
+
+	for row := 0; row < rawBitmap.Height; row++ {
+		pixel = append(pixel, imgBitmap.Row(row)...)
+	}
+	rawBitmap.Pixels = base64.StdEncoding.EncodeToString(pixel)
+
+	return rawBitmap
+}
+
 // TextureBitmap implements the model.DataStore interface
 func (inplace *InplaceDataStore) TextureBitmap(projectID string, textureID int, size string,
 	onSuccess func(bmp *model.RawBitmap), onFailure model.FailureFunc) {
@@ -384,18 +506,30 @@ func (inplace *InplaceDataStore) TextureBitmap(projectID string, textureID int, 
 
 		if err == nil {
 			bmp := project.Textures().Image(textureID, model.TextureSize(size))
-			var entity model.RawBitmap
-
-			entity.Width = int(bmp.ImageWidth())
-			entity.Height = int(bmp.ImageHeight())
-			var pixel []byte
-
-			for row := 0; row < entity.Height; row++ {
-				pixel = append(pixel, bmp.Row(row)...)
-			}
-			entity.Pixels = base64.StdEncoding.EncodeToString(pixel)
+			entity := inplace.toRawBitmap(bmp)
 
 			inplace.out(func() { onSuccess(&entity) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetTextureBitmap implements the model.DataStore interface
+func (inplace *InplaceDataStore) SetTextureBitmap(projectID string, textureID int, size string, rawBitmap *model.RawBitmap,
+	onSuccess func(*model.RawBitmap), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			textures := project.Textures()
+			imgBitmap := inplace.fromRawBitmap(rawBitmap)
+			textures.SetImage(textureID, model.TextureSize(size), imgBitmap)
+			imgResult := textures.Image(textureID, model.TextureSize(size))
+			rawResult := inplace.toRawBitmap(imgResult)
+
+			inplace.out(func() { onSuccess(&rawResult) })
 		}
 		if err != nil {
 			inplace.out(onFailure)
@@ -413,11 +547,11 @@ func (inplace *InplaceDataStore) Tiles(projectID string, archiveID string, level
 			level := project.Archive().Level(levelID)
 			var entity model.Tiles
 
-			entity.Table = make([][]model.Tile, 64)
+			entity.Table = make([][]model.TileProperties, 64)
 			for y := 0; y < 64; y++ {
-				entity.Table[y] = make([]model.Tile, 64)
+				entity.Table[y] = make([]model.TileProperties, 64)
 				for x := 0; x < 64; x++ {
-					entity.Table[y][x] = inplace.getLevelTileEntity(project, level, x, y)
+					entity.Table[y][x] = level.TileProperties(x, y)
 				}
 			}
 
@@ -429,14 +563,6 @@ func (inplace *InplaceDataStore) Tiles(projectID string, archiveID string, level
 	})
 }
 
-func (inplace *InplaceDataStore) getLevelTileEntity(project *Project, level *Level, x int, y int) (entity model.Tile) {
-	entity.Href = "/projects/" + project.Name() + "/archive/levels/" + fmt.Sprintf("%d", level.ID()) +
-		"/tiles/" + fmt.Sprintf("%d", y) + "/" + fmt.Sprintf("%d", x)
-	entity.Properties = level.TileProperties(int(x), int(y))
-
-	return
-}
-
 // Tile implements the model.DataStore interface
 func (inplace *InplaceDataStore) Tile(projectID string, archiveID string, levelID int, x, y int,
 	onSuccess func(properties model.TileProperties), onFailure model.FailureFunc) {
@@ -445,9 +571,9 @@ func (inplace *InplaceDataStore) Tile(projectID string, archiveID string, levelI
 
 		if err == nil {
 			level := project.Archive().Level(int(levelID))
-			entity := inplace.getLevelTileEntity(project, level, x, y)
+			properties := level.TileProperties(x, y)
 
-			inplace.out(func() { onSuccess(entity.Properties) })
+			inplace.out(func() { onSuccess(properties) })
 		}
 		if err != nil {
 			inplace.out(onFailure)
@@ -465,8 +591,8 @@ func (inplace *InplaceDataStore) SetTile(projectID string, archiveID string, lev
 			level := project.Archive().Level(levelID)
 
 			level.SetTileProperties(x, y, properties)
-			result := inplace.getLevelTileEntity(project, level, x, y)
-			inplace.out(func() { onSuccess(result.Properties) })
+			result := level.TileProperties(x, y)
+			inplace.out(func() { onSuccess(result) })
 		}
 		if err != nil {
 			inplace.out(onFailure)

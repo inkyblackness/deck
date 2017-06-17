@@ -1,6 +1,12 @@
 package modes
 
 import (
+	"encoding/base64"
+	"fmt"
+	"image"
+	"image/color"
+	"os"
+
 	"github.com/inkyblackness/shocked-client/editor/model"
 	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/graphics/controls"
@@ -47,7 +53,8 @@ type GameTexturesMode struct {
 	useTextTitle  *controls.Label
 	useTextValue  *controls.Label
 
-	imageDisplays map[dataModel.TextureSize]*controls.ImageDisplay
+	imageDisplayDrops map[dataModel.TextureSize]*ui.Area
+	imageDisplays     map[dataModel.TextureSize]*controls.ImageDisplay
 }
 
 // NewGameTexturesMode returns a new instance.
@@ -56,6 +63,7 @@ func NewGameTexturesMode(context Context, parent *ui.Area) *GameTexturesMode {
 		context:           context,
 		textureAdapter:    context.ModelAdapter().TextureAdapter(),
 		selectedTextureID: -1,
+		imageDisplayDrops: make(map[dataModel.TextureSize]*ui.Area),
 		imageDisplays:     make(map[dataModel.TextureSize]*controls.ImageDisplay)}
 
 	{
@@ -106,12 +114,14 @@ func NewGameTexturesMode(context Context, parent *ui.Area) *GameTexturesMode {
 		mode.propertiesHeader = panelBuilder.addTitle("Properties")
 		{
 			mode.languageLabel, mode.languageBox = panelBuilder.addComboProperty("Language", mode.onLanguageChanged)
-			items := []controls.ComboBoxItem{&enumItem{0, "STD"}, &enumItem{1, "FRA"}, &enumItem{2, "GER"}}
+			items := []controls.ComboBoxItem{&enumItem{0, "STD"}, &enumItem{1, "FRN"}, &enumItem{2, "GER"}}
 			mode.languageBox.SetItems(items)
 			mode.languageBox.SetSelectedItem(items[0])
 
 			mode.nameTitle, mode.nameValue = panelBuilder.addInfo("Name")
+			mode.nameValue.AllowTextChange(mode.onNameChangeRequested)
 			mode.useTextTitle, mode.useTextValue = panelBuilder.addInfo("Use Text")
+			mode.useTextValue.AllowTextChange(mode.onUseTextChangeRequested)
 		}
 		{
 			mode.climbableLabel, mode.climbableBox = panelBuilder.addComboProperty("Climbable", mode.onClimbableChanged)
@@ -140,18 +150,26 @@ func NewGameTexturesMode(context Context, parent *ui.Area) *GameTexturesMode {
 			dataModel.TextureIcon:   16}
 
 		for _, textureSize := range dataModel.TextureSizes() {
-			builder := mode.context.ControlFactory().ForImageDisplay()
+			dropBuilder := ui.NewAreaBuilder()
+			displayBuilder := mode.context.ControlFactory().ForImageDisplay()
 			left := ui.NewOffsetAnchor(runningLeft, padding)
 			right := ui.NewOffsetAnchor(left, pixelSizes[textureSize])
 			top := ui.NewOffsetAnchor(mode.area.Top(), padding)
 
-			builder.SetParent(mode.area)
-			builder.SetLeft(left)
-			builder.SetRight(right)
-			builder.SetTop(top)
-			builder.SetBottom(ui.NewOffsetAnchor(top, pixelSizes[dataModel.TextureLarge]))
-			builder.WithProvider(mode.imageProvider(textureSize))
-			mode.imageDisplays[textureSize] = builder.Build()
+			dropBuilder.SetParent(mode.area)
+			displayBuilder.SetParent(mode.area)
+			dropBuilder.SetLeft(left)
+			displayBuilder.SetLeft(left)
+			dropBuilder.SetRight(right)
+			displayBuilder.SetRight(right)
+			dropBuilder.SetTop(top)
+			displayBuilder.SetTop(top)
+			dropBuilder.SetBottom(ui.NewOffsetAnchor(top, pixelSizes[dataModel.TextureLarge]))
+			displayBuilder.SetBottom(ui.NewOffsetAnchor(top, pixelSizes[dataModel.TextureLarge]))
+			dropBuilder.OnEvent(events.FileDropEventType, mode.textureDropHandler(textureSize))
+			displayBuilder.WithProvider(mode.imageProvider(textureSize))
+			mode.imageDisplayDrops[textureSize] = dropBuilder.Build()
+			mode.imageDisplays[textureSize] = displayBuilder.Build()
 			runningLeft = right
 		}
 	}
@@ -191,6 +209,9 @@ func (mode *GameTexturesMode) onGameTexturesChanged() {
 	textureCount := mode.textureAdapter.WorldTextureCount()
 
 	mode.selectedTextureIDSlider.SetRange(0, int64(textureCount)-1)
+	if mode.selectedTextureID >= 0 {
+		mode.onTextureSelected(mode.selectedTextureID)
+	}
 }
 
 func (mode *GameTexturesMode) onTextureSelected(id int) {
@@ -237,6 +258,18 @@ func (mode *GameTexturesMode) updateTextureText() {
 	mode.useTextValue.SetText(useText)
 }
 
+func (mode *GameTexturesMode) onNameChangeRequested(newValue string) {
+	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
+		properties.Name[mode.languageIndex] = stringAsPointer(newValue)
+	})
+}
+
+func (mode *GameTexturesMode) onUseTextChangeRequested(newValue string) {
+	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
+		properties.CantBeUsed[mode.languageIndex] = stringAsPointer(newValue)
+	})
+}
+
 func (mode *GameTexturesMode) onClimbableChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
 	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
@@ -261,4 +294,48 @@ func (mode *GameTexturesMode) onAnimationIndexChanged(newValue int64) {
 	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
 		properties.AnimationIndex = intAsPointer(int(newValue))
 	})
+}
+
+func (mode *GameTexturesMode) textureDropHandler(textureSize dataModel.TextureSize) ui.EventHandler {
+	return func(area *ui.Area, event events.Event) (result bool) {
+		fileDropEvent := event.(*events.FileDropEvent)
+		filePaths := fileDropEvent.FilePaths()
+		if len(filePaths) == 1 {
+			file, err := os.Open(filePaths[0])
+			var img image.Image
+
+			if err == nil {
+				defer file.Close()
+				img, _, err = image.Decode(file)
+				if err != nil {
+					mode.context.ModelAdapter().SetMessage(fmt.Sprintf("File <%v> has unknown image format", filePaths[0]))
+				}
+			} else {
+				mode.context.ModelAdapter().SetMessage(fmt.Sprintf("Could not open file <%v>", filePaths[0]))
+			}
+			if err == nil {
+				mode.setTextureBitmap(textureSize, img)
+			}
+		}
+		return
+	}
+}
+
+func (mode *GameTexturesMode) setTextureBitmap(textureSize dataModel.TextureSize, img image.Image) {
+	if mode.selectedTextureID >= 0 {
+		rawPalette := mode.context.ModelAdapter().GamePalette()
+		palette := make([]color.Color, len(rawPalette))
+		for index, clr := range rawPalette {
+			palette[index] = clr
+		}
+		bitmapper := graphics.NewStandardBitmapper(palette)
+		gfxBitmap := bitmapper.Map(img)
+		var rawBitmap dataModel.RawBitmap
+
+		rawBitmap.Width = gfxBitmap.Width
+		rawBitmap.Height = gfxBitmap.Height
+		rawBitmap.Pixels = base64.StdEncoding.EncodeToString(gfxBitmap.Pixels)
+
+		mode.textureAdapter.RequestTextureBitmapChange(mode.selectedTextureID, textureSize, &rawBitmap)
+	}
 }

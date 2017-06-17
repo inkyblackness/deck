@@ -19,9 +19,11 @@ type Adapter struct {
 
 	availableLevelIDs *observable
 
-	palette        *observable
-	textureAdapter *TextureAdapter
-	objectsAdapter *ObjectsAdapter
+	palette            *observable
+	bitmapsAdapter     *BitmapsAdapter
+	textureAdapter     *TextureAdapter
+	objectsAdapter     *ObjectsAdapter
+	electronicMessages *ElectronicMessageAdapter
 }
 
 // NewAdapter returns a new model adapter.
@@ -39,9 +41,11 @@ func NewAdapter(store model.DataStore) *Adapter {
 		palette: newObservable()}
 
 	adapter.message.set("")
+	adapter.bitmapsAdapter = newBitmapsAdapter(adapter, store)
 	adapter.textureAdapter = newTextureAdapter(adapter, store)
 	adapter.objectsAdapter = newObjectsAdapter(adapter, store)
 	adapter.activeLevel = newLevelAdapter(adapter, store, adapter.objectsAdapter)
+	adapter.electronicMessages = newElectronicMessageAdapter(adapter, store)
 	adapter.palette.set(&[256]model.Color{})
 
 	return adapter
@@ -75,6 +79,7 @@ func (adapter *Adapter) ActiveProjectID() string {
 
 // RequestProject sets the project to work on.
 func (adapter *Adapter) RequestProject(projectID string) {
+	adapter.bitmapsAdapter.clear()
 	adapter.textureAdapter.clear()
 	adapter.objectsAdapter.clear()
 	adapter.requestArchive("")
@@ -88,6 +93,7 @@ func (adapter *Adapter) RequestProject(projectID string) {
 			adapter.onGamePalette, adapter.simpleStoreFailure("Palette"))
 		adapter.objectsAdapter.refresh()
 		adapter.textureAdapter.refresh()
+		adapter.bitmapsAdapter.refresh()
 	}
 }
 
@@ -105,6 +111,11 @@ func (adapter *Adapter) OnGamePaletteChanged(callback func()) {
 	adapter.palette.addObserver(callback)
 }
 
+// BitmapsAdapter returns the adapter for bitmaps.
+func (adapter *Adapter) BitmapsAdapter() *BitmapsAdapter {
+	return adapter.bitmapsAdapter
+}
+
 // TextureAdapter returns the adapter for textures.
 func (adapter *Adapter) TextureAdapter() *TextureAdapter {
 	return adapter.textureAdapter
@@ -113,6 +124,11 @@ func (adapter *Adapter) TextureAdapter() *TextureAdapter {
 // ObjectsAdapter returns the adapter for game objects.
 func (adapter *Adapter) ObjectsAdapter() *ObjectsAdapter {
 	return adapter.objectsAdapter
+}
+
+// ElectronicMessageAdapter returns the adapter for electronic messages.
+func (adapter *Adapter) ElectronicMessageAdapter() *ElectronicMessageAdapter {
+	return adapter.electronicMessages
 }
 
 // ActiveArchiveID returns the identifier of the current archive.

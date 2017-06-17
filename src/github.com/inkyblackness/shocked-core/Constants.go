@@ -9,12 +9,16 @@ const MaximumLevelsPerArchive = 16
 
 type localizedFiles struct {
 	cybstrng string
+	mfdart   string
 }
 
 var localized = [model.LanguageCount]localizedFiles{
 	{
-		cybstrng: "cybstrng.res"},
+		cybstrng: "cybstrng.res",
+		mfdart:   "mfdart.res"},
 	{
-		cybstrng: "frnstrng.res"},
+		cybstrng: "frnstrng.res",
+		mfdart:   "mfdfrn.res"},
 	{
-		cybstrng: "gerstrng.res"}}
+		cybstrng: "gerstrng.res",
+		mfdart:   "mfdger.res"}}

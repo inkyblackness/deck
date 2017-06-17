@@ -89,6 +89,14 @@ func (adapter *TextureAdapter) RequestTexturePropertiesChange(id int, properties
 		}, adapter.context.simpleStoreFailure("SetTextureProperties"))
 }
 
+// RequestTextureBitmapChange requests to change the bitmap of a single texture.
+func (adapter *TextureAdapter) RequestTextureBitmapChange(id int, size model.TextureSize, rawBitmap *model.RawBitmap) {
+	adapter.store.SetTextureBitmap(adapter.context.ActiveProjectID(), id, string(size), rawBitmap,
+		func(rawResult *model.RawBitmap) {
+			adapter.worldTextures[size].setRawBitmap(id, rawResult)
+		}, adapter.context.simpleStoreFailure("SetTextureBitmap"))
+}
+
 // RequestWorldTextureBitmaps will load the bitmap data for given world texture.
 func (adapter *TextureAdapter) RequestWorldTextureBitmaps(key int) {
 	if adapter.worldTextureRequestsPending[key] == 0 {

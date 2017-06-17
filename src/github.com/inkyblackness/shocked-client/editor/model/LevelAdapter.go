@@ -161,7 +161,7 @@ func (adapter *LevelAdapter) onTiles(tiles model.Tiles) {
 	for y := 0; y < len(tiles.Table); y++ {
 		row := tiles.Table[y]
 		for x := 0; x < len(row); x++ {
-			adapter.onTilePropertiesUpdated(TileCoordinateOf(x, y), &row[x].Properties)
+			adapter.onTilePropertiesUpdated(TileCoordinateOf(x, y), &row[x])
 		}
 	}
 }
@@ -359,16 +359,14 @@ func (adapter *LevelAdapter) RequestTilePropertyChange(coordinates []TileCoordin
 	}
 	for _, coord := range coordinates {
 		x, y := coord.XY()
+		additionalQueries[TileCoordinateOf(x, y)] = true
 		additionalQueries[TileCoordinateOf(x-1, y)] = true
 		additionalQueries[TileCoordinateOf(x+1, y)] = true
 		additionalQueries[TileCoordinateOf(x, y-1)] = true
 		additionalQueries[TileCoordinateOf(x, y+1)] = true
 		adapter.store.SetTile(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), storeLevelID,
 			x, y, *properties,
-			tileUpdateHandler(coord), adapter.context.simpleStoreFailure("SetTile"))
-	}
-	for _, coord := range coordinates {
-		delete(additionalQueries, coord)
+			func(model.TileProperties) {}, adapter.context.simpleStoreFailure("SetTile"))
 	}
 	for coord := range additionalQueries {
 		x, y := coord.XY()

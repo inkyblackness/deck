@@ -3,6 +3,7 @@ package controls
 import (
 	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/ui"
+	"github.com/inkyblackness/shocked-client/ui/events"
 )
 
 // LabelBuilder creates new label controls.
@@ -13,6 +14,7 @@ type LabelBuilder struct {
 	texturizer      BitmapTexturizer
 	textureRenderer graphics.TextureRenderer
 
+	fitToWidth        bool
 	scale             float32
 	horizontalAligner Aligner
 	verticalAligner   Aligner
@@ -39,11 +41,15 @@ func (builder *LabelBuilder) Build() *Label {
 		textPainter:       builder.textPainter,
 		texturizer:        builder.texturizer,
 		textureRenderer:   builder.textureRenderer,
+		fitToWidth:        builder.fitToWidth,
 		scale:             builder.scale,
 		horizontalAligner: builder.horizontalAligner,
 		verticalAligner:   builder.verticalAligner}
 
 	builder.areaBuilder.OnRender(label.onRender)
+	builder.areaBuilder.OnEvent(events.ClipboardCopyEventType, label.onClipboardCopy)
+	builder.areaBuilder.OnEvent(events.ClipboardPasteEventType, label.onClipboardPaste)
+	builder.areaBuilder.OnEvent(events.FileDropEventType, label.onFileDrop)
 	label.area = builder.areaBuilder.Build()
 	label.SetText("")
 
@@ -95,5 +101,11 @@ func (builder *LabelBuilder) AlignedHorizontallyBy(aligner Aligner) *LabelBuilde
 // AlignedVerticallyBy sets the aligner for the vertical axis. Default: Center.
 func (builder *LabelBuilder) AlignedVerticallyBy(aligner Aligner) *LabelBuilder {
 	builder.verticalAligner = aligner
+	return builder
+}
+
+// SetFitToWidth has the label always fit its text into the width.
+func (builder *LabelBuilder) SetFitToWidth() *LabelBuilder {
+	builder.fitToWidth = true
 	return builder
 }

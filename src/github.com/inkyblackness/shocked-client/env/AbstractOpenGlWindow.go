@@ -29,6 +29,7 @@ type AbstractOpenGlWindow struct {
 	CallModifier          ModifierCallback
 	CallKey               KeyCallback
 	CallCharCallback      CharCallback
+	CallFileDropCallback  FileDropCallback
 }
 
 // InitAbstractOpenGlWindow returns an initialized instance.
@@ -41,7 +42,8 @@ func InitAbstractOpenGlWindow() AbstractOpenGlWindow {
 		CallOnMouseButtonDown: func(uint32, keys.Modifier) {},
 		CallKey:               func(keys.Key, keys.Modifier) {},
 		CallModifier:          func(keys.Modifier) {},
-		CallCharCallback:      func(rune) {}}
+		CallCharCallback:      func(rune) {},
+		CallFileDropCallback:  func([]string) {}}
 }
 
 // StickyKeyListener returns an instance of a listener acting as an adapter
@@ -93,4 +95,9 @@ func (window *AbstractOpenGlWindow) OnModifier(callback ModifierCallback) {
 // OnCharCallback implements the OpenGlWindow interface
 func (window *AbstractOpenGlWindow) OnCharCallback(callback CharCallback) {
 	window.CallCharCallback = callback
+}
+
+// OnFileDropCallback implements the OpenGlWindow interface
+func (window *AbstractOpenGlWindow) OnFileDropCallback(callback FileDropCallback) {
+	window.CallFileDropCallback = callback
 }

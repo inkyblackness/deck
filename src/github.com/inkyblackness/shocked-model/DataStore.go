@@ -13,6 +13,13 @@ type DataStore interface {
 	// Font queries a specific font.
 	Font(projectID string, fontID int, onSuccess func(font *Font), onFailure FailureFunc)
 
+	// Bitmap queries the data of a bitmap resource.
+	Bitmap(projectID string, key ResourceKey,
+		onSuccess func(ResourceKey, *RawBitmap), onFailure FailureFunc)
+	// SetBitmap requests to set the data of a bitmap resource.
+	SetBitmap(projectID string, key ResourceKey, bmp *RawBitmap,
+		onSuccess func(ResourceKey, *RawBitmap), onFailure FailureFunc)
+
 	// GameObjects queries the basic properties of all objects in the project.
 	GameObjects(projectID string, onSuccess func(objects []GameObject), onFailure FailureFunc)
 	// GameObjectIcon queries the icon bitmap of a game object.
@@ -20,6 +27,13 @@ type DataStore interface {
 	// SetGameObject requests to update the properties of a game object.
 	SetGameObject(projectID string, class, subclass, objType int, properties *GameObjectProperties,
 		onSuccess func(properties *GameObjectProperties), onFailure FailureFunc)
+
+	// ElectronicMessage queries the data of a specific electronic message.
+	ElectronicMessage(projectID string, messageType ElectronicMessageType, id int,
+		onSuccess func(message ElectronicMessage), onFailure FailureFunc)
+	// SetElectronicMessage requests to update the properties of a specific electronic message.
+	SetElectronicMessage(projectID string, messageType ElectronicMessageType, id int, message ElectronicMessage,
+		onSuccess func(message ElectronicMessage), onFailure FailureFunc)
 
 	// Palette queries a palette.
 	Palette(projectID string, paletteID string, onSuccess func(colors [256]Color), onFailure FailureFunc)
@@ -50,6 +64,9 @@ type DataStore interface {
 		onSuccess func(properties *TextureProperties), onFailure FailureFunc)
 	// TextureBitmap queries the texture bitmap of a texture.
 	TextureBitmap(projectID string, textureID int, size string, onSuccess func(bmp *RawBitmap), onFailure FailureFunc)
+	// SetTextureBitmap requests to update the bitmap of a texture.
+	SetTextureBitmap(projectID string, textureID int, size string, bmp *RawBitmap,
+		onSuccess func(bmp *RawBitmap), onFailure FailureFunc)
 
 	// Tiles queries the complete tile map of a level.
 	Tiles(projectID string, archiveID string, levelID int, onSuccess func(tiles Tiles), onFailure FailureFunc)

@@ -12,6 +12,7 @@ type Context interface {
 	UITextRenderer() *BitmapTextureRenderer
 
 	NewPaletteTexture(colorProvider ColorProvider) *PaletteTexture
+	BitmapsStore() *BufferedTextureStore
 	WorldTextureStore(size model.TextureSize) *BufferedTextureStore
 	GameObjectIconsStore() *BufferedTextureStore
 }

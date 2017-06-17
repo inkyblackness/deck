@@ -563,6 +563,10 @@ func (mode *LevelMapMode) onMouseButtonClicked(area *ui.Area, event events.Event
 		if tileX >= 0 && tileX < 64 && tileY >= 0 && tileY < 64 {
 			if keys.Modifier(mouseEvent.Modifier()) == keys.ModControl {
 				mode.toggleSelectedTile(coord)
+			} else if (keys.Modifier(mouseEvent.Modifier()) == keys.ModShift) && (len(mode.selectedTiles) > 0) {
+				firstTile := mode.selectedTiles[0]
+				massSelectStartX, massSelectStartY := firstTile.XY()
+				mode.massSelectTiles(model.TileCoordinateOf(massSelectStartX, massSelectStartY), coord)
 			} else {
 				mode.setSelectedTiles([]model.TileCoordinate{coord})
 			}
@@ -571,6 +575,30 @@ func (mode *LevelMapMode) onMouseButtonClicked(area *ui.Area, event events.Event
 	}
 
 	return
+}
+
+func (mode *LevelMapMode) massSelectTiles(fromCoord model.TileCoordinate, toCoord model.TileCoordinate) {
+	sel := func(a, b int, selectA bool) (result int) {
+		result = b
+		if selectA {
+			result = a
+		}
+		return
+	}
+	min := func(a, b int) int { return sel(a, b, a < b) }
+	max := func(a, b int) int { return sel(a, b, b < a) }
+	newSelection := []model.TileCoordinate{fromCoord}
+	fromX, fromY := fromCoord.XY()
+	toX, toY := toCoord.XY()
+	for y := min(fromY, toY); y <= max(fromY, toY); y++ {
+		for x := min(fromX, toX); x <= max(fromX, toX); x++ {
+			selCoord := model.TileCoordinateOf(x, y)
+			if selCoord != fromCoord {
+				newSelection = append(newSelection, selCoord)
+			}
+		}
+	}
+	mode.setSelectedTiles(newSelection)
 }
 
 func (mode *LevelMapMode) setSelectedTiles(tiles []model.TileCoordinate) {

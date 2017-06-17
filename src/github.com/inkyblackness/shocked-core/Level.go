@@ -323,20 +323,8 @@ func (level *Level) Objects() []model.LevelObject {
 	return result
 }
 
-func intAsPointer(value int) (ptr *int) {
-	ptr = new(int)
-	*ptr = value
-	return
-}
-
-func boolAsPointer(value bool) (ptr *bool) {
-	ptr = new(bool)
-	*ptr = value
-	return
-}
-
 func (level *Level) objectFromRawEntry(index int, rawEntry *data.LevelObjectEntry) (entry model.LevelObject) {
-	entry.Identifiable = model.Identifiable{ID: fmt.Sprintf("%d", index)}
+	entry.ID = index
 	entry.Class = int(rawEntry.Class)
 
 	entry.Properties.Subclass = intAsPointer(int(rawEntry.Subclass))

@@ -59,6 +59,7 @@ func NewOpenGlWindow() (window *OpenGlWindow, err error) {
 			glfwWindow.SetFramebufferSizeCallback(window.onFramebufferResize)
 			glfwWindow.SetKeyCallback(window.onKey)
 			glfwWindow.SetCharCallback(window.onChar)
+			glfwWindow.SetDropCallback(window.onDrop)
 		}
 	}
 	return
@@ -104,6 +105,22 @@ func (window *OpenGlWindow) OpenGl() opengl.OpenGl {
 // Size implements the env.OpenGlWindow interface.
 func (window *OpenGlWindow) Size() (width int, height int) {
 	return window.glfwWindow.GetFramebufferSize()
+}
+
+// Clipboard implements the env.OpenGlWindow interface.
+func (window *OpenGlWindow) Clipboard() env.Clipboard {
+	return window
+}
+
+// Text implements the env.Clipboard interface.
+func (window *OpenGlWindow) Text() string {
+	text, _ := window.glfwWindow.GetClipboardString()
+	return text
+}
+
+// SetText implements the env.Clipboard interface.
+func (window *OpenGlWindow) SetText(value string) {
+	window.glfwWindow.SetClipboardString(value)
 }
 
 func (window *OpenGlWindow) onFramebufferResize(rawWindow *glfw.Window, width int, height int) {
@@ -174,4 +191,8 @@ func (window *OpenGlWindow) mapModifier(mods glfw.ModifierKey) keys.Modifier {
 	}
 
 	return modifier
+}
+
+func (window *OpenGlWindow) onDrop(rawWindow *glfw.Window, filePaths []string) {
+	window.CallFileDropCallback(filePaths)
 }
