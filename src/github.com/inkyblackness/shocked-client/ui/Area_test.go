@@ -403,6 +403,45 @@ func (suite *AreaSuite) TestDispatchPositionalEventCallsFocusedItemBeforeChildre
 	c.Check(handleCalls, check.DeepEquals, map[string]int{"area3": 0, "area2": 1, "area1": 2})
 }
 
+func (suite *AreaSuite) TestDispatchPositionalEventCallsFocusedAreaHandlerWithoutFocusedChildBeforeChildren(c *check.C) {
+	testEvent := suite.aPositionalEvent(50.0, 50.0)
+	handleCounter := 0
+	handleCalls := make(map[string]int)
+	aHandler := func(id string, consume bool) EventHandler {
+		return func(*Area, events.Event) bool {
+			handleCalls[id] = handleCounter
+			handleCounter++
+			return consume
+		}
+	}
+	var testedArea *Area
+
+	suite.builder.OnEvent(testEvent.EventType(), aHandler("root", false))
+	area := suite.builder.Build()
+
+	{
+		subAreaBuilder := NewAreaBuilder()
+		subAreaBuilder.OnEvent(testEvent.EventType(), aHandler("area1", false))
+		subAreaBuilder.SetRight(area.Right())
+		subAreaBuilder.SetBottom(area.Bottom())
+		subAreaBuilder.SetParent(area)
+		testedArea = subAreaBuilder.Build()
+	}
+	{
+		subAreaBuilder := NewAreaBuilder()
+		subAreaBuilder.OnEvent(testEvent.EventType(), aHandler("area2", false))
+		subAreaBuilder.SetRight(area.Right())
+		subAreaBuilder.SetBottom(area.Bottom())
+		subAreaBuilder.SetParent(testedArea)
+		subAreaBuilder.Build()
+	}
+
+	testedArea.RequestFocus()
+	area.DispatchPositionalEvent(testEvent)
+
+	c.Check(handleCalls, check.DeepEquals, map[string]int{"root": 2, "area2": 1, "area1": 0})
+}
+
 func (suite *AreaSuite) TestDispatchPositionalEventCallsFocusedItemOnlyOnce(c *check.C) {
 	testEvent := suite.aPositionalEvent(50.0, 50.0)
 	handleCounter := 0

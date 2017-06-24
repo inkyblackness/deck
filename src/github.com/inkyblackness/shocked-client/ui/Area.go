@@ -141,8 +141,12 @@ func (area *Area) HandleEvent(event events.Event) (consumed bool) {
 // before trying to handle it within this area.
 func (area *Area) DispatchPositionalEvent(event events.PositionalEvent) (consumed bool) {
 	if area.IsVisible() {
+		triedLocal := false
 		if area.focusedArea != nil {
 			consumed = area.focusedArea.DispatchPositionalEvent(event)
+		} else if !area.isRoot() && area.HasFocus() {
+			triedLocal = true
+			consumed = area.tryEventHandlerFor(event)
 		}
 		if !consumed {
 			children := area.currentChildren()
@@ -157,7 +161,7 @@ func (area *Area) DispatchPositionalEvent(event events.PositionalEvent) (consume
 				}
 			}
 		}
-		if !consumed {
+		if !consumed && !triedLocal {
 			consumed = area.tryEventHandlerFor(event)
 		}
 	}

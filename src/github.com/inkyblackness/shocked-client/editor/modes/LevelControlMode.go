@@ -48,6 +48,8 @@ type LevelControlMode struct {
 	currentLevelTextureIndex int
 	worldTexturesLabel       *controls.Label
 	worldTexturesSelector    *controls.TextureSelector
+	worldTexturesIDLabel     *controls.Label
+	worldTexturesIDSlider    *controls.Slider
 
 	selectedSurveillanceIndex    int
 	surveillanceIndexLabel       *controls.Label
@@ -158,6 +160,13 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 				mode.levelTextures, mode.onSelectedLevelTextureChanged)
 			mode.worldTexturesLabel, mode.worldTexturesSelector = panelBuilder.addTextureProperty("World Textures",
 				mode.worldTextures, mode.onSelectedWorldTextureChanged)
+			mode.worldTexturesIDLabel, mode.worldTexturesIDSlider = panelBuilder.addSliderProperty("World Texture ID",
+				mode.onSelectedWorldTextureIDChanged)
+
+			textureAdapter := mode.context.ModelAdapter().TextureAdapter()
+			textureAdapter.OnGameTexturesChanged(func() {
+				mode.worldTexturesIDSlider.SetRange(0, int64(textureAdapter.WorldTextureCount()-1))
+			})
 		}
 		{
 			mode.surveillanceIndexLabel, mode.surveillanceIndexBox =
@@ -243,6 +252,9 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 			mode.animationGroupTimeLabel, mode.animationGroupTimeSlider =
 				panelBuilder.addSliderProperty("Texture Animation Time", mode.onAnimationGroupTimeChanged)
 			mode.animationGroupTimeSlider.SetRange(0, 1000)
+			mode.animationGroupTimeSlider.SetValueFormatter(func(value int64) string {
+				return fmt.Sprintf("%v msec", value)
+			})
 			mode.animationGroupFramesLabel, mode.animationGroupFramesSlider =
 				panelBuilder.addSliderProperty("Texture Animation Frame Count", mode.onAnimationGroupFramesChanged)
 			mode.animationGroupFramesSlider.SetRange(0, 10)
@@ -307,22 +319,36 @@ func (mode *LevelControlMode) onSelectedLevelTextureChanged(index int) {
 	ids := mode.context.ModelAdapter().ActiveLevel().LevelTextureIDs()
 
 	if (index >= 0) && (index < len(ids)) {
-		mode.worldTexturesSelector.SetSelectedIndex(ids[index])
+		textureID := ids[index]
+		mode.worldTexturesSelector.SetSelectedIndex(textureID)
+		mode.worldTexturesIDSlider.SetValue(int64(textureID))
 		mode.currentLevelTextureIndex = index
 	} else {
 		mode.worldTexturesSelector.SetSelectedIndex(-1)
+		mode.worldTexturesIDSlider.SetValueUndefined()
 		mode.currentLevelTextureIndex = -1
 	}
 }
 
 func (mode *LevelControlMode) onSelectedWorldTextureChanged(index int) {
+	mode.worldTexturesIDSlider.SetValue(int64(index))
+	mode.setLevelTextureID(index)
+}
+
+func (mode *LevelControlMode) onSelectedWorldTextureIDChanged(newValue int64) {
+	mode.worldTexturesSelector.SetSelectedIndex(int(newValue))
+	mode.worldTexturesSelector.DisplaySelectedIndex()
+	mode.setLevelTextureID(int(newValue))
+}
+
+func (mode *LevelControlMode) setLevelTextureID(id int) {
 	levelAdapter := mode.context.ModelAdapter().ActiveLevel()
 	ids := levelAdapter.LevelTextureIDs()
 
 	if (mode.currentLevelTextureIndex >= 0) && (mode.currentLevelTextureIndex < len(ids)) {
 		newIDs := make([]int, len(ids))
 		copy(newIDs, ids)
-		newIDs[mode.currentLevelTextureIndex] = index
+		newIDs[mode.currentLevelTextureIndex] = id
 		levelAdapter.RequestLevelTexturesChange(newIDs)
 	}
 }

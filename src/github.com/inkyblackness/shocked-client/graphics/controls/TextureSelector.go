@@ -46,6 +46,13 @@ func (selector *TextureSelector) SetSelectedIndex(index int) {
 	selector.selectedIndex = index
 }
 
+// DisplaySelectedIndex sets the first displayed index to the currently selected item.
+func (selector *TextureSelector) DisplaySelectedIndex() {
+	if selector.selectedIndex >= 0 {
+		selector.firstDisplayedIndex = selector.selectedIndex
+	}
+}
+
 func (selector *TextureSelector) onRender(area *ui.Area) {
 	areaTop := area.Top().Value()
 	areaBottom := area.Bottom().Value()
@@ -144,8 +151,6 @@ func (selector *TextureSelector) onListMouseButtonClicked(area *ui.Area, event e
 }
 
 func (selector *TextureSelector) onDisplayMouseButtonClicked(area *ui.Area, event events.Event) bool {
-	if selector.selectedIndex >= 0 {
-		selector.firstDisplayedIndex = selector.selectedIndex
-	}
+	selector.DisplaySelectedIndex()
 	return true
 }

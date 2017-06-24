@@ -40,10 +40,14 @@ func Write(writer io.Writer, bmp Bitmap, bmpType BitmapType, forceTransparency b
 }
 
 func writePixel(bmp Bitmap, bmpType BitmapType) (result []byte) {
-	rawPixel := make([]byte, int(bmp.ImageWidth()*bmp.ImageHeight()))
+	width := int(bmp.ImageWidth())
+	height := int(bmp.ImageHeight())
+	rawPixel := make([]byte, width*height)
 
-	for row := 0; row < int(bmp.ImageHeight()); row++ {
-		copy(rawPixel[int(bmp.ImageWidth())*row:], bmp.Row(row))
+	for row := 0; row < height; row++ {
+		inRow := bmp.Row(row)
+		outRow := rawPixel[width*row:]
+		copy(outRow, inRow)
 	}
 
 	if bmpType == CompressedBitmap {

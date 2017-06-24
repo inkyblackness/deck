@@ -103,6 +103,7 @@ func NewGameTexturesMode(context Context, parent *ui.Area) *GameTexturesMode {
 			mode.selectedTextureIDLabel, mode.selectedTextureIDSlider = panelBuilder.addSliderProperty("Selected Texture ID",
 				func(newValue int64) {
 					mode.selectedTextureSelector.SetSelectedIndex(int(newValue))
+					mode.selectedTextureSelector.DisplaySelectedIndex()
 					mode.onTextureSelected(int(newValue))
 				})
 			mode.selectedTextureLabel, mode.selectedTextureSelector = panelBuilder.addTextureProperty("Selected Texture",
