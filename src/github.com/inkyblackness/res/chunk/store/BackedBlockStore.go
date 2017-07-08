@@ -44,7 +44,7 @@ func (backed *backedBlockStore) ContentType() res.DataTypeID {
 // BlockCount returns the number of blocks available in the chunk.
 // Flat chunks must contain exactly one block.
 func (backed *backedBlockStore) BlockCount() uint16 {
-	return backed.holder.BlockCount()
+	return uint16(len(backed.retriever))
 }
 
 // BlockData returns the data for the requested block index.
@@ -54,6 +54,10 @@ func (backed *backedBlockStore) BlockData(block uint16) []byte {
 
 // SetBlockData sets the data for the requested block index.
 func (backed *backedBlockStore) SetBlockData(block uint16, data []byte) {
-	backed.retriever[int(block)] = func() []byte { return data }
+	blockIndex := int(block)
+	for len(backed.retriever) <= blockIndex {
+		backed.retriever = append(backed.retriever, func() []byte { return nil })
+	}
+	backed.retriever[blockIndex] = func() []byte { return data }
 	backed.onModified()
 }

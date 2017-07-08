@@ -6,6 +6,7 @@ import (
 	"image/color"
 
 	"github.com/inkyblackness/res"
+	"github.com/inkyblackness/res/audio"
 	"github.com/inkyblackness/res/image"
 	"github.com/inkyblackness/shocked-core/release"
 	"github.com/inkyblackness/shocked-model"
@@ -143,6 +144,90 @@ func (inplace *InplaceDataStore) SetBitmap(projectID string, key model.ResourceK
 	})
 }
 
+// Text implements the model.DataStore interface
+func (inplace *InplaceDataStore) Text(projectID string, key model.ResourceKey,
+	onSuccess func(model.ResourceKey, string), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			var text string
+			text, err = project.Texts().Text(key)
+
+			if err == nil {
+				inplace.out(func() { onSuccess(key, text) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetText implements the model.DataStore interface
+func (inplace *InplaceDataStore) SetText(projectID string, key model.ResourceKey, text string,
+	onSuccess func(model.ResourceKey, string), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			texts := project.Texts()
+			var resultKey model.ResourceKey
+
+			resultKey, err = texts.SetText(key, text)
+
+			if err == nil {
+				inplace.out(func() { onSuccess(resultKey, text) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// Audio implements the model.DataStore interface
+func (inplace *InplaceDataStore) Audio(projectID string, key model.ResourceKey,
+	onSuccess func(model.ResourceKey, audio.SoundData), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			var data audio.SoundData
+			data, err = project.Sounds().Audio(key)
+
+			if err == nil {
+				inplace.out(func() { onSuccess(key, data) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetAudio implements the model.DataStore interface
+func (inplace *InplaceDataStore) SetAudio(projectID string, key model.ResourceKey, data audio.SoundData,
+	onSuccess func(model.ResourceKey), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			sounds := project.Sounds()
+			var resultKey model.ResourceKey
+
+			resultKey, err = sounds.SetAudio(key, data)
+
+			if err == nil {
+				inplace.out(func() { onSuccess(resultKey) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
 // GameObjects implements the model.DataStore interface
 func (inplace *InplaceDataStore) GameObjects(projectID string,
 	onSuccess func(objects []model.GameObject), onFailure model.FailureFunc) {
@@ -245,6 +330,49 @@ func (inplace *InplaceDataStore) SetElectronicMessage(projectID string, messageT
 
 			if err == nil {
 				inplace.out(func() { onSuccess(result) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// ElectronicMessageAudio implements the model.DataStore interface.
+func (inplace *InplaceDataStore) ElectronicMessageAudio(projectID string,
+	messageType model.ElectronicMessageType, id int, language model.ResourceLanguage,
+	onSuccess func(data audio.SoundData), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			eMessages := project.ElectronicMessages()
+			var data audio.SoundData
+			data, err = eMessages.MessageAudio(messageType, id, language)
+
+			if err == nil {
+				inplace.out(func() { onSuccess(data) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetElectronicMessageAudio implements the model.DataStore interface.
+func (inplace *InplaceDataStore) SetElectronicMessageAudio(projectID string,
+	messageType model.ElectronicMessageType, id int, language model.ResourceLanguage, data audio.SoundData,
+	onSuccess func(), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			eMessages := project.ElectronicMessages()
+			err = eMessages.SetMessageAudio(messageType, id, language, data)
+
+			if err == nil {
+				inplace.out(func() { onSuccess() })
 			}
 		}
 		if err != nil {

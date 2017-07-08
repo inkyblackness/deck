@@ -1,11 +1,15 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/inkyblackness/res"
+	"github.com/inkyblackness/res/audio"
+	memAudio "github.com/inkyblackness/res/audio/mem"
 	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/data"
+	"github.com/inkyblackness/res/movi"
 	"github.com/inkyblackness/res/text"
 	"github.com/inkyblackness/shocked-core/io"
 	model "github.com/inkyblackness/shocked-model"
@@ -15,6 +19,7 @@ import (
 type ElectronicMessages struct {
 	cybstrng [model.LanguageCount]chunk.Store
 	cp       text.Codepage
+	citalog  [model.LanguageCount]chunk.Store
 }
 
 type messageRange struct {
@@ -26,7 +31,7 @@ func (msgRange messageRange) isRelativeIDValid(id int) bool {
 	return ((msgRange.start + id) < msgRange.end) && ((msgRange.end - id) >= msgRange.start)
 }
 
-var electronicmessageBases = map[model.ElectronicMessageType]messageRange{
+var electronicMessageBases = map[model.ElectronicMessageType]messageRange{
 	model.ElectronicMessageTypeMail:     {0x0989, 0x09B8},
 	model.ElectronicMessageTypeLog:      {0x09B8, 0x0A98},
 	model.ElectronicMessageTypeFragment: {0x0A98, 0x0AA8}}
@@ -34,14 +39,19 @@ var electronicmessageBases = map[model.ElectronicMessageType]messageRange{
 // NewElectronicMessages returns a new instance of ElectronicMessages.
 func NewElectronicMessages(library io.StoreLibrary) (messages *ElectronicMessages, err error) {
 	var cybstrng [model.LanguageCount]chunk.Store
+	var citalog [model.LanguageCount]chunk.Store
 
 	for i := 0; i < model.LanguageCount && err == nil; i++ {
 		cybstrng[i], err = library.ChunkStore(localized[i].cybstrng)
 	}
+	for i := 0; i < model.LanguageCount && err == nil; i++ {
+		citalog[i], err = library.ChunkStore(localized[i].citalog)
+	}
 	if err == nil {
 		messages = &ElectronicMessages{
 			cybstrng: cybstrng,
-			cp:       text.DefaultCodepage()}
+			cp:       text.DefaultCodepage(),
+			citalog:  citalog}
 	}
 
 	return
@@ -49,7 +59,7 @@ func NewElectronicMessages(library io.StoreLibrary) (messages *ElectronicMessage
 
 // Message tries to retrieve the message data for given identification.
 func (messages *ElectronicMessages) Message(messageType model.ElectronicMessageType, id int) (message model.ElectronicMessage, err error) {
-	msgRange, properType := electronicmessageBases[messageType]
+	msgRange, properType := electronicMessageBases[messageType]
 	setMessageText := func(language int, dataMessage *data.ElectronicMessage) {
 		message.Title[language] = stringAsPointer(dataMessage.Title())
 		message.Sender[language] = stringAsPointer(dataMessage.Sender())
@@ -102,7 +112,7 @@ func (messages *ElectronicMessages) Message(messageType model.ElectronicMessageT
 
 // SetMessage updates the properties of a message.
 func (messages *ElectronicMessages) SetMessage(messageType model.ElectronicMessageType, id int, message model.ElectronicMessage) (err error) {
-	msgRange, properType := electronicmessageBases[messageType]
+	msgRange, properType := electronicMessageBases[messageType]
 	setMessageData := func(language int, dataMessage *data.ElectronicMessage) {
 		if message.NextMessage != nil {
 			dataMessage.SetNextMessage(*message.NextMessage)
@@ -159,5 +169,47 @@ func (messages *ElectronicMessages) SetMessage(messageType model.ElectronicMessa
 		err = fmt.Errorf("Wrong message type/range: %v", messageType)
 	}
 
+	return
+}
+
+// MessageAudio tries to retrieve the audio data for given key.
+func (messages *ElectronicMessages) MessageAudio(messageType model.ElectronicMessageType, id int, language model.ResourceLanguage) (data audio.SoundData, err error) {
+	msgRange := electronicMessageBases[messageType]
+	if ((messageType == model.ElectronicMessageTypeLog) || (messageType == model.ElectronicMessageTypeMail)) && msgRange.isRelativeIDValid(id) {
+		holder := messages.citalog[language.ToIndex()].Get(res.ResourceID(msgRange.start + id + 300))
+		if holder != nil {
+			blockData := holder.BlockData(0)
+			var container movi.Container
+			container, err = movi.Read(bytes.NewReader(blockData))
+
+			if err == nil {
+				samples := []byte{}
+				for index := 0; index < container.EntryCount(); index++ {
+					entry := container.Entry(index)
+					if entry.Type() == movi.Audio {
+						samples = append(samples, entry.Data()...)
+					}
+				}
+				data = memAudio.NewL8SoundData(float32(container.AudioSampleRate()), samples)
+			}
+		}
+	} else {
+		err = fmt.Errorf("Wrong message type/range: %v", messageType)
+	}
+	return
+}
+
+// SetMessageAudio tries to set the audio data for given key.
+func (messages *ElectronicMessages) SetMessageAudio(messageType model.ElectronicMessageType, id int, language model.ResourceLanguage,
+	data audio.SoundData) (err error) {
+	msgRange := electronicMessageBases[messageType]
+	if ((messageType == model.ElectronicMessageTypeLog) || (messageType == model.ElectronicMessageTypeMail)) && msgRange.isRelativeIDValid(id) {
+		store := messages.citalog[language.ToIndex()]
+		data := movi.ContainSoundData(data)
+
+		store.Put(res.ResourceID(msgRange.start+id+300), chunk.NewBlockHolder(chunk.BasicChunkType, res.Media, [][]byte{data}))
+	} else {
+		err = fmt.Errorf("Wrong message type/range: %v", messageType)
+	}
 	return
 }

@@ -1,6 +1,11 @@
 package modes
 
 import (
+	"fmt"
+	"os"
+	"path"
+
+	"github.com/inkyblackness/res/audio/wav"
 	"github.com/inkyblackness/shocked-client/editor/model"
 	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/graphics/controls"
@@ -55,6 +60,11 @@ type ElectronicMessagesMode struct {
 	leftDisplayValue  *controls.Slider
 	rightDisplayLabel *controls.Label
 	rightDisplayValue *controls.Slider
+
+	audioArea       *ui.Area
+	audioLabel      *controls.Label
+	audioInfo       *controls.Label
+	audioDropTarget *ui.Area
 
 	displayArea *ui.Area
 
@@ -162,6 +172,18 @@ func NewElectronicMessagesMode(context Context, parent *ui.Area) *ElectronicMess
 		mode.leftDisplayValue.SetRange(-1, 0xFF)
 		mode.rightDisplayLabel, mode.rightDisplayValue = panelBuilder.addSliderProperty("Right Display", mode.onRightDisplayChanged)
 		mode.rightDisplayValue.SetRange(-1, 0xFF)
+
+		var audioBuilder *controlPanelBuilder
+		mode.audioArea, audioBuilder = panelBuilder.addSection(false)
+		mode.audioLabel, mode.audioInfo = audioBuilder.addInfo("Audio")
+		audioDropTargetBuilder := ui.NewAreaBuilder()
+		audioDropTargetBuilder.SetParent(mode.audioArea)
+		audioDropTargetBuilder.SetLeft(ui.NewOffsetAnchor(mode.audioArea.Left(), 0))
+		audioDropTargetBuilder.SetTop(ui.NewOffsetAnchor(mode.audioArea.Top(), 0))
+		audioDropTargetBuilder.SetRight(ui.NewOffsetAnchor(mode.audioArea.Right(), 0))
+		audioDropTargetBuilder.SetBottom(ui.NewOffsetAnchor(mode.audioArea.Bottom(), 0))
+		audioDropTargetBuilder.OnEvent(events.FileDropEventType, mode.onAudioFileDropped)
+		mode.audioDropTarget = audioDropTargetBuilder.Build()
 	}
 	{
 		builder := ui.NewAreaBuilder()
@@ -248,6 +270,7 @@ func NewElectronicMessagesMode(context Context, parent *ui.Area) *ElectronicMess
 		mode.subjectValue.AllowTextChange(mode.onSubjectChangeRequested)
 	}
 	mode.messageAdapter.OnMessageDataChanged(mode.onMessageDataChanged)
+	mode.messageAdapter.OnMessageAudioChanged(mode.onMessageAudioChanged)
 
 	return mode
 }
@@ -266,16 +289,74 @@ func (mode *ElectronicMessagesMode) rightDisplayImage() (texture *graphics.Bitma
 }
 
 func (mode *ElectronicMessagesMode) displayImage(index int) (texture *graphics.BitmapTexture) {
-	if index >= 0 {
+	if (index >= 0) && (index < 0x100) {
 		resourceKey := dataModel.MakeLocalizedResourceKey(dataModel.ResourceTypeMfdDataImages, mode.language, uint16(index))
 		texture = mode.context.ForGraphics().BitmapsStore().Texture(graphics.TextureKeyFromInt(resourceKey.ToInt()))
 	}
 	return
 }
 
+func (mode *ElectronicMessagesMode) onAudioFileDropped(area *ui.Area, event events.Event) (consumed bool) {
+	dropEvent := event.(*events.FileDropEvent)
+
+	if len(dropEvent.FilePaths()) == 1 {
+		filePath := dropEvent.FilePaths()[0]
+		fileInfo, err := os.Stat(filePath)
+
+		if err == nil {
+			if fileInfo.IsDir() {
+				mode.exportAudio(filePath)
+			} else {
+				mode.importAudio(filePath)
+			}
+		} else {
+			mode.context.ModelAdapter().SetMessage(fmt.Sprintf("File is not found/recognized %s", filePath))
+		}
+		consumed = true
+	}
+
+	return
+}
+
+func (mode *ElectronicMessagesMode) exportAudio(filePath string) {
+	languageIndex := mode.language.ToIndex()
+	soundData := mode.messageAdapter.Audio(languageIndex)
+
+	if soundData != nil {
+		fileName := path.Join(filePath, fmt.Sprintf("%v_%02d_%v.wav", mode.messageType, mode.selectedMessageID, mode.language.ShortName()))
+		file, err := os.Create(fileName)
+
+		if err == nil {
+			defer file.Close()
+			wav.Save(file, soundData.SampleRate(), soundData.Samples(0, soundData.SampleCount()))
+			mode.context.ModelAdapter().SetMessage(fmt.Sprintf("Exported %s", fileName))
+		} else {
+			mode.context.ModelAdapter().SetMessage("Could not create file for export.")
+		}
+	}
+}
+
+func (mode *ElectronicMessagesMode) importAudio(filePath string) {
+	file, fileErr := os.Open(filePath)
+
+	if (fileErr == nil) && (file != nil) {
+		defer file.Close()
+		data, dataErr := wav.Load(file)
+
+		if dataErr == nil {
+			mode.messageAdapter.RequestAudioChange(mode.language, data)
+		} else {
+			mode.context.ModelAdapter().SetMessage("File not supported. Only .wav files with 16bit or 8bit LPCM possible.")
+		}
+	} else {
+		mode.context.ModelAdapter().SetMessage(fmt.Sprintf("File could not be opened: %s", filePath))
+	}
+}
+
 func (mode *ElectronicMessagesMode) onMessageTypeChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
 	mode.messageType = mode.messageTypeByIndex[item.value]
+	mode.audioArea.SetVisible(mode.messageType != dataModel.ElectronicMessageTypeFragment)
 	mode.selectedMessageIDSlider.SetValue(0)
 	mode.selectedMessageIDSlider.SetRange(0, messageRanges[mode.messageType]-1)
 	mode.onMessageSelected(0)
@@ -296,10 +377,15 @@ func (mode *ElectronicMessagesMode) onMessageDataChanged() {
 	mode.rightDisplayValue.SetValue(int64(mode.messageAdapter.RightDisplay()))
 }
 
+func (mode *ElectronicMessagesMode) onMessageAudioChanged() {
+	mode.updateMessageAudio()
+}
+
 func (mode *ElectronicMessagesMode) onLanguageChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
 	mode.language = dataModel.ResourceLanguage(item.value)
 	mode.updateMessageText()
+	mode.updateMessageAudio()
 }
 
 func (mode *ElectronicMessagesMode) onVariantChanged(boxItem controls.ComboBoxItem) {
@@ -321,6 +407,20 @@ func (mode *ElectronicMessagesMode) updateMessageText() {
 	mode.subjectValue.SetText(mode.messageAdapter.Subject(languageIndex))
 	mode.titleValue.SetText(mode.messageAdapter.Title(languageIndex))
 	mode.senderValue.SetText(mode.messageAdapter.Sender(languageIndex))
+}
+
+func (mode *ElectronicMessagesMode) updateMessageAudio() {
+	languageIndex := mode.language.ToIndex()
+	data := mode.messageAdapter.Audio(languageIndex)
+	info := ""
+
+	if data != nil {
+		info = fmt.Sprintf("%.02f sec", float32(data.SampleCount())/data.SampleRate())
+	} else {
+		info = "(no audio)"
+	}
+
+	mode.audioInfo.SetText(info)
 }
 
 func (mode *ElectronicMessagesMode) updateMessageData(modifier func(*dataModel.ElectronicMessage)) {

@@ -1,5 +1,9 @@
 package model
 
+import (
+	"github.com/inkyblackness/res/audio"
+)
+
 // FailureFunc is for failed queries.
 type FailureFunc func()
 
@@ -20,6 +24,20 @@ type DataStore interface {
 	SetBitmap(projectID string, key ResourceKey, bmp *RawBitmap,
 		onSuccess func(ResourceKey, *RawBitmap), onFailure FailureFunc)
 
+	// Text queries the data of a text resource.
+	Text(projectID string, key ResourceKey,
+		onSuccess func(ResourceKey, string), onFailure FailureFunc)
+	// SetText requests to set the data of a text resource.
+	SetText(projectID string, key ResourceKey, text string,
+		onSuccess func(ResourceKey, string), onFailure FailureFunc)
+
+	// Audio queries the data of an audio resource.
+	Audio(projectID string, key ResourceKey,
+		onSuccess func(ResourceKey, audio.SoundData), onFailure FailureFunc)
+	// SetAudio requests to set the audio of a text resource.
+	SetAudio(projectID string, key ResourceKey, data audio.SoundData,
+		onSuccess func(ResourceKey), onFailure FailureFunc)
+
 	// GameObjects queries the basic properties of all objects in the project.
 	GameObjects(projectID string, onSuccess func(objects []GameObject), onFailure FailureFunc)
 	// GameObjectIcon queries the icon bitmap of a game object.
@@ -34,6 +52,12 @@ type DataStore interface {
 	// SetElectronicMessage requests to update the properties of a specific electronic message.
 	SetElectronicMessage(projectID string, messageType ElectronicMessageType, id int, message ElectronicMessage,
 		onSuccess func(message ElectronicMessage), onFailure FailureFunc)
+	// ElectronicMessageAudio queries the audio part of a specific electronic message.
+	ElectronicMessageAudio(projectID string, messageType ElectronicMessageType, id int, language ResourceLanguage,
+		onSuccess func(data audio.SoundData), onFailure FailureFunc)
+	// SetElectronicMessageAudio requests to update the audio part of a specific electronic message.
+	SetElectronicMessageAudio(projectID string, messageType ElectronicMessageType, id int, language ResourceLanguage, data audio.SoundData,
+		onSuccess func(), onFailure FailureFunc)
 
 	// Palette queries a palette.
 	Palette(projectID string, paletteID string, onSuccess func(colors [256]Color), onFailure FailureFunc)

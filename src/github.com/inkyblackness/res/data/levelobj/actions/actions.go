@@ -27,17 +27,24 @@ var changeHealthDetails = interpreters.New().
 
 var cloneMoveObjectDetails = interpreters.New().
 	With("ObjectIndex", 0, 2).As(interpreters.ObjectIndex()).
-	With("MoveFlag", 2, 2).As(interpreters.EnumValue(map[uint32]string{0: "Clone Object", 1: "Move Object"})).
+	With("MoveFlag", 2, 2).As(interpreters.EnumValue(map[uint32]string{
+	0x0000: "Clone Object",
+	0x0001: "Move Object (0x0001)",
+	0x0002: "Move Object (0x0002)",
+	0x0FFF: "Move Object (0x0FFF)",
+	0xAAAA: "Move Object (0xAAAA)",
+	0xFFFF: "Move Object (0xFFFF)"})).
 	With("TargetX", 4, 4).As(interpreters.RangedValue(1, 63)).
 	With("TargetY", 8, 4).As(interpreters.RangedValue(1, 63)).
-	With("TargetHeight", 12, 4).As(interpreters.RangedValue(0, 255))
+	With("TargetHeight", 12, 1).As(interpreters.SpecialValue("ObjectHeight")).
+	With("KeepSourceHeight", 13, 1).As(interpreters.EnumValue(map[uint32]string{0x00: "Set height", 0x40: "Keep height"}))
 
 var setGameVariableDetails = interpreters.New().
 	With("VariableKey", 0, 4).As(interpreters.SpecialValue("VariableKey")).
 	With("Value", 4, 2).
 	With("Operation", 6, 2).As(interpreters.EnumValue(map[uint32]string{0: "Set", 1: "Add", 2: "Subtract", 3: "Multiply", 4: "Divide"})).
-	With("Message1", 8, 4).As(interpreters.RangedValue(0, 1000)).
-	With("Message2", 12, 4).As(interpreters.RangedValue(0, 1000))
+	With("Message1", 8, 4).As(interpreters.RangedValue(0, 511)).
+	With("Message2", 12, 4).As(interpreters.RangedValue(0, 511))
 
 var showCutsceneDetails = interpreters.New().
 	With("CutsceneIndex", 0, 4).As(interpreters.EnumValue(map[uint32]string{0: "Death", 1: "Intro", 2: "Ending"})).
@@ -102,8 +109,8 @@ var effectDetails = interpreters.New().
 var changeTileHeightsDetails = interpreters.New().
 	With("TileX", 0, 4).As(interpreters.RangedValue(1, 63)).
 	With("TileY", 4, 4).As(interpreters.RangedValue(1, 63)).
-	With("TargetFloorHeight", 8, 2).As(interpreters.RangedValue(0, 0x0FFF)).
-	With("TargetCeilingHeight", 10, 2).As(interpreters.RangedValue(0, 0x0FFF)).
+	With("TargetFloorHeight", 8, 2).As(interpreters.SpecialValue("MoveTileHeight")).
+	With("TargetCeilingHeight", 10, 2).As(interpreters.SpecialValue("MoveTileHeight")).
 	With("Ignored000C", 12, 4).As(interpreters.SpecialValue("Ignored"))
 
 var randomTimerDetails = interpreters.New().
@@ -123,7 +130,7 @@ var deleteObjectsDetails = interpreters.New().
 	With("ObjectIndex1", 0, 2).As(interpreters.ObjectIndex()).
 	With("ObjectIndex2", 4, 2).As(interpreters.ObjectIndex()).
 	With("ObjectIndex3", 8, 2).As(interpreters.ObjectIndex()).
-	With("MessageIndex", 12, 2).As(interpreters.RangedValue(0, 500))
+	With("MessageIndex", 12, 2).As(interpreters.RangedValue(0, 511))
 
 var receiveEmailDetails = interpreters.New().
 	With("EmailIndex", 0, 2).As(interpreters.RangedValue(0, 1000)).
@@ -161,7 +168,7 @@ var setCritterStateDetails = interpreters.New().
 
 var trapMessageDetails = interpreters.New().
 	With("BackgroundImageIndex", 0, 4).As(interpreters.RangedValue(-2, 500)).
-	With("MessageIndex", 4, 4).As(interpreters.RangedValue(0, 500)).
+	With("MessageIndex", 4, 4).As(interpreters.RangedValue(0, 511)).
 	With("TextColor", 8, 4).As(interpreters.RangedValue(0, 255)).
 	With("MfdSuppressionFlag", 12, 4).As(interpreters.EnumValue(map[uint32]string{0: "Show in MFD", 1: "Show only in HUD"}))
 

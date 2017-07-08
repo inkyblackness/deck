@@ -223,6 +223,9 @@ func (panel *propertyPanel) NewSimplifier(key string, unifiedValue int64) *inter
 		}
 	})
 
+	simplifier.SetSpecialHandler("Mistake", func() {})
+	simplifier.SetSpecialHandler("Ignored", func() {})
+
 	return simplifier
 }
 

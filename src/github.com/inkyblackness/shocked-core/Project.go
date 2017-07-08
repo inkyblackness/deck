@@ -14,6 +14,8 @@ type Project struct {
 	library io.StoreLibrary
 
 	bitmaps     *Bitmaps
+	texts       *Texts
+	sounds      *Sounds
 	fonts       *Fonts
 	textures    *Textures
 	palettes    *Palettes
@@ -26,6 +28,8 @@ type Project struct {
 func NewProject(name string, source release.Release, sink release.Release) (project *Project, err error) {
 	library := io.NewReleaseStoreLibrary(source, sink, 5000)
 	var bitmaps *Bitmaps
+	var texts *Texts
+	var sounds *Sounds
 	var fonts *Fonts
 	var textures *Textures
 	var palettes *Palettes
@@ -37,6 +41,12 @@ func NewProject(name string, source release.Release, sink release.Release) (proj
 
 	if err == nil {
 		bitmaps, err = NewBitmaps(library)
+	}
+	if err == nil {
+		texts, err = NewTexts(library)
+	}
+	if err == nil {
+		sounds, err = NewSounds(library)
 	}
 	if err == nil {
 		palettes, err = NewPalettes(library)
@@ -61,6 +71,8 @@ func NewProject(name string, source release.Release, sink release.Release) (proj
 			sink:        sink,
 			library:     library,
 			bitmaps:     bitmaps,
+			texts:       texts,
+			sounds:      sounds,
 			fonts:       fonts,
 			textures:    textures,
 			palettes:    palettes,
@@ -80,6 +92,16 @@ func (project *Project) Name() string {
 // Bitmaps returns the wrapper for bitmaps.
 func (project *Project) Bitmaps() *Bitmaps {
 	return project.bitmaps
+}
+
+// Texts returns the wrapper for texts.
+func (project *Project) Texts() *Texts {
+	return project.texts
+}
+
+// Soundss returns the wrapper for sounds.
+func (project *Project) Sounds() *Sounds {
+	return project.sounds
 }
 
 // Fonts returns the wrapper for fonts.

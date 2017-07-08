@@ -742,7 +742,40 @@ func (mode *LevelObjectsMode) createPropertyControls(key string, unifiedValue in
 		}
 	})
 
+	simplifier.SetSpecialHandler("ObjectHeight", func() {
+		slider := mode.selectedObjectsPropertiesPanel.NewSlider(key, "", func(currentValue, parameter uint32) uint32 {
+			return parameter
+		})
+		slider.SetRange(0, 255)
+		slider.SetValueFormatter(mode.objectZToString)
+		if unifiedValue != math.MinInt64 {
+			slider.SetValue(int64(unifiedValue))
+		}
+	})
+	simplifier.SetSpecialHandler("MoveTileHeight", func() {
+		slider := mode.selectedObjectsPropertiesPanel.NewSlider(key, "", func(currentValue, parameter uint32) uint32 {
+			return parameter
+		})
+		slider.SetRange(0, 0x0FFF)
+		slider.SetValueFormatter(mode.moveTileHeightUnitToString)
+		if unifiedValue != math.MinInt64 {
+			slider.SetValue(int64(unifiedValue))
+		}
+	})
+
 	describer(simplifier)
+}
+
+func (mode *LevelObjectsMode) moveTileHeightUnitToString(value int64) (result string) {
+	if (value >= 0) && (value < 32) {
+		tileHeights := []float64{32.0, 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25}
+		heightShift := mode.levelAdapter.HeightShift()
+
+		result = fmt.Sprintf("%.3f tile(s)  - raw: %v", (float64(value)*tileHeights[heightShift])/32.0, value)
+	} else {
+		result = fmt.Sprintf("Don't change  - raw: 0x%04X", value)
+	}
+	return
 }
 
 func (mode *LevelObjectsMode) levelTextures() []*graphics.BitmapTexture {

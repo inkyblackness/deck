@@ -21,6 +21,8 @@ type Adapter struct {
 
 	palette            *observable
 	bitmapsAdapter     *BitmapsAdapter
+	textAdapter        *TextAdapter
+	soundAdapter       *SoundAdapter
 	textureAdapter     *TextureAdapter
 	objectsAdapter     *ObjectsAdapter
 	electronicMessages *ElectronicMessageAdapter
@@ -42,6 +44,8 @@ func NewAdapter(store model.DataStore) *Adapter {
 
 	adapter.message.set("")
 	adapter.bitmapsAdapter = newBitmapsAdapter(adapter, store)
+	adapter.textAdapter = newTextAdapter(adapter, store)
+	adapter.soundAdapter = newSoundAdapter(adapter, store)
 	adapter.textureAdapter = newTextureAdapter(adapter, store)
 	adapter.objectsAdapter = newObjectsAdapter(adapter, store)
 	adapter.activeLevel = newLevelAdapter(adapter, store, adapter.objectsAdapter)
@@ -77,9 +81,16 @@ func (adapter *Adapter) ActiveProjectID() string {
 	return adapter.activeProjectID.orDefault("").(string)
 }
 
+// OnProjectChanged registers a callback for updates of the current project.
+func (adapter *Adapter) OnProjectChanged(callback func()) {
+	adapter.activeProjectID.addObserver(callback)
+}
+
 // RequestProject sets the project to work on.
 func (adapter *Adapter) RequestProject(projectID string) {
 	adapter.bitmapsAdapter.clear()
+	adapter.textAdapter.clear()
+	adapter.soundAdapter.clear()
 	adapter.textureAdapter.clear()
 	adapter.objectsAdapter.clear()
 	adapter.requestArchive("")
@@ -129,6 +140,16 @@ func (adapter *Adapter) ObjectsAdapter() *ObjectsAdapter {
 // ElectronicMessageAdapter returns the adapter for electronic messages.
 func (adapter *Adapter) ElectronicMessageAdapter() *ElectronicMessageAdapter {
 	return adapter.electronicMessages
+}
+
+// TextAdapter returns the adapter for texts.
+func (adapter *Adapter) TextAdapter() *TextAdapter {
+	return adapter.textAdapter
+}
+
+// SoundAdapter returns the adapter for sounds.
+func (adapter *Adapter) SoundAdapter() *SoundAdapter {
+	return adapter.soundAdapter
 }
 
 // ActiveArchiveID returns the identifier of the current archive.

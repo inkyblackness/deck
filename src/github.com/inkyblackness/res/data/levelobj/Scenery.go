@@ -28,7 +28,7 @@ var texturableFurniture = baseScenery.
 	With("TextureIndex", 6, 2).As(interpreters.RangedValue(0, 500))
 
 var wordScenery = baseScenery.
-	With("TextIndex", 0, 2).As(interpreters.RangedValue(0, 500)).
+	With("TextIndex", 0, 2).As(interpreters.RangedValue(0, 511)).
 	With("Font", 2, 1).As(interpreters.Bitfield(map[uint32]string{
 	0x0F: "Face",
 	0xF0: "Size"})).

@@ -75,3 +75,30 @@ func (suite *BackedBlockStoreSuite) TestGetReturnsNewBlockData_WhenBlockIsModifi
 
 	c.Check(result, check.DeepEquals, []byte{0x04})
 }
+
+func (suite *BackedBlockStoreSuite) TestBlockCountReturnsNewSizeWhenHigherBlockIndexSet(c *check.C) {
+	holder := chunk.NewBlockHolder(chunk.BasicChunkType.WithDirectory(), res.Text, [][]byte{nil, nil})
+	backed := newBackedBlockStore(holder, func() {})
+
+	backed.SetBlockData(3, []byte{0x01})
+
+	c.Check(backed.BlockCount(), check.Equals, uint16(4))
+}
+
+func (suite *BackedBlockStoreSuite) TestGetReturnsEmptyBlockData_WhenDataNeedsToBeFilledIn(c *check.C) {
+	holder := chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{0x01}, []byte{0x02}})
+	backed := newBackedBlockStore(holder, func() {})
+	backed.SetBlockData(uint16(3), []byte{0x04})
+	result := backed.BlockData(uint16(2))
+
+	c.Check(len(result), check.Equals, 0)
+}
+
+func (suite *BackedBlockStoreSuite) TestGetReturnsNewBlockData_WhenLaterIndexSet(c *check.C) {
+	holder := chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{0x01}, []byte{0x02}})
+	backed := newBackedBlockStore(holder, func() {})
+	backed.SetBlockData(uint16(3), []byte{0x05})
+	result := backed.BlockData(uint16(3))
+
+	c.Check(result, check.DeepEquals, []byte{0x05})
+}

@@ -72,7 +72,11 @@ func (slider *Slider) SetValueFormatter(formatter SliderValueFormatter) {
 }
 
 func (slider *Slider) updateValueLabel() {
-	slider.valueLabel.SetText(slider.formatter(slider.value))
+	text := ""
+	if !slider.valueUndefined {
+		text = slider.formatter(slider.value)
+	}
+	slider.valueLabel.SetText(text)
 }
 
 func (slider *Slider) onRender(area *ui.Area) {
