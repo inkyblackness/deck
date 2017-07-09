@@ -307,6 +307,9 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 		mode.limitTitles[classes], mode.limitValues[classes] = panelBuilder.addInfo("Total")
 	}
 
+	mode.levelAdapter.OnIDChanged(func() {
+		mode.setSelectedObjects(nil)
+	})
 	mode.levelAdapter.OnLevelPropertiesChanged(func() {
 		mode.selectedObjectsZValue.SetValueFormatter(mode.objectZToString)
 	})
@@ -317,10 +320,7 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 }
 
 func (mode *LevelObjectsMode) objectZToString(value int64) string {
-	tileHeights := []float64{32.0, 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25}
-	heightShift := mode.levelAdapter.HeightShift()
-
-	return fmt.Sprintf("%.3f tile(s)  - raw: %v", (float64(value)*tileHeights[heightShift])/256.0, value)
+	return heightToString(mode.levelAdapter.HeightShift(), value, 256.0)
 }
 
 func (mode *LevelObjectsMode) rotationToString(value int64) string {
@@ -768,10 +768,7 @@ func (mode *LevelObjectsMode) createPropertyControls(key string, unifiedValue in
 
 func (mode *LevelObjectsMode) moveTileHeightUnitToString(value int64) (result string) {
 	if (value >= 0) && (value < 32) {
-		tileHeights := []float64{32.0, 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25}
-		heightShift := mode.levelAdapter.HeightShift()
-
-		result = fmt.Sprintf("%.3f tile(s)  - raw: %v", (float64(value)*tileHeights[heightShift])/32.0, value)
+		result = heightToString(mode.levelAdapter.HeightShift(), value, 32.0)
 	} else {
 		result = fmt.Sprintf("Don't change  - raw: 0x%04X", value)
 	}

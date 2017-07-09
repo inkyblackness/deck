@@ -20,9 +20,9 @@ var transportHackerDetails = interpreters.New().
 	0x00: "Cross-Level", 0x10: "Same-Level (0x10)", 0x20: "Same-Level (0x20)", 0x22: "Same-Level (0x22)"}))
 
 var changeHealthDetails = interpreters.New().
-	With("HealthDelta", 4, 2).
+	With("HealthDelta", 4, 1).
 	With("HealthChangeFlag", 6, 2).As(interpreters.EnumValue(map[uint32]string{0: "Remove Delta", 1: "Add Delta"})).
-	With("PowerDelta", 8, 2).
+	With("PowerDelta", 8, 1).
 	With("PowerChangeFlag", 10, 2).As(interpreters.EnumValue(map[uint32]string{0: "Remove Delta", 1: "Add Delta"}))
 
 var cloneMoveObjectDetails = interpreters.New().
@@ -90,8 +90,8 @@ var changeLightingDetails = interpreters.New().
 	})
 
 var effectDetails = interpreters.New().
-	With("SoundIndex", 0, 2).
-	With("SoundPlayCount", 2, 2).
+	With("SoundIndex", 0, 2).As(interpreters.RangedValue(0, 512)).
+	With("SoundPlayCount", 2, 2).As(interpreters.RangedValue(0, 100)).
 	With("VisualEffect", 4, 2).As(interpreters.EnumValue(map[uint32]string{
 	0: "none",
 	1: "power on",

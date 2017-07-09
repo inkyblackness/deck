@@ -26,7 +26,14 @@ var funPack = baseSoftware.
 var baseCyberspaceScenery = interpreters.New()
 
 var scenerySoftware = baseCyberspaceScenery.
-	With("Parameter", 0, 2).
+	Refining("FunPack", 0, 2, funPack,
+		func(inst *interpreters.Instance) bool {
+			return (inst.Get("Subclass") == 3) && (inst.Get("Type") == 0)
+		}).
+	Refining("Program", 0, 2, cyberspaceProgram,
+		func(inst *interpreters.Instance) bool {
+			return (inst.Get("Subclass") == 0) || (inst.Get("Subclass") == 1)
+		}).
 	With("Subclass", 2, 4).As(interpreters.RangedValue(0, 7)).
 	With("Type", 6, 4).As(interpreters.RangedValue(0, 16))
 
@@ -43,7 +50,6 @@ func initSoftware() interpreterRetriever {
 	class := newInterpreterEntry(baseSoftware)
 	class.set(0, cyberspacePrograms) // aggressive programs
 	class.set(1, cyberspacePrograms) // defensive programs
-	class.set(2, cyberspacePrograms) // boost programs
 	class.set(3, realWorldTools)
 	class.set(4, multimediaSoftware)
 
@@ -51,7 +57,17 @@ func initSoftware() interpreterRetriever {
 }
 
 func initCyberspaceScenery() interpreterRetriever {
-	class := newInterpreterLeaf(scenerySoftware)
+	cyberspaceScenery := newInterpreterEntry(scenerySoftware)
+
+	cyberspaceScenerySubclass2 := newInterpreterEntry(baseCyberspaceScenery)
+	cyberspaceScenerySubclass2.set(0, cyberspaceScenery) // "SIGN"
+	cyberspaceScenerySubclass3 := newInterpreterEntry(baseCyberspaceScenery)
+	cyberspaceScenerySubclass3.set(2, cyberspaceScenery) // "GLOW BULB"
+
+	class := newInterpreterEntry(scenerySoftware)
+
+	class.set(2, cyberspaceScenerySubclass2)
+	class.set(3, cyberspaceScenerySubclass3)
 
 	return class
 }
