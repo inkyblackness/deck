@@ -10,3 +10,9 @@ import (
 func ForRealWorld(objID res.ObjectID, data []byte) *interpreters.Instance {
 	return realWorldEntries.specialize(int(objID.Class)).specialize(int(objID.Subclass)).specialize(int(objID.Type)).instance(data)
 }
+
+// RealWorldExtra returns an interpreter instance that handles the level object extra
+// data of the specified object - in real world.
+func RealWorldExtra(objID res.ObjectID, data []byte) *interpreters.Instance {
+	return realWorldExtras.specialize(int(objID.Class)).specialize(int(objID.Subclass)).specialize(int(objID.Type)).instance(data)
+}

@@ -341,6 +341,9 @@ func (level *Level) objectFromRawEntry(index int, rawEntry *data.LevelObjectEntr
 	entry.Properties.RotationZ = intAsPointer(int(rawEntry.Rot2))
 	entry.Properties.Hitpoints = intAsPointer(int(rawEntry.Hitpoints))
 
+	entry.Properties.ExtraData = make([]byte, len(rawEntry.Extra))
+	copy(entry.Properties.ExtraData, rawEntry.Extra[:])
+
 	meta := data.LevelObjectClassMetaEntry(rawEntry.Class)
 	classStore := level.store.Get(res.ResourceID(4000 + level.id*100 + 10 + entry.Class))
 	blockData := classStore.BlockData(0)
@@ -504,6 +507,9 @@ func (level *Level) SetObject(objectIndex int, newProperties *model.LevelObjectP
 			}
 			if newProperties.Hitpoints != nil {
 				objectEntry.Hitpoints = uint16(*newProperties.Hitpoints)
+			}
+			if newProperties.ExtraData != nil {
+				copy(objectEntry.Extra[:], newProperties.ExtraData)
 			}
 
 			if len(newProperties.ClassData) > 0 {

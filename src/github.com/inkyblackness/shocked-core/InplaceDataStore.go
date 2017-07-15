@@ -634,9 +634,11 @@ func (inplace *InplaceDataStore) TextureBitmap(projectID string, textureID int, 
 
 		if err == nil {
 			bmp := project.Textures().Image(textureID, model.TextureSize(size))
-			entity := inplace.toRawBitmap(bmp)
 
-			inplace.out(func() { onSuccess(&entity) })
+			if bmp != nil {
+				entity := inplace.toRawBitmap(bmp)
+				inplace.out(func() { onSuccess(&entity) })
+			}
 		}
 		if err != nil {
 			inplace.out(onFailure)

@@ -91,3 +91,8 @@ func (obj *LevelObject) RotationZ() int {
 func (obj *LevelObject) Hitpoints() int {
 	return *obj.properties.Hitpoints
 }
+
+// ExtraData returns the raw extra data for the level object.
+func (obj *LevelObject) ExtraData() []byte {
+	return obj.properties.ExtraData
+}

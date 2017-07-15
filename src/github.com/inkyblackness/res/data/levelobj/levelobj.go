@@ -7,6 +7,13 @@ import (
 var realWorldEntries *interpreterEntry
 var cyberspaceEntries *interpreterEntry
 
+var realWorldExtras *interpreterEntry
+var cyberspaceExtras *interpreterEntry
+
+var extraIced = interpreters.New().
+	With("ICE-presence", 1, 1).
+	With("ICE-level", 3, 1)
+
 func init() {
 
 	projectiles := newInterpreterEntry(baseProjectile)
@@ -39,4 +46,11 @@ func init() {
 	cyberspaceEntries.set(9, initCyberspacePanels())
 	cyberspaceEntries.set(12, markers)
 	cyberspaceEntries.set(14, critters)
+
+	realWorldExtras = newInterpreterEntry(interpreters.New())
+	cyberspaceExtras = newInterpreterEntry(interpreters.New())
+	cyberspaceExtras.set(6, newInterpreterLeaf(extraIced))
+	cyberspaceExtras.set(7, newInterpreterLeaf(extraIced))
+	cyberspaceExtras.set(8, newInterpreterLeaf(extraIced))
+	cyberspaceExtras.set(9, newInterpreterLeaf(extraIced))
 }

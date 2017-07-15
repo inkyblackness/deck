@@ -32,7 +32,7 @@ type LevelObjectEntry struct {
 	Type      res.ObjectType
 	Hitpoints uint16
 
-	Unknown0017 [4]byte
+	Extra [4]byte
 }
 
 // DefaultLevelObjectEntry returns a new LevelObjectEntry instance.

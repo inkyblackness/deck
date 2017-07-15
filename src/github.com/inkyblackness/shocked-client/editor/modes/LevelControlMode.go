@@ -43,6 +43,8 @@ type LevelControlMode struct {
 	heightShiftLabel *controls.Label
 	heightShiftBox   *controls.ComboBox
 
+	realWorldProperties *ui.Area
+
 	levelTexturesLabel       *controls.Label
 	levelTexturesSelector    *controls.TextureSelector
 	currentLevelTextureIndex int
@@ -155,124 +157,133 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 				}
 			})
 		}
+
 		{
-			mode.levelTexturesLabel, mode.levelTexturesSelector = panelBuilder.addTextureProperty("Level Textures",
-				mode.levelTextures, mode.onSelectedLevelTextureChanged)
-			mode.worldTexturesLabel, mode.worldTexturesSelector = panelBuilder.addTextureProperty("World Textures",
-				mode.worldTextures, mode.onSelectedWorldTextureChanged)
-			mode.worldTexturesIDLabel, mode.worldTexturesIDSlider = panelBuilder.addSliderProperty("World Texture ID",
-				mode.onSelectedWorldTextureIDChanged)
+			var realWorldBuilder *controlPanelBuilder
+			mode.realWorldProperties, realWorldBuilder = panelBuilder.addSection(false)
 
-			textureAdapter := mode.context.ModelAdapter().TextureAdapter()
-			textureAdapter.OnGameTexturesChanged(func() {
-				mode.worldTexturesIDSlider.SetRange(0, int64(textureAdapter.WorldTextureCount()-1))
-			})
-		}
-		{
-			mode.surveillanceIndexLabel, mode.surveillanceIndexBox =
-				panelBuilder.addComboProperty("Surveillance Object", mode.onSurveillanceIndexChanged)
-			mode.surveillanceSourceLabel, mode.surveillanceSourceSlider =
-				panelBuilder.addSliderProperty("Surveillance Source", mode.onSurveillanceSourceChanged)
-			mode.surveillanceDeathwatchLabel, mode.surveillanceDeathwatchSlider =
-				panelBuilder.addSliderProperty("Surveillance Deathwatch", mode.onSurveillanceDeathwatchChanged)
-			mode.surveillanceSourceSlider.SetRange(0, 871)
-			mode.surveillanceDeathwatchSlider.SetRange(0, 871)
+			{
+				mode.levelTexturesLabel, mode.levelTexturesSelector = realWorldBuilder.addTextureProperty("Level Textures",
+					mode.levelTextures, mode.onSelectedLevelTextureChanged)
+				mode.worldTexturesLabel, mode.worldTexturesSelector = realWorldBuilder.addTextureProperty("World Textures",
+					mode.worldTextures, mode.onSelectedWorldTextureChanged)
+				mode.worldTexturesIDLabel, mode.worldTexturesIDSlider = realWorldBuilder.addSliderProperty("World Texture ID",
+					mode.onSelectedWorldTextureIDChanged)
 
-			mode.levelAdapter.OnLevelSurveillanceChanged(mode.onLevelSurveillanceChanged)
-		}
-		{
-			mode.ceilingEffectLabel, mode.ceilingEffectBox =
-				panelBuilder.addComboProperty("Ceiling Effect", mode.onLevelCeilingPropertyBoxChanged)
-			mode.ceilingEffectLevelLabel, mode.ceilingEffectLevelSlider =
-				panelBuilder.addSliderProperty("Ceiling Effect Level", mode.onCeilingEffectLevelChanged)
-
-			noEffectItem := &levelPropertyItem{"None",
-				func(properties *dataModel.LevelProperties) { properties.CeilingHasRadiation = boolAsPointer(false) },
-				controls.DefaultSliderValueFormatter}
-			radiationEffectItem := &levelPropertyItem{"Radiation",
-				func(properties *dataModel.LevelProperties) { properties.CeilingHasRadiation = boolAsPointer(true) },
-				lbpValueFormatter}
-			ceilingItems := []controls.ComboBoxItem{noEffectItem, radiationEffectItem}
-
-			mode.ceilingEffectBox.SetItems(ceilingItems)
-			mode.ceilingEffectLevelSlider.SetRange(0, 255)
-
-			mode.levelAdapter.OnLevelPropertiesChanged(func() {
-				radiation, level := mode.levelAdapter.CeilingEffect()
-				item := noEffectItem
-
-				if radiation {
-					item = radiationEffectItem
-				}
-				mode.ceilingEffectBox.SetSelectedItem(item)
-				mode.ceilingEffectLevelSlider.SetValue(int64(level))
-				mode.ceilingEffectLevelSlider.SetValueFormatter(item.formatter)
-			})
-		}
-		{
-			mode.floorEffectLabel, mode.floorEffectBox =
-				panelBuilder.addComboProperty("Floor Effect", mode.onLevelFloorPropertyBoxChanged)
-			mode.floorEffectLevelLabel, mode.floorEffectLevelSlider =
-				panelBuilder.addSliderProperty("Floor Effect Level", mode.onFloorEffectLevelChanged)
-
-			noEffectItem := &levelPropertyItem{"None", func(properties *dataModel.LevelProperties) {
-				properties.FloorHasBiohazard = boolAsPointer(false)
-				properties.FloorHasGravity = boolAsPointer(false)
-			}, controls.DefaultSliderValueFormatter}
-			gravityEffectItem := &levelPropertyItem{"Gravity", func(properties *dataModel.LevelProperties) {
-				properties.FloorHasBiohazard = boolAsPointer(false)
-				properties.FloorHasGravity = boolAsPointer(true)
-			}, func(value int64) string { return fmt.Sprintf("%v%%", value*25) }}
-			biohazardEffectItem := &levelPropertyItem{"Biohazard", func(properties *dataModel.LevelProperties) {
-				properties.FloorHasBiohazard = boolAsPointer(true)
-				properties.FloorHasGravity = boolAsPointer(false)
-			}, lbpValueFormatter}
-			floorItems := []controls.ComboBoxItem{noEffectItem, gravityEffectItem, biohazardEffectItem}
-
-			mode.floorEffectBox.SetItems(floorItems)
-			mode.floorEffectLevelSlider.SetRange(0, 255)
-
-			mode.levelAdapter.OnLevelPropertiesChanged(func() {
-				biohazard, gravity, level := mode.levelAdapter.FloorEffect()
-				item := noEffectItem
-
-				if gravity {
-					item = gravityEffectItem
-				} else if biohazard {
-					item = biohazardEffectItem
-				}
-				mode.floorEffectBox.SetSelectedItem(item)
-				mode.floorEffectLevelSlider.SetValue(int64(level))
-				mode.floorEffectLevelSlider.SetValueFormatter(item.formatter)
-			})
-		}
-		{
-			mode.animationGroupIndexLabel, mode.animationGroupIndexBox =
-				panelBuilder.addComboProperty("Texture Animation Group", mode.onAnimationGroupIndexChanged)
-			mode.animationGroupTimeLabel, mode.animationGroupTimeSlider =
-				panelBuilder.addSliderProperty("Texture Animation Time", mode.onAnimationGroupTimeChanged)
-			mode.animationGroupTimeSlider.SetRange(0, 1000)
-			mode.animationGroupTimeSlider.SetValueFormatter(func(value int64) string {
-				return fmt.Sprintf("%v msec", value)
-			})
-			mode.animationGroupFramesLabel, mode.animationGroupFramesSlider =
-				panelBuilder.addSliderProperty("Texture Animation Frame Count", mode.onAnimationGroupFramesChanged)
-			mode.animationGroupFramesSlider.SetRange(0, 10)
-			mode.animationGroupTypeLabel, mode.animationGroupTypeBox =
-				panelBuilder.addComboProperty("Texture Animation Type", mode.onAnimationGroupTypeChanged)
-			items := []controls.ComboBoxItem{
-				&enumItem{uint32(data.TextureAnimationForward), "Forward"},
-				&enumItem{uint32(data.TextureAnimationForthAndBack), "Forth-And-Back"},
-				&enumItem{uint32(data.TextureAnimationBackAndForth), "Back-And-Forth"}}
-			mode.animationGroupTypeItems = make(map[int]controls.ComboBoxItem)
-			for _, boxItem := range items {
-				item := boxItem.(*enumItem)
-				mode.animationGroupTypeItems[int(item.value)] = item
+				textureAdapter := mode.context.ModelAdapter().TextureAdapter()
+				textureAdapter.OnGameTexturesChanged(func() {
+					mode.worldTexturesIDSlider.SetRange(0, int64(textureAdapter.WorldTextureCount()-1))
+				})
 			}
-			mode.animationGroupTypeBox.SetItems(items)
+			{
+				mode.surveillanceIndexLabel, mode.surveillanceIndexBox =
+					realWorldBuilder.addComboProperty("Surveillance Object", mode.onSurveillanceIndexChanged)
+				mode.surveillanceSourceLabel, mode.surveillanceSourceSlider =
+					realWorldBuilder.addSliderProperty("Surveillance Source", mode.onSurveillanceSourceChanged)
+				mode.surveillanceDeathwatchLabel, mode.surveillanceDeathwatchSlider =
+					realWorldBuilder.addSliderProperty("Surveillance Deathwatch", mode.onSurveillanceDeathwatchChanged)
+				mode.surveillanceSourceSlider.SetRange(0, 871)
+				mode.surveillanceDeathwatchSlider.SetRange(0, 871)
 
-			mode.levelAdapter.OnLevelTextureAnimationsChanged(mode.onLevelTextureAnimationsChanged)
+				mode.levelAdapter.OnLevelSurveillanceChanged(mode.onLevelSurveillanceChanged)
+			}
+			{
+				mode.ceilingEffectLabel, mode.ceilingEffectBox =
+					realWorldBuilder.addComboProperty("Ceiling Effect", mode.onLevelCeilingPropertyBoxChanged)
+				mode.ceilingEffectLevelLabel, mode.ceilingEffectLevelSlider =
+					realWorldBuilder.addSliderProperty("Ceiling Effect Level", mode.onCeilingEffectLevelChanged)
+
+				noEffectItem := &levelPropertyItem{"None",
+					func(properties *dataModel.LevelProperties) { properties.CeilingHasRadiation = boolAsPointer(false) },
+					controls.DefaultSliderValueFormatter}
+				radiationEffectItem := &levelPropertyItem{"Radiation",
+					func(properties *dataModel.LevelProperties) { properties.CeilingHasRadiation = boolAsPointer(true) },
+					lbpValueFormatter}
+				ceilingItems := []controls.ComboBoxItem{noEffectItem, radiationEffectItem}
+
+				mode.ceilingEffectBox.SetItems(ceilingItems)
+				mode.ceilingEffectLevelSlider.SetRange(0, 255)
+
+				mode.levelAdapter.OnLevelPropertiesChanged(func() {
+					radiation, level := mode.levelAdapter.CeilingEffect()
+					item := noEffectItem
+
+					if radiation {
+						item = radiationEffectItem
+					}
+					mode.ceilingEffectBox.SetSelectedItem(item)
+					mode.ceilingEffectLevelSlider.SetValue(int64(level))
+					mode.ceilingEffectLevelSlider.SetValueFormatter(item.formatter)
+				})
+			}
+			{
+				mode.floorEffectLabel, mode.floorEffectBox =
+					realWorldBuilder.addComboProperty("Floor Effect", mode.onLevelFloorPropertyBoxChanged)
+				mode.floorEffectLevelLabel, mode.floorEffectLevelSlider =
+					realWorldBuilder.addSliderProperty("Floor Effect Level", mode.onFloorEffectLevelChanged)
+
+				noEffectItem := &levelPropertyItem{"None", func(properties *dataModel.LevelProperties) {
+					properties.FloorHasBiohazard = boolAsPointer(false)
+					properties.FloorHasGravity = boolAsPointer(false)
+				}, controls.DefaultSliderValueFormatter}
+				gravityEffectItem := &levelPropertyItem{"Gravity", func(properties *dataModel.LevelProperties) {
+					properties.FloorHasBiohazard = boolAsPointer(false)
+					properties.FloorHasGravity = boolAsPointer(true)
+				}, func(value int64) string { return fmt.Sprintf("%v%%", value*25) }}
+				biohazardEffectItem := &levelPropertyItem{"Biohazard", func(properties *dataModel.LevelProperties) {
+					properties.FloorHasBiohazard = boolAsPointer(true)
+					properties.FloorHasGravity = boolAsPointer(false)
+				}, lbpValueFormatter}
+				floorItems := []controls.ComboBoxItem{noEffectItem, gravityEffectItem, biohazardEffectItem}
+
+				mode.floorEffectBox.SetItems(floorItems)
+				mode.floorEffectLevelSlider.SetRange(0, 255)
+
+				mode.levelAdapter.OnLevelPropertiesChanged(func() {
+					biohazard, gravity, level := mode.levelAdapter.FloorEffect()
+					item := noEffectItem
+
+					if gravity {
+						item = gravityEffectItem
+					} else if biohazard {
+						item = biohazardEffectItem
+					}
+					mode.floorEffectBox.SetSelectedItem(item)
+					mode.floorEffectLevelSlider.SetValue(int64(level))
+					mode.floorEffectLevelSlider.SetValueFormatter(item.formatter)
+				})
+			}
+			{
+				mode.animationGroupIndexLabel, mode.animationGroupIndexBox =
+					realWorldBuilder.addComboProperty("Texture Animation Group", mode.onAnimationGroupIndexChanged)
+				mode.animationGroupTimeLabel, mode.animationGroupTimeSlider =
+					realWorldBuilder.addSliderProperty("Texture Animation Time", mode.onAnimationGroupTimeChanged)
+				mode.animationGroupTimeSlider.SetRange(0, 1000)
+				mode.animationGroupTimeSlider.SetValueFormatter(func(value int64) string {
+					return fmt.Sprintf("%v msec", value)
+				})
+				mode.animationGroupFramesLabel, mode.animationGroupFramesSlider =
+					realWorldBuilder.addSliderProperty("Texture Animation Frame Count", mode.onAnimationGroupFramesChanged)
+				mode.animationGroupFramesSlider.SetRange(0, 10)
+				mode.animationGroupTypeLabel, mode.animationGroupTypeBox =
+					realWorldBuilder.addComboProperty("Texture Animation Type", mode.onAnimationGroupTypeChanged)
+				items := []controls.ComboBoxItem{
+					&enumItem{uint32(data.TextureAnimationForward), "Forward"},
+					&enumItem{uint32(data.TextureAnimationForthAndBack), "Forth-And-Back"},
+					&enumItem{uint32(data.TextureAnimationBackAndForth), "Back-And-Forth"}}
+				mode.animationGroupTypeItems = make(map[int]controls.ComboBoxItem)
+				for _, boxItem := range items {
+					item := boxItem.(*enumItem)
+					mode.animationGroupTypeItems[int(item.value)] = item
+				}
+				mode.animationGroupTypeBox.SetItems(items)
+
+				mode.levelAdapter.OnLevelTextureAnimationsChanged(mode.onLevelTextureAnimationsChanged)
+			}
 		}
+		mode.levelAdapter.OnLevelPropertiesChanged(func() {
+			mode.realWorldProperties.SetVisible(!mode.levelAdapter.IsCyberspace())
+		})
 	}
 
 	return mode

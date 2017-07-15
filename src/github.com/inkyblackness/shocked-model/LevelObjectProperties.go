@@ -17,4 +17,6 @@ type LevelObjectProperties struct {
 	RotationY *int
 	RotationZ *int
 	Hitpoints *int
+
+	ExtraData []byte
 }

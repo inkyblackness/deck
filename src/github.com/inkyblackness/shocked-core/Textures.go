@@ -51,18 +51,28 @@ func (textures *Textures) TextureCount() int {
 
 // Image returns the bitmap of identified & sized texture.
 func (textures *Textures) Image(index int, size model.TextureSize) (bmp image.Bitmap) {
-	var blockData []byte
+	var resID res.ResourceID
+	blockIndex := uint16(0)
 
 	if size == model.TextureLarge {
-		blockData = textures.images.Get(res.ResourceID(0x03E8 + index)).BlockData(0)
+		resID = res.ResourceID(0x03E8 + index)
 	} else if size == model.TextureMedium {
-		blockData = textures.images.Get(res.ResourceID(0x02C3 + index)).BlockData(0)
+		resID = res.ResourceID(0x02C3 + index)
 	} else if size == model.TextureSmall {
-		blockData = textures.images.Get(res.ResourceID(0x004D)).BlockData(uint16(index))
+		resID = res.ResourceID(0x004D)
+		blockIndex = uint16(index)
 	} else if size == model.TextureIcon {
-		blockData = textures.images.Get(res.ResourceID(0x004C)).BlockData(uint16(index))
+		resID = res.ResourceID(0x004C)
+		blockIndex = uint16(index)
 	}
-	bmp, _ = image.Read(bytes.NewReader(blockData))
+	holder := textures.images.Get(resID)
+	var blockData []byte
+	if holder != nil {
+		blockData = holder.BlockData(blockIndex)
+	}
+	if len(blockData) > 0 {
+		bmp, _ = image.Read(bytes.NewReader(blockData))
+	}
 
 	return
 }
