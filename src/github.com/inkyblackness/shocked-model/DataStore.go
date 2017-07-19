@@ -45,6 +45,12 @@ type DataStore interface {
 	// SetGameObject requests to update the properties of a game object.
 	SetGameObject(projectID string, class, subclass, objType int, properties *GameObjectProperties,
 		onSuccess func(properties *GameObjectProperties), onFailure FailureFunc)
+	// GameObjectBitmap queries the data of a bitmap resource for a game object.
+	GameObjectBitmap(projectID string, class, subclass, objType int, index int,
+		onSuccess func(*RawBitmap), onFailure FailureFunc)
+	// SetGameObjectBitmap requests to set the data of a bitmap resource for a game object.
+	SetGameObjectBitmap(projectID string, class, subclass, objType int, index int, bmp *RawBitmap,
+		onSuccess func(), onFailure FailureFunc)
 
 	// ElectronicMessage queries the data of a specific electronic message.
 	ElectronicMessage(projectID string, messageType ElectronicMessageType, id int,

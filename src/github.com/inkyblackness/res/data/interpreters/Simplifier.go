@@ -1,11 +1,15 @@
 package interpreters
 
 import (
+	"fmt"
 	"math"
 )
 
+// RawValueFormatter converts a raw value to a textual form.
+type RawValueFormatter func(value int64) string
+
 // RawValueHandler is for a simple value range.
-type RawValueHandler func(minValue, maxValue int64)
+type RawValueHandler func(minValue, maxValue int64, formatter RawValueFormatter)
 
 // EnumValueHandler is for enumerated (mapped) values.
 type EnumValueHandler func(values map[uint32]string)
@@ -19,10 +23,19 @@ type ObjectIndexHandler func()
 // SpecialHandler is for rare occasions.
 type SpecialHandler func()
 
+func basicToString(value int64) string {
+	return fmt.Sprintf("%v", value)
+}
+
 // RangedValue creates a field range for specific minimum and maximum values.
 func RangedValue(minValue, maxValue int64) FieldRange {
+	return FormattedRangedValue(minValue, maxValue, basicToString)
+}
+
+// FormattedRangedValue is similar to RangedValue, and adds a formatting function.
+func FormattedRangedValue(minValue, maxValue int64, formatter RawValueFormatter) FieldRange {
 	return func(simpl *Simplifier) bool {
-		return simpl.rangedValue(minValue, maxValue)
+		return simpl.rangedValue(minValue, maxValue, formatter)
 	}
 }
 
@@ -51,6 +64,7 @@ func ObjectIndex() FieldRange {
 // Currently known special values:
 // * BinaryCodedDecimal - for keypads storing their number as BCD
 // * LevelTexture - index value into level texture list
+// * MaterialOrLevelTexture - index value into level texture list, or material (bit 7 toggles)
 // * VariableKey - for actions
 // * VariableCondition - for action conditions
 // * ObjectType - for 0x00CCSSTT selection
@@ -85,15 +99,15 @@ func NewSimplifier(rawValueHandler RawValueHandler) *Simplifier {
 func (simpl *Simplifier) rawValue(e *entry) {
 	max := int64(math.Pow(2, float64(e.count*8)))
 	if max == 256 {
-		simpl.rawValueHandler(0, 255)
+		simpl.rawValueHandler(0, 255, basicToString)
 	} else {
 		half := max / 2
-		simpl.rawValueHandler(-1, half-1)
+		simpl.rawValueHandler(-1, half-1, basicToString)
 	}
 }
 
-func (simpl *Simplifier) rangedValue(minValue, maxValue int64) bool {
-	simpl.rawValueHandler(minValue, maxValue)
+func (simpl *Simplifier) rangedValue(minValue, maxValue int64, formatter RawValueFormatter) bool {
+	simpl.rawValueHandler(minValue, maxValue, formatter)
 	return true
 }
 

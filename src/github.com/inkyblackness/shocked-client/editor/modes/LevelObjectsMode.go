@@ -197,6 +197,11 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 				properties.Subclass = intAsPointer(typeItem.id.Subclass())
 				properties.Type = intAsPointer(typeItem.id.Type())
 			})
+			mode.updateSelectedObjectsClassPropertiesRaw(func(objectID model.ObjectID, classData []byte) {
+				for index := range classData {
+					classData[index] = 0x00
+				}
+			})
 		})
 
 		mode.selectedObjectsPropertiesTitle, mode.selectedObjectsPropertiesBox = panelBuilder.addComboProperty("Show Properties", mode.onSelectedPropertiesDisplayChanged)
@@ -793,6 +798,33 @@ func (mode *LevelObjectsMode) createPropertyControls(panel *propertyPanel, key s
 		}
 	})
 
+	simplifier.SetSpecialHandler("MaterialOrLevelTexture", func() {
+		selectionBox := panel.NewComboBox(key, "Type", maskedUpdate(7, 0xFF))
+		var selectedItem controls.ComboBoxItem
+		selectedType := -1
+		selectedIndex := 0
+		items := []controls.ComboBoxItem{
+			&enumItem{0, "Material"},
+			&enumItem{1, "Level texture"}}
+
+		if unifiedValue != math.MinInt64 {
+			selectedType = int(unifiedValue >> 7)
+			selectedIndex = int(unifiedValue & 0x7F)
+			selectedItem = items[selectedType]
+		}
+		selectionBox.SetItems(items)
+		selectionBox.SetSelectedItem(selectedItem)
+
+		if selectedType == 0 {
+			slider := panel.NewSlider(key, "Material", maskedUpdate(0, 0x7F))
+			slider.SetRange(0, 127)
+			slider.SetValue(int64(selectedIndex))
+		} else if selectedType == 1 {
+			selector := panel.NewTextureSelector(key, "", maskedUpdate(0, 0x7F), mode.levelTextures)
+			selector.SetSelectedIndex(selectedIndex)
+		}
+	})
+
 	simplifier.SetSpecialHandler("ObjectHeight", func() {
 		slider := panel.NewSlider(key, "", func(currentValue, parameter uint32) uint32 {
 			return parameter
@@ -855,11 +887,17 @@ func (mode *LevelObjectsMode) updateSelectedObjectsBaseProperties(modifier func(
 func (mode *LevelObjectsMode) updateSelectedObjectsClassProperties(key string, value uint32, update propertyUpdateFunction) {
 	interpreterFactory := mode.classInterpreterFactory()
 
+	mode.updateSelectedObjectsClassPropertiesRaw(func(objectID model.ObjectID, classData []byte) {
+		mode.setInterpreterValue(interpreterFactory, objectID, classData, key, value, update)
+	})
+}
+
+func (mode *LevelObjectsMode) updateSelectedObjectsClassPropertiesRaw(modifier func(objectID model.ObjectID, classData []byte)) {
 	for _, object := range mode.selectedObjects {
 		var properties dataModel.LevelObjectProperties
 
 		properties.ClassData = object.ClassData()
-		mode.setInterpreterValue(interpreterFactory, object.ID(), properties.ClassData, key, value, update)
+		modifier(object.ID(), properties.ClassData)
 		mode.levelAdapter.RequestObjectPropertiesChange([]int{object.Index()}, &properties)
 	}
 }

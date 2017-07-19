@@ -1,6 +1,8 @@
 package levelobj
 
 import (
+	"fmt"
+
 	"github.com/inkyblackness/res/data/interpreters"
 	"github.com/inkyblackness/res/data/levelobj/actions"
 	"github.com/inkyblackness/res/data/levelobj/conditions"
@@ -38,7 +40,10 @@ var cyberspaceTerminal = gameVariablePanel.
 
 var energyChargeStation = gameVariablePanel.
 	With("EnergyDelta", 6, 4).As(interpreters.RangedValue(0, 255)).
-	With("RechargeTime", 10, 4).As(interpreters.RangedValue(0, 3600)).
+	With("RechargeTime", 10, 4).As(interpreters.FormattedRangedValue(0, 3600,
+	func(value int64) string {
+		return fmt.Sprintf("%d sec", value)
+	})).
 	With("TriggerObjectIndex", 14, 4).As(interpreters.ObjectIndex()).
 	With("RechargedTimestamp", 18, 4)
 

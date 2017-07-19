@@ -1,6 +1,8 @@
 package levelobj
 
 import (
+	"fmt"
+
 	"github.com/inkyblackness/res/data/interpreters"
 )
 
@@ -48,15 +50,23 @@ var securityCamera = baseScenery.
 	With("PanningSwitch", 2, 1).As(interpreters.EnumValue(map[uint32]string{0: "Stationary", 1: "Panning"}))
 
 var solidBridge = baseScenery.
-	With("Size", 2, 1).
-	With("Height", 3, 1).
-	With("TopBottomTexture", 4, 1).
-	With("SideTexture", 5, 1)
+	With("Size", 2, 1).As(interpreters.Bitfield(map[uint32]string{0x0F: "X", 0xF0: "Y"})).
+	With("Height", 3, 1).As(interpreters.SpecialValue("ObjectHeight")).
+	With("TopBottomTexture", 4, 1).As(interpreters.SpecialValue("MaterialOrLevelTexture")).
+	With("SideTexture", 5, 1).As(interpreters.SpecialValue("MaterialOrLevelTexture"))
 
 var forceBridge = baseScenery.
-	With("Size", 2, 1).
-	With("Height", 3, 1).
-	With("Color", 6, 1)
+	With("Size", 2, 1).As(interpreters.Bitfield(map[uint32]string{0x0F: "X", 0xF0: "Y"})).
+	With("Height", 3, 1).As(interpreters.SpecialValue("ObjectHeight")).
+	With("Color", 6, 1).As(interpreters.FormattedRangedValue(0, 255,
+	func(value int64) (result string) {
+		if colorText, defined := forceColors[value]; defined {
+			result = fmt.Sprintf("%s  - raw: %d", colorText, value)
+		} else {
+			result = fmt.Sprintf("%d", value)
+		}
+		return result
+	}))
 
 func initScenery() interpreterRetriever {
 	displays := newInterpreterLeaf(displayScenery)

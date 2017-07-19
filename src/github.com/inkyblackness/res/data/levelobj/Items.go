@@ -25,7 +25,7 @@ var corpseItem = baseItem.
 var severedHeadItem = baseItem.
 	With("ImageIndex", 2, 1)
 
-var accessMaskDescription = interpreters.Bitfield(map[uint32]string{
+var accessLevelMasks = map[uint32]string{
 	0x00000001: "None",
 	0x00000002: "Generic1",
 	0x00000004: "Generic2",
@@ -59,7 +59,9 @@ var accessMaskDescription = interpreters.Bitfield(map[uint32]string{
 	0x08000000: "Personal4",
 	0x10000000: "Personal5",
 	0x20000000: "Personal6",
-	0x40000000: "Personal7"})
+	0x40000000: "Personal7"}
+
+var accessMaskDescription = interpreters.Bitfield(accessLevelMasks)
 
 var accessCardItem = baseItem.
 	With("Ignored0000", 0, 2).As(interpreters.SpecialValue("Ignored")).

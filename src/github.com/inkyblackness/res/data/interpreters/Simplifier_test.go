@@ -15,7 +15,7 @@ func (suite *SimplifierSuite) SetUpTest(c *check.C) {
 func (suite *SimplifierSuite) TestRawValueCallsHandler(c *check.C) {
 	var calledMinValue int64
 	var calledMaxValue int64
-	rawHandler := func(minValue, maxValue int64) {
+	rawHandler := func(minValue, maxValue int64, formatter RawValueFormatter) {
 		calledMinValue, calledMaxValue = minValue, maxValue
 	}
 	simpl := NewSimplifier(rawHandler)
@@ -27,7 +27,7 @@ func (suite *SimplifierSuite) TestRawValueCallsHandler(c *check.C) {
 }
 
 func (suite *SimplifierSuite) TestEnumValueReturnsFalseIfNoHandlerRegistered(c *check.C) {
-	simpl := NewSimplifier(func(minValue, maxValue int64) {})
+	simpl := NewSimplifier(func(minValue, maxValue int64, formatter RawValueFormatter) {})
 
 	result := simpl.enumValue(map[uint32]string{})
 
@@ -36,7 +36,7 @@ func (suite *SimplifierSuite) TestEnumValueReturnsFalseIfNoHandlerRegistered(c *
 
 func (suite *SimplifierSuite) TestEnumValueCallsRegisteredHandler(c *check.C) {
 	result := map[uint32]string{}
-	simpl := NewSimplifier(func(minValue, maxValue int64) {})
+	simpl := NewSimplifier(func(minValue, maxValue int64, formatter RawValueFormatter) {})
 	simpl.SetEnumValueHandler(func(values map[uint32]string) {
 		result = values
 	})

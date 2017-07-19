@@ -254,19 +254,10 @@ func (inplace *InplaceDataStore) GameObjectIcon(projectID string, class, subclas
 
 		if err == nil {
 			objID := res.MakeObjectID(res.ObjectClass(class), res.ObjectSubclass(subclass), res.ObjectType(objType))
-			bmp := project.GameObjects().Icon(objID)
-			var entity model.RawBitmap
+			imgBitmap := project.GameObjects().Icon(objID)
+			rawBitmap := inplace.toRawBitmap(imgBitmap)
 
-			entity.Width = int(bmp.ImageWidth())
-			entity.Height = int(bmp.ImageHeight())
-			var pixel []byte
-
-			for row := 0; row < entity.Height; row++ {
-				pixel = append(pixel, bmp.Row(row)...)
-			}
-			entity.Pixels = base64.StdEncoding.EncodeToString(pixel)
-
-			inplace.out(func() { onSuccess(&entity) })
+			inplace.out(func() { onSuccess(&rawBitmap) })
 		}
 		if err != nil {
 			inplace.out(onFailure)
@@ -287,6 +278,50 @@ func (inplace *InplaceDataStore) SetGameObject(projectID string, class, subclass
 
 			entity.Data = gameObjects.SetObjectData(objID, properties.Data)
 			inplace.out(func() { onSuccess(&entity) })
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// GameObjectBitmap implements the model.DataStore interface
+func (inplace *InplaceDataStore) GameObjectBitmap(projectID string, class, subclass, objType int, index int,
+	onSuccess func(bmp *model.RawBitmap), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			objID := res.MakeObjectID(res.ObjectClass(class), res.ObjectSubclass(subclass), res.ObjectType(objType))
+			var imgBitmap image.Bitmap
+			imgBitmap, err = project.GameObjects().Bitmap(objID, index)
+
+			if err == nil {
+				rawBitmap := inplace.toRawBitmap(imgBitmap)
+
+				inplace.out(func() { onSuccess(&rawBitmap) })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
+// SetGameObjectBitmap implements the model.DataStore interface
+func (inplace *InplaceDataStore) SetGameObjectBitmap(projectID string, class, subclass, objType int, index int, bmp *model.RawBitmap,
+	onSuccess func(), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			objID := res.MakeObjectID(res.ObjectClass(class), res.ObjectSubclass(subclass), res.ObjectType(objType))
+			imgBitmap := inplace.fromRawBitmap(bmp)
+			err = project.GameObjects().SetBitmap(objID, index, imgBitmap)
+
+			if err == nil {
+				inplace.out(func() { onSuccess() })
+			}
 		}
 		if err != nil {
 			inplace.out(onFailure)

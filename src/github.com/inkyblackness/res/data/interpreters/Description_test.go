@@ -77,7 +77,7 @@ func (suite *DescriptionSuite) TestAsRegistersRangeFunctionForLastField(c *check
 	desc := New().With("fieldA", 0, 2).As(rangeFunc)
 
 	inst := desc.For([]byte{0x00, 0x01})
-	simplifier := NewSimplifier(func(minValue, maxValue int64) {})
+	simplifier := NewSimplifier(func(minValue, maxValue int64, formatter RawValueFormatter) {})
 	inst.Describe("fieldA", simplifier)
 
 	c.Check(rangeFuncCalled, check.Equals, true)

@@ -44,6 +44,7 @@ type MainApplication struct {
 
 	bitmaps              *graphics.BufferedTextureStore
 	worldTextures        map[dataModel.TextureSize]*graphics.BufferedTextureStore
+	gameObjectBitmaps    *graphics.BufferedTextureStore
 	gameObjectIcons      *graphics.BufferedTextureStore
 	worldPalette         *graphics.PaletteTexture
 	worldTextureRenderer *graphics.BitmapTextureRenderer
@@ -127,7 +128,7 @@ func (app *MainApplication) initResources() {
 		app.initWorldTextureBuffer(size)
 	}
 	app.initBitmaps()
-	app.initGameObjectIconsBuffer()
+	app.initGameObjectBitmapsBuffer()
 	app.initWorldPalette()
 }
 
@@ -145,10 +146,13 @@ func (app *MainApplication) initBitmaps() {
 	})
 }
 
-func (app *MainApplication) initGameObjectIconsBuffer() {
+func (app *MainApplication) initGameObjectBitmapsBuffer() {
 	objectsAdapter := app.modelAdapter.ObjectsAdapter()
 	app.gameObjectIcons = app.createTextureStore(objectsAdapter.Icons(), func(keyAsInt int) {
 		objectsAdapter.RequestIcon(model.ObjectIDFromInt(keyAsInt))
+	})
+	app.gameObjectBitmaps = app.createTextureStore(objectsAdapter.Bitmaps(), func(keyAsInt int) {
+		objectsAdapter.RequestBitmap(model.ObjectBitmapIDFromInt(keyAsInt))
 	})
 }
 
@@ -340,6 +344,11 @@ func (app *MainApplication) NewPaletteTexture(colorProvider graphics.ColorProvid
 // WorldTextureStore implements the graphics.Context interface.
 func (app *MainApplication) WorldTextureStore(size dataModel.TextureSize) *graphics.BufferedTextureStore {
 	return app.worldTextures[size]
+}
+
+// GameObjectBitmapsStore implements the graphics.Context interface.
+func (app *MainApplication) GameObjectBitmapsStore() *graphics.BufferedTextureStore {
+	return app.gameObjectBitmaps
 }
 
 // GameObjectIconsStore implements the graphics.Context interface.

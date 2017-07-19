@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
@@ -101,6 +102,39 @@ func (gameObjects *GameObjects) Icon(id res.ObjectID) (bmp image.Bitmap) {
 		bmp, _ = image.Read(bytes.NewReader(objIconBlockData))
 	}
 
+	return
+}
+
+// Bitmap returns an image of the specified game object.
+func (gameObjects *GameObjects) Bitmap(id res.ObjectID, index int) (bmp image.Bitmap, err error) {
+	commonProperties := gameObjects.commonProperties(id)
+	extraImages := int(commonProperties.Extra >> 4)
+	available := 3 + extraImages
+
+	if (index >= 0) && (available > index) {
+		blockData := gameObjects.objart.Get(res.ResourceID(0x0546)).BlockData(uint16(gameObjects.objIconOffsets[id] + index))
+		bmp, err = image.Read(bytes.NewReader(blockData))
+	} else {
+		err = fmt.Errorf("Object index out of range: %v[%d]", id, index)
+	}
+	return
+}
+
+// SetBitmap stores an image for the specified game object.
+func (gameObjects *GameObjects) SetBitmap(id res.ObjectID, index int, bmp image.Bitmap) (err error) {
+	commonProperties := gameObjects.commonProperties(id)
+	extraImages := int(commonProperties.Extra >> 4)
+	available := 3 + extraImages
+
+	if (index >= 0) && (available > index) {
+		blockIndex := uint16(gameObjects.objIconOffsets[id] + index)
+		holder := gameObjects.objart.Get(res.ResourceID(0x0546)) //.BlockData(uint16(gameObjects.objIconOffsets[id] + index))
+		buf := bytes.NewBuffer(nil)
+		image.Write(buf, bmp, image.CompressedBitmap, true, 0)
+		holder.SetBlockData(blockIndex, buf.Bytes())
+	} else {
+		err = fmt.Errorf("Object index out of range: %v[%d]", id, index)
+	}
 	return
 }
 

@@ -14,6 +14,9 @@ type ObjectsAdapter struct {
 
 	objects *observable
 	icons   *Bitmaps
+
+	bitmaps               *Bitmaps
+	bitmapRequestsPending map[ObjectBitmapID]bool
 }
 
 func newObjectsAdapter(context projectContext, store model.DataStore) *ObjectsAdapter {
@@ -22,7 +25,10 @@ func newObjectsAdapter(context projectContext, store model.DataStore) *ObjectsAd
 		store:   store,
 
 		objects: newObservable(),
-		icons:   newBitmaps()}
+		icons:   newBitmaps(),
+
+		bitmaps:               newBitmaps(),
+		bitmapRequestsPending: make(map[ObjectBitmapID]bool)}
 
 	objectMap := make(map[ObjectID]*GameObject)
 	adapter.objects.set(&objectMap)
@@ -34,6 +40,8 @@ func (adapter *ObjectsAdapter) clear() {
 	objectMap := make(map[ObjectID]*GameObject)
 	adapter.objects.set(&objectMap)
 	adapter.icons.clear()
+	adapter.bitmaps.clear()
+	adapter.bitmapRequestsPending = make(map[ObjectBitmapID]bool)
 }
 
 func (adapter *ObjectsAdapter) refresh() {
@@ -99,6 +107,40 @@ func (adapter *ObjectsAdapter) RequestIcon(id ObjectID) {
 			adapter.icons.setRawBitmap(id.ToInt(), bmp)
 		},
 		adapter.context.simpleStoreFailure(fmt.Sprintf("GameObjectIcon[%v]", id)))
+}
+
+// RequestBitmapChange will update the bitmap data for identified object.
+func (adapter *ObjectsAdapter) RequestBitmapChange(id ObjectBitmapID, newBitmap *model.RawBitmap) {
+	adapter.store.SetGameObjectBitmap(adapter.context.ActiveProjectID(),
+		id.ObjectID.Class(), id.ObjectID.Subclass(), id.ObjectID.Type(), id.Index, newBitmap,
+		func() {
+			adapter.bitmaps.setRawBitmap(id.ToInt(), newBitmap)
+		},
+		func() {
+			adapter.context.simpleStoreFailure(fmt.Sprintf("SetGameObjectBitmap[%v]", id))()
+		})
+}
+
+// RequestBitmap will load the bitmap data for identified key.
+func (adapter *ObjectsAdapter) RequestBitmap(id ObjectBitmapID) {
+	if !adapter.bitmapRequestsPending[id] {
+		adapter.bitmapRequestsPending[id] = true
+		adapter.store.GameObjectBitmap(adapter.context.ActiveProjectID(),
+			id.ObjectID.Class(), id.ObjectID.Subclass(), id.ObjectID.Type(), id.Index,
+			func(bmp *model.RawBitmap) {
+				adapter.bitmapRequestsPending[id] = false
+				adapter.bitmaps.setRawBitmap(id.ToInt(), bmp)
+			},
+			func() {
+				adapter.bitmapRequestsPending[id] = false
+				adapter.context.simpleStoreFailure(fmt.Sprintf("GameObjectBitmap[%v]", id))()
+			})
+	}
+}
+
+// Bitmaps returns the container of bitmaps.
+func (adapter *ObjectsAdapter) Bitmaps() *Bitmaps {
+	return adapter.bitmaps
 }
 
 // ObjectsOfClass returns all objects matching the requested class.

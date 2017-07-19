@@ -1,6 +1,8 @@
 package actions
 
 import (
+	"fmt"
+
 	"github.com/inkyblackness/res/data/interpreters"
 )
 
@@ -50,15 +52,19 @@ var showCutsceneDetails = interpreters.New().
 	With("CutsceneIndex", 0, 4).As(interpreters.EnumValue(map[uint32]string{0: "Death", 1: "Intro", 2: "Ending"})).
 	With("EndGameFlag", 4, 4).As(interpreters.EnumValue(map[uint32]string{0: "No (not working)", 1: "Yes"}))
 
+func pointOneSecond(value int64) string {
+	return fmt.Sprintf("%.1f sec", float64(value)*0.1)
+}
+
 var triggerOtherObjectsDetails = interpreters.New().
 	With("Object1Index", 0, 2).As(interpreters.ObjectIndex()).
-	With("Object1Delay", 2, 2).As(interpreters.RangedValue(0, 6000)).
+	With("Object1Delay", 2, 2).As(interpreters.FormattedRangedValue(0, 6000, pointOneSecond)).
 	With("Object2Index", 4, 2).As(interpreters.ObjectIndex()).
-	With("Object2Delay", 6, 2).As(interpreters.RangedValue(0, 6000)).
+	With("Object2Delay", 6, 2).As(interpreters.FormattedRangedValue(0, 6000, pointOneSecond)).
 	With("Object3Index", 8, 2).As(interpreters.ObjectIndex()).
-	With("Object3Delay", 10, 2).As(interpreters.RangedValue(0, 6000)).
+	With("Object3Delay", 10, 2).As(interpreters.FormattedRangedValue(0, 6000, pointOneSecond)).
 	With("Object4Index", 12, 2).As(interpreters.ObjectIndex()).
-	With("Object4Delay", 14, 2).As(interpreters.RangedValue(0, 6000))
+	With("Object4Delay", 14, 2).As(interpreters.FormattedRangedValue(0, 6000, pointOneSecond))
 
 var changeLightingDetails = interpreters.New().
 	Refining("ObjectExtent", 0, 2, interpreters.New().With("Index", 0, 2).As(interpreters.ObjectIndex()), func(inst *interpreters.Instance) bool {

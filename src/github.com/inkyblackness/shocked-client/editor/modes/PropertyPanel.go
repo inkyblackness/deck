@@ -98,8 +98,9 @@ func (panel *propertyPanel) Reset() {
 }
 
 func (panel *propertyPanel) NewSimplifier(key string, unifiedValue int64) *interpreters.Simplifier {
-	simplifier := interpreters.NewSimplifier(func(minValue, maxValue int64) {
+	simplifier := interpreters.NewSimplifier(func(minValue, maxValue int64, formatter interpreters.RawValueFormatter) {
 		slider := panel.NewSlider(key, "", setUpdate())
+		slider.SetValueFormatter(func(value int64) string { return formatter(value) })
 		slider.SetRange(minValue, maxValue)
 		if unifiedValue != math.MinInt64 {
 			slider.SetValue(unifiedValue)
