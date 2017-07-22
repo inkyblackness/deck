@@ -94,6 +94,7 @@ func NewGameTextsMode(context Context, parent *ui.Area) *GameTextsMode {
 				&enumItem{uint32(dataModel.ResourceTypeTrapMessages), "Trap Messages"},
 				&enumItem{uint32(dataModel.ResourceTypeWords), "Words"},
 				&enumItem{uint32(dataModel.ResourceTypeLogCategories), "Log Categories"},
+				&enumItem{uint32(dataModel.ResourceTypeVariousMessages), "Various Messages"},
 				&enumItem{uint32(dataModel.ResourceTypeScreenMessages), "Screen Messages"},
 				&enumItem{uint32(dataModel.ResourceTypeInfoNodeMessages), "Info Node Messages (8/5/6)"},
 				&enumItem{uint32(dataModel.ResourceTypeAccessCardNames), "Access Card Names"},

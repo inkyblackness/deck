@@ -13,6 +13,8 @@ const (
 	ResourceTypeWords = ResourceType(0x0868)
 	// ResourceTypeLogCategories contains the category names of logs.
 	ResourceTypeLogCategories = ResourceType(0x0870)
+	// ResourceTypeVariousMessages contains all sorts of messages, including door lock messages.
+	ResourceTypeVariousMessages = ResourceType(0x0871)
 	// ResourceTypeScreenMessages contains the messages shown on screens.
 	ResourceTypeScreenMessages = ResourceType(0x0877)
 	// ResourceTypeInfoNodeMessages contains the short text fragments found in cyberspace of 8/5/6 nodes.

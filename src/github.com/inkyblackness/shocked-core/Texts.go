@@ -19,6 +19,7 @@ var knownTexts = map[model.ResourceType]textInfo{
 	model.ResourceTypeTrapMessages:     {false, model.MaxTrapMessages},
 	model.ResourceTypeWords:            {false, model.MaxWords},
 	model.ResourceTypeLogCategories:    {false, model.MaxLogCategories},
+	model.ResourceTypeVariousMessages:  {false, model.MaxVariousMessages},
 	model.ResourceTypeScreenMessages:   {false, model.MaxScreenMessages},
 	model.ResourceTypeInfoNodeMessages: {false, model.MaxInfoNodeMessages},
 	model.ResourceTypeAccessCardNames:  {false, model.MaxAccessCardNames},

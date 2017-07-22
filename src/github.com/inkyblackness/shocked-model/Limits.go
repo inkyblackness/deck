@@ -5,6 +5,7 @@ const (
 	MaxTrapMessages     = 512
 	MaxWords            = 512
 	MaxLogCategories    = 16
+	MaxVariousMessages  = 256
 	MaxScreenMessages   = 120
 	MaxInfoNodeMessages = 256
 	MaxAccessCardNames  = 32 * 2
@@ -16,6 +17,7 @@ var maxEntriesByType = map[ResourceType]int{
 	ResourceTypeTrapMessages:     MaxTrapMessages,
 	ResourceTypeWords:            MaxWords,
 	ResourceTypeLogCategories:    MaxLogCategories,
+	ResourceTypeVariousMessages:  MaxVariousMessages,
 	ResourceTypeScreenMessages:   MaxScreenMessages,
 	ResourceTypeInfoNodeMessages: MaxInfoNodeMessages,
 	ResourceTypeAccessCardNames:  MaxAccessCardNames,
