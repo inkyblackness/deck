@@ -145,7 +145,7 @@ var receiveEmailDetails = interpreters.New().
 var changeEffectDetails = interpreters.New().
 	With("DeltaValue", 0, 2).As(interpreters.RangedValue(0, 1000)).
 	With("EffectChangeFlag", 2, 2).As(interpreters.EnumValue(map[uint32]string{0: "Add Delta", 1: "Remove Delta"})).
-	With("EffectType", 4, 4).As(interpreters.EnumValue(map[uint32]string{0: "Radiation poisoning", 1: "Bio contamination"}))
+	With("EffectType", 4, 4).As(interpreters.EnumValue(map[uint32]string{4: "Radiation poisoning", 8: "Bio contamination"}))
 
 var setObjectParameterDetails = interpreters.New().
 	With("ObjectIndex", 0, 4).As(interpreters.ObjectIndex()).
