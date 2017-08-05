@@ -112,10 +112,10 @@ type LevelMapMode struct {
 	ceilingHazardBox   *controls.ComboBox
 	ceilingHazardItems map[string]controls.ComboBoxItem
 
-	floorShadowLabel    *controls.Label
-	floorShadowSlider   *controls.Slider
-	ceilingShadowLabel  *controls.Label
-	ceilingShadowSlider *controls.Slider
+	floorLightLabel    *controls.Label
+	floorLightSlider   *controls.Slider
+	ceilingLightLabel  *controls.Label
+	ceilingLightSlider *controls.Slider
 
 	cyberspaceArea *ui.Area
 
@@ -402,18 +402,18 @@ func NewLevelMapMode(context Context, parent *ui.Area, mapDisplay *display.MapDi
 				mode.wallTexturePatternBox.SetItems(wallTexturePatternItems)
 			}
 			{
-				mode.floorShadowLabel, mode.floorShadowSlider = realWorldPanelBuilder.addSliderProperty("Floor Shadow", func(value int64) {
+				mode.floorLightLabel, mode.floorLightSlider = realWorldPanelBuilder.addSliderProperty("Floor Light", func(value int64) {
 					mode.changeSelectedTileProperties(func(properties *dataModel.TileProperties) {
-						properties.RealWorld.FloorShadow = intAsPointer(int(value))
+						properties.RealWorld.FloorShadow = intAsPointer(15 - int(value))
 					})
 				})
-				mode.floorShadowSlider.SetRange(0, 15)
-				mode.ceilingShadowLabel, mode.ceilingShadowSlider = realWorldPanelBuilder.addSliderProperty("Ceiling Shadow", func(value int64) {
+				mode.floorLightSlider.SetRange(0, 15)
+				mode.ceilingLightLabel, mode.ceilingLightSlider = realWorldPanelBuilder.addSliderProperty("Ceiling Light", func(value int64) {
 					mode.changeSelectedTileProperties(func(properties *dataModel.TileProperties) {
-						properties.RealWorld.CeilingShadow = intAsPointer(int(value))
+						properties.RealWorld.CeilingShadow = intAsPointer(15 - int(value))
 					})
 				})
-				mode.ceilingShadowSlider.SetRange(0, 15)
+				mode.ceilingLightSlider.SetRange(0, 15)
 			}
 			{
 				var boxItems []controls.ComboBoxItem
@@ -702,8 +702,8 @@ func (mode *LevelMapMode) onSelectedTilesChanged() {
 	useAdjacentWallTextureUnifier := util.NewValueUnifier("")
 	wallTexturePatternUnifier := util.NewValueUnifier(-1)
 	spookyMusicUnifier := util.NewValueUnifier("")
-	floorShadowUnifier := util.NewValueUnifier(-1)
-	ceilingShadowUnifier := util.NewValueUnifier(-1)
+	floorLightUnifier := util.NewValueUnifier(-1)
+	ceilingLightUnifier := util.NewValueUnifier(-1)
 	musicIndexUnifier := util.NewValueUnifier(-1)
 	floorHazardUnifier := util.NewValueUnifier("")
 	ceilingHazardUnifier := util.NewValueUnifier("")
@@ -740,8 +740,8 @@ func (mode *LevelMapMode) onSelectedTilesChanged() {
 				useAdjacentWallTextureUnifier.Add(fmt.Sprintf("%v", *properties.RealWorld.UseAdjacentWallTexture))
 				wallTexturePatternUnifier.Add(*properties.RealWorld.WallTexturePattern)
 				spookyMusicUnifier.Add(fmt.Sprintf("%v", *properties.RealWorld.SpookyMusic))
-				floorShadowUnifier.Add(*properties.RealWorld.FloorShadow)
-				ceilingShadowUnifier.Add(*properties.RealWorld.CeilingShadow)
+				floorLightUnifier.Add(15 - *properties.RealWorld.FloorShadow)
+				ceilingLightUnifier.Add(15 - *properties.RealWorld.CeilingShadow)
 				floorHazardUnifier.Add(fmt.Sprintf("%v", *properties.RealWorld.FloorHazard))
 				ceilingHazardUnifier.Add(fmt.Sprintf("%v", *properties.RealWorld.CeilingHazard))
 			} else if properties.Cyberspace != nil {
@@ -772,8 +772,8 @@ func (mode *LevelMapMode) onSelectedTilesChanged() {
 	mode.flightPullTypeBox.SetSelectedItem(mode.flightPullTypeItems[flightPullTypeUnifier.Value().(int)])
 	mode.gameOfLifeSetBox.SetSelectedItem(mode.gameOfLifeSetItems[gameOfLifeSetUnifier.Value().(string)])
 
-	setSlider(mode.floorShadowSlider, floorShadowUnifier)
-	setSlider(mode.ceilingShadowSlider, ceilingShadowUnifier)
+	setSlider(mode.floorLightSlider, floorLightUnifier)
+	setSlider(mode.ceilingLightSlider, ceilingLightUnifier)
 	setSlider(mode.floorColorSlider, floorColorUnifier)
 	setSlider(mode.ceilingColorSlider, ceilingColorUnifier)
 }

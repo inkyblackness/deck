@@ -77,19 +77,19 @@ var changeLightingDetails = interpreters.New().
 	}).
 	With("ReferenceObjectIndex", 2, 2).As(interpreters.ObjectIndex()).
 	With("TransitionType", 4, 2).As(interpreters.EnumValue(map[uint32]string{0x0000: "immediate", 0x0001: "fade", 0x0100: "flicker"})).
-	With("LightModification", 7, 1).As(interpreters.EnumValue(map[uint32]string{0x00: "add light", 0x10: "remove light"})).
-	With("LightType", 8, 1).As(interpreters.EnumValue(map[uint32]string{0x00: "rectangular", 0x01: "linear gradient", 0x03: "circular gradient"})).
+	With("LightModification", 7, 1).As(interpreters.EnumValue(map[uint32]string{0x00: "light on", 0x10: "light off"})).
+	With("LightType", 8, 1).As(interpreters.EnumValue(map[uint32]string{0x00: "rectangular", 0x03: "circular gradient"})).
 	With("LightSurface", 10, 2).As(interpreters.EnumValue(map[uint32]string{0: "floor", 1: "ceiling", 2: "floor and ceiling"})).
 	Refining("Rectangular", 12, 2, interpreters.New().
-		With("Remove light value", 0, 1).As(interpreters.RangedValue(0, 15)).
-		With("Add light value", 1, 1).As(interpreters.RangedValue(0, 15)), func(inst *interpreters.Instance) bool {
+		With("Off light value", 0, 1).As(interpreters.RangedValue(0, 15)).
+		With("On light value", 1, 1).As(interpreters.RangedValue(0, 15)), func(inst *interpreters.Instance) bool {
 		return inst.Get("LightType") == 0x00
 	}).
 	Refining("Gradient", 12, 4, interpreters.New().
-		With("Remove light begin intensity", 0, 1).As(interpreters.RangedValue(0, 127)).
-		With("Remove light end intensity", 1, 1).As(interpreters.RangedValue(0, 127)).
-		With("Add light begin intensity", 2, 1).As(interpreters.RangedValue(0, 127)).
-		With("Add light end intensity", 3, 1).As(interpreters.RangedValue(0, 127)), func(inst *interpreters.Instance) bool {
+		With("Off light begin intensity", 0, 1).As(interpreters.RangedValue(0, 127)).
+		With("Off light end intensity", 1, 1).As(interpreters.RangedValue(0, 127)).
+		With("On light begin intensity", 2, 1).As(interpreters.RangedValue(0, 127)).
+		With("On light end intensity", 3, 1).As(interpreters.RangedValue(0, 127)), func(inst *interpreters.Instance) bool {
 		var lightType = inst.Get("LightType")
 
 		return (lightType == 0x01) || (lightType == 0x03)
@@ -121,10 +121,13 @@ var changeTileHeightsDetails = interpreters.New().
 
 var randomTimerDetails = interpreters.New().
 	With("ObjectIndex", 0, 4).As(interpreters.ObjectIndex()).
-	With("TimeInterval", 4, 4).As(interpreters.RangedValue(0, 6000)).
+	With("TimeInterval", 4, 4).As(interpreters.FormattedRangedValue(0, 6000,
+	func(value int64) string {
+		return fmt.Sprintf("%.1fs", float64(value)/10.0)
+	})).
 	With("ActivationValue", 8, 4).As(interpreters.EnumValue(map[uint32]string{0: "Off",
 	0xFFFF: "On (0xFFFF)", 0x10000: "On (0x10000)", 0x11111: "On (0x11111)"})).
-	With("Variance", 12, 2).As(interpreters.RangedValue(0, 6000))
+	With("Variance", 12, 2).As(interpreters.RangedValue(0, 512))
 
 var cycleObjectsDetails = interpreters.New().
 	With("ObjectIndex1", 0, 4).As(interpreters.ObjectIndex()).
