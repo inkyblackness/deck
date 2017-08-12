@@ -31,6 +31,8 @@ type ReleaseStoreLibrary struct {
 	objpropStores map[string]objprop.Store
 
 	textpropStores map[string]textprop.Store
+
+	saveChannels map[string]chan interface{}
 }
 
 // NewReleaseStoreLibrary returns a StoreLibrary that covers two Release container.
@@ -45,9 +47,19 @@ func NewReleaseStoreLibrary(source release.Release, sink release.Release, timeou
 		descriptors:   objprop.StandardProperties(),
 		objpropStores: make(map[string]objprop.Store),
 
-		textpropStores: make(map[string]textprop.Store)}
+		textpropStores: make(map[string]textprop.Store),
+
+		saveChannels: make(map[string]chan interface{})}
 
 	return library
+}
+
+// SaveAll requests all stores to save their current state to disk.
+// This operation is performed asynchronously.
+func (library *ReleaseStoreLibrary) SaveAll() {
+	for _, save := range library.saveChannels {
+		save <- true
+	}
 }
 
 // ChunkStore implements the StoreLibrary interface.
@@ -184,7 +196,7 @@ func (library *ReleaseStoreLibrary) createSavingChunkStore(provider chunk.Provid
 			return storeChunk.NewProviderBacked(newProvider, onStoreChanged)
 		})
 	}
-	library.startSaverRoutine(storeChanged, saveAndSwap)
+	library.startSaverRoutine(name, storeChanged, saveAndSwap)
 
 	return chunkStore
 }
@@ -244,7 +256,7 @@ func (library *ReleaseStoreLibrary) createSavingObjpropStore(provider objprop.Pr
 			return storeObjprop.NewProviderBacked(newProvider, onStoreChanged)
 		})
 	}
-	library.startSaverRoutine(storeChanged, saveAndSwap)
+	library.startSaverRoutine(name, storeChanged, saveAndSwap)
 
 	return propStore
 }
@@ -308,7 +320,7 @@ func (library *ReleaseStoreLibrary) createSavingTextpropStore(provider textprop.
 			return storeTextprop.NewProviderBacked(newProvider, onStoreChanged)
 		})
 	}
-	library.startSaverRoutine(storeChanged, saveAndSwap)
+	library.startSaverRoutine(name, storeChanged, saveAndSwap)
 
 	return propStore
 }
@@ -347,16 +359,27 @@ func (library *ReleaseStoreLibrary) saveAndReloadTextpropData(data []byte, path 
 	return
 }
 
-func (library *ReleaseStoreLibrary) startSaverRoutine(storeChanged <-chan interface{}, saveAndSwap func()) {
+func (library *ReleaseStoreLibrary) startSaverRoutine(name string, storeChanged <-chan interface{}, saveAndSwap func()) {
+	saveNow := make(chan interface{})
+	library.saveChannels[name] = saveNow
+
 	go func() {
 		for true {
-			<-storeChanged
-			for saved := false; !saved; {
-				select {
-				case <-storeChanged:
-				case <-time.After(time.Duration(library.timeoutMSec) * time.Millisecond):
-					saveAndSwap()
-					saved = true
+			select {
+			case <-saveNow:
+			case <-storeChanged:
+				for saved := false; !saved; {
+					doSave := func() {
+						saveAndSwap()
+						saved = true
+					}
+					select {
+					case <-storeChanged:
+					case <-saveNow:
+						doSave()
+					case <-time.After(time.Duration(library.timeoutMSec) * time.Millisecond):
+						doSave()
+					}
 				}
 			}
 		}

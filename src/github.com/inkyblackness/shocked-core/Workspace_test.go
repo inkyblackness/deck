@@ -23,7 +23,7 @@ func (suite *WorkspaceSuite) SetUpTest(c *check.C) {
 }
 
 func (suite *WorkspaceSuite) TestNamesReturnsNamesOfProjects(c *check.C) {
-	ws := NewWorkspace(suite.source, suite.projects)
+	ws := NewWorkspace(suite.source, suite.projects, 0)
 
 	result := ws.ProjectNames()
 	sort.Strings(result)
@@ -32,7 +32,7 @@ func (suite *WorkspaceSuite) TestNamesReturnsNamesOfProjects(c *check.C) {
 }
 
 func (suite *WorkspaceSuite) TestProjectReturnsErrorIfNoReleaseAvailable(c *check.C) {
-	ws := NewWorkspace(suite.source, suite.projects)
+	ws := NewWorkspace(suite.source, suite.projects, 0)
 
 	_, err := ws.Project("not-existing")
 
@@ -40,7 +40,7 @@ func (suite *WorkspaceSuite) TestProjectReturnsErrorIfNoReleaseAvailable(c *chec
 }
 
 func (suite *WorkspaceSuite) TestProjectReturnsInstanceIfReleaseAvailable(c *check.C) {
-	ws := NewWorkspace(suite.source, suite.projects)
+	ws := NewWorkspace(suite.source, suite.projects, 0)
 
 	project, _ := ws.Project("project2")
 
@@ -48,7 +48,7 @@ func (suite *WorkspaceSuite) TestProjectReturnsInstanceIfReleaseAvailable(c *che
 }
 
 func (suite *WorkspaceSuite) TestNewProjectReturnsErrorIfExisting(c *check.C) {
-	ws := NewWorkspace(suite.source, suite.projects)
+	ws := NewWorkspace(suite.source, suite.projects, 0)
 
 	_, err := ws.NewProject("project1")
 
@@ -56,7 +56,7 @@ func (suite *WorkspaceSuite) TestNewProjectReturnsErrorIfExisting(c *check.C) {
 }
 
 func (suite *WorkspaceSuite) TestNewProjectReturnsInstanceIfNotExisting(c *check.C) {
-	ws := NewWorkspace(suite.source, suite.projects)
+	ws := NewWorkspace(suite.source, suite.projects, 0)
 
 	project, _ := ws.NewProject("project3")
 
@@ -64,7 +64,7 @@ func (suite *WorkspaceSuite) TestNewProjectReturnsInstanceIfNotExisting(c *check
 }
 
 func (suite *WorkspaceSuite) TestNewProjectCreatesNewRelease(c *check.C) {
-	ws := NewWorkspace(suite.source, suite.projects)
+	ws := NewWorkspace(suite.source, suite.projects, 0)
 
 	ws.NewProject("project3")
 	rel, _ := suite.projects.Get("project3")

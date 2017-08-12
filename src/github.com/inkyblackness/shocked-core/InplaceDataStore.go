@@ -22,10 +22,10 @@ type InplaceDataStore struct {
 }
 
 // NewInplaceDataStore returns a new instance of an inplace data store.
-func NewInplaceDataStore(source release.Release, outQueue chan<- func()) *InplaceDataStore {
+func NewInplaceDataStore(source release.Release, outQueue chan<- func(), autoSaveTimeoutMSec int) *InplaceDataStore {
 	projects := release.NewStaticReleaseContainer(map[string]release.Release{"(inplace)": source})
 	inplace := &InplaceDataStore{
-		workspace: NewWorkspace(source, projects),
+		workspace: NewWorkspace(source, projects, autoSaveTimeoutMSec),
 		inQueue:   make(chan func(), 100),
 		outQueue:  outQueue}
 	go inplace.processor(inplace.inQueue)
@@ -72,6 +72,17 @@ func (inplace *InplaceDataStore) NewProject(projectID string,
 	onSuccess func(), onFailure model.FailureFunc) {
 	inplace.in(func() {
 		inplace.out(onFailure)
+	})
+}
+
+// SaveProject implements the model.DataStore interface
+func (inplace *InplaceDataStore) SaveProject(projectID string) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			project.Save()
+		}
 	})
 }
 

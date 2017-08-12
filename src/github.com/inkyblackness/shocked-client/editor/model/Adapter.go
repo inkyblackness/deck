@@ -108,6 +108,11 @@ func (adapter *Adapter) RequestProject(projectID string) {
 	}
 }
 
+// SaveProject requests to save all pending changes.
+func (adapter *Adapter) SaveProject() {
+	adapter.store.SaveProject(adapter.ActiveProjectID())
+}
+
 func (adapter *Adapter) onGamePalette(colors [256]model.Color) {
 	adapter.palette.set(&colors)
 }

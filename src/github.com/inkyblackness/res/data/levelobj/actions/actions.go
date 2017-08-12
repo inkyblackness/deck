@@ -288,6 +288,7 @@ var changeStateDetails = interpreters.New().
 
 var unconditionalAction = interpreters.New().
 	With("Type", 0, 1).As(interpreters.EnumValue(map[uint32]string{
+	0:  "Nothing",
 	1:  "Transport Hacker",
 	2:  "Change Health",
 	3:  "Clone/Move Object",

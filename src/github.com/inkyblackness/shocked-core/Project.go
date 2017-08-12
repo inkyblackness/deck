@@ -2,15 +2,11 @@ package core
 
 import (
 	"github.com/inkyblackness/shocked-core/io"
-	"github.com/inkyblackness/shocked-core/release"
 )
 
 // Project represents one editor project, including access to all the resources.
 type Project struct {
-	name   string
-	source release.Release
-	sink   release.Release
-
+	name    string
 	library io.StoreLibrary
 
 	bitmaps     *Bitmaps
@@ -24,9 +20,8 @@ type Project struct {
 	archive     *Archive
 }
 
-// NewProject creates a new project based on given release container.
-func NewProject(name string, source release.Release, sink release.Release) (project *Project, err error) {
-	library := io.NewReleaseStoreLibrary(source, sink, 5000)
+// NewProject creates a new project based on given store library.
+func NewProject(name string, library io.StoreLibrary) (project *Project, err error) {
 	var bitmaps *Bitmaps
 	var texts *Texts
 	var sounds *Sounds
@@ -67,8 +62,6 @@ func NewProject(name string, source release.Release, sink release.Release) (proj
 	if err == nil {
 		project = &Project{
 			name:        name,
-			source:      source,
-			sink:        sink,
 			library:     library,
 			bitmaps:     bitmaps,
 			texts:       texts,
@@ -82,6 +75,11 @@ func NewProject(name string, source release.Release, sink release.Release) (proj
 	}
 
 	return
+}
+
+// Save requests to persist all currently pending changes.
+func (project *Project) Save() {
+	project.library.SaveAll()
 }
 
 // Name returns the name of the project.
@@ -99,7 +97,7 @@ func (project *Project) Texts() *Texts {
 	return project.texts
 }
 
-// Soundss returns the wrapper for sounds.
+// Sounds returns the wrapper for sounds.
 func (project *Project) Sounds() *Sounds {
 	return project.sounds
 }

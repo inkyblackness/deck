@@ -276,7 +276,9 @@ func (app *MainApplication) onMouseScroll(dx float32, dy float32) {
 
 func (app *MainApplication) onKey(key keys.Key, modifier keys.Modifier) {
 	app.keyModifier = modifier
-	if key == keys.KeyCopy {
+	if key == keys.KeySave {
+		app.modelAdapter.SaveProject()
+	} else if key == keys.KeyCopy {
 		app.rootArea.DispatchPositionalEvent(events.NewClipboardEvent(events.ClipboardCopyEventType,
 			app.mouseX, app.mouseY, app.glWindow.Clipboard()))
 	} else if key == keys.KeyPaste {

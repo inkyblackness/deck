@@ -14,6 +14,9 @@ type DataStore interface {
 	// NewProject requests to create a new project with given ID.
 	NewProject(projectID string, onSuccess func(), onFailure FailureFunc)
 
+	// SaveProject requests to persist all pending modifications.
+	SaveProject(projectID string)
+
 	// Font queries a specific font.
 	Font(projectID string, fontID int, onSuccess func(font *Font), onFailure FailureFunc)
 

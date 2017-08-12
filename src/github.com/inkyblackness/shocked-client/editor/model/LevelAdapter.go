@@ -102,11 +102,15 @@ func (adapter *LevelAdapter) properties() (properties *model.LevelProperties) {
 
 // RequestLevelPropertiesChange requests to change the properties of the level.
 func (adapter *LevelAdapter) RequestLevelPropertiesChange(modifier func(properties *model.LevelProperties)) {
-	var properties model.LevelProperties
+	levelID := adapter.ID()
 
-	modifier(&properties)
-	adapter.store.SetLevelProperties(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), adapter.ID(),
-		properties, adapter.onLevelProperties, adapter.context.simpleStoreFailure("SetLevelProperties"))
+	if levelID >= 0 {
+		var properties model.LevelProperties
+
+		modifier(&properties)
+		adapter.store.SetLevelProperties(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
+			properties, adapter.onLevelProperties, adapter.context.simpleStoreFailure("SetLevelProperties"))
+	}
 }
 
 // OnLevelPropertiesChanged registers for updates of the level properties.
@@ -199,8 +203,11 @@ func (adapter *LevelAdapter) OnLevelTexturesChanged(callback func()) {
 
 // RequestLevelTexturesChange requests to change the level textures list
 func (adapter *LevelAdapter) RequestLevelTexturesChange(textureIDs []int) {
-	adapter.store.SetLevelTextures(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), adapter.ID(),
-		textureIDs, adapter.onLevelTextures, adapter.context.simpleStoreFailure("SetLevelTextures"))
+	levelID := adapter.ID()
+	if levelID >= 0 {
+		adapter.store.SetLevelTextures(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
+			textureIDs, adapter.onLevelTextures, adapter.context.simpleStoreFailure("SetLevelTextures"))
+	}
 }
 
 func (adapter *LevelAdapter) onLevelTextureAnimations(animations []model.TextureAnimation) {
@@ -235,8 +242,12 @@ func (adapter *LevelAdapter) TextureAnimationGroup(id int) *LevelTextureAnimatio
 
 // RequestLevelTextureAnimationGroupChange requests the change properties of a texture animation group.
 func (adapter *LevelAdapter) RequestLevelTextureAnimationGroupChange(id int, properties model.TextureAnimation) {
-	adapter.store.SetLevelTextureAnimation(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), adapter.ID(),
-		id, properties, adapter.onLevelTextureAnimations, adapter.context.simpleStoreFailure("SetLevelTextureAnimation"))
+	levelID := adapter.ID()
+
+	if levelID >= 0 {
+		adapter.store.SetLevelTextureAnimation(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
+			id, properties, adapter.onLevelTextureAnimations, adapter.context.simpleStoreFailure("SetLevelTextureAnimation"))
+	}
 }
 
 func (adapter *LevelAdapter) levelObjectsMap() map[int]*LevelObject {
@@ -262,6 +273,13 @@ func (adapter *LevelAdapter) LevelObjects(filter func(*LevelObject) bool) []*Lev
 	return result
 }
 
+// LevelObject returns the object for given index. nil if not known.
+func (adapter *LevelAdapter) LevelObject(index int) *LevelObject {
+	objects := adapter.levelObjectsMap()
+
+	return objects[index]
+}
+
 // OnLevelObjectsChanged registers a callback for updates on the list of level objects.
 func (adapter *LevelAdapter) OnLevelObjectsChanged(callback func()) {
 	adapter.levelObjects.addObserver(callback)
@@ -278,11 +296,12 @@ func (adapter *LevelAdapter) onLevelObjects(objects *model.LevelObjects) {
 
 // RequestNewObject requests to add a new object at the given coordinate.
 func (adapter *LevelAdapter) RequestNewObject(worldX, worldY float32, objectID ObjectID) {
+	levelID := adapter.ID()
 	integerX, integerY := int(worldX), int(worldY)
 	tileX, fineX := integerX>>8, integerX&0xFF
 	tileY, fineY := integerY>>8, integerY&0xFF
 
-	if (tileX >= 0) && (tileX < 64) && (tileY >= 0) && (tileY < 64) {
+	if (tileX >= 0) && (tileX < 64) && (tileY >= 0) && (tileY < 64) && (levelID >= 0) {
 		tile := adapter.tileMap.Tile(TileCoordinateOf(tileX, tileY))
 		z := int(*tile.Properties().FloorHeight) // TODO: take level.heightShift into account
 
@@ -299,7 +318,7 @@ func (adapter *LevelAdapter) RequestNewObject(worldX, worldY float32, objectID O
 
 			Hitpoints: adapter.objectsAdapter.Object(objectID).CommonHitpoints()}
 
-		adapter.store.AddLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), adapter.ID(),
+		adapter.store.AddLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
 			template, adapter.onLevelObjectAdded,
 			adapter.context.simpleStoreFailure("AddLevelObject"))
 	}
@@ -315,64 +334,73 @@ func (adapter *LevelAdapter) onLevelObjectAdded(object model.LevelObject) {
 // RequestRemoveObjects requests to remove all identified objects.
 func (adapter *LevelAdapter) RequestRemoveObjects(objectIndices []int) {
 	levelID := adapter.ID()
-	objects := adapter.levelObjectsMap()
-	successHandler := func(objectIndex int) func() {
-		return func() {
-			delete(objects, objectIndex)
-			adapter.levelObjects.notifyObservers()
-		}
-	}
 
-	for _, objectIndex := range objectIndices {
-		adapter.store.RemoveLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
-			objectIndex, successHandler(objectIndex),
-			adapter.context.simpleStoreFailure(fmt.Sprintf("RemoveLevelObject %v", objectIndex)))
+	if levelID >= 0 {
+		objects := adapter.levelObjectsMap()
+		successHandler := func(objectIndex int) func() {
+			return func() {
+				delete(objects, objectIndex)
+				adapter.levelObjects.notifyObservers()
+			}
+		}
+
+		for _, objectIndex := range objectIndices {
+			adapter.store.RemoveLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
+				objectIndex, successHandler(objectIndex),
+				adapter.context.simpleStoreFailure(fmt.Sprintf("RemoveLevelObject %v", objectIndex)))
+		}
 	}
 }
 
 // RequestObjectPropertiesChange requests to modify identified objects.
 func (adapter *LevelAdapter) RequestObjectPropertiesChange(objectIndices []int, properties *model.LevelObjectProperties) {
 	levelID := adapter.ID()
-	objects := adapter.levelObjectsMap()
-	successHandler := func(objectIndex int) func(newProperties *model.LevelObjectProperties) {
-		return func(newProperties *model.LevelObjectProperties) {
-			objects[objectIndex].onPropertiesChanged(newProperties)
-			adapter.levelObjects.notifyObservers()
-		}
-	}
 
-	for _, objectIndex := range objectIndices {
-		adapter.store.SetLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
-			objectIndex, properties, successHandler(objectIndex),
-			adapter.context.simpleStoreFailure(fmt.Sprintf("SetLevelObject %v", objectIndex)))
+	if levelID >= 0 {
+		objects := adapter.levelObjectsMap()
+		successHandler := func(objectIndex int) func(newProperties *model.LevelObjectProperties) {
+			return func(newProperties *model.LevelObjectProperties) {
+				objects[objectIndex].onPropertiesChanged(newProperties)
+				adapter.levelObjects.notifyObservers()
+			}
+		}
+
+		for _, objectIndex := range objectIndices {
+			adapter.store.SetLevelObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
+				objectIndex, properties, successHandler(objectIndex),
+				adapter.context.simpleStoreFailure(fmt.Sprintf("SetLevelObject %v", objectIndex)))
+		}
 	}
 }
 
 // RequestTilePropertyChange requests the tiles at given coordinates to set provided properties.
 func (adapter *LevelAdapter) RequestTilePropertyChange(coordinates []TileCoordinate, properties *model.TileProperties) {
-	additionalQueries := make(map[TileCoordinate]bool)
 	storeLevelID := adapter.ID()
-	tileUpdateHandler := func(coord TileCoordinate) func(model.TileProperties) {
-		return func(newProperties model.TileProperties) {
-			adapter.onTilePropertiesUpdated(coord, &newProperties)
+
+	if storeLevelID >= 0 {
+		additionalQueries := make(map[TileCoordinate]bool)
+		tileUpdateHandler := func(coord TileCoordinate) func(model.TileProperties) {
+			return func(newProperties model.TileProperties) {
+				adapter.onTilePropertiesUpdated(coord, &newProperties)
+			}
 		}
-	}
-	for _, coord := range coordinates {
-		x, y := coord.XY()
-		additionalQueries[TileCoordinateOf(x, y)] = true
-		additionalQueries[TileCoordinateOf(x-1, y)] = true
-		additionalQueries[TileCoordinateOf(x+1, y)] = true
-		additionalQueries[TileCoordinateOf(x, y-1)] = true
-		additionalQueries[TileCoordinateOf(x, y+1)] = true
-		adapter.store.SetTile(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), storeLevelID,
-			x, y, *properties,
-			func(model.TileProperties) {}, adapter.context.simpleStoreFailure("SetTile"))
-	}
-	for coord := range additionalQueries {
-		x, y := coord.XY()
-		if (x >= 0) && (x < 64) && (y >= 0) && (y < 64) {
-			adapter.store.Tile(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), storeLevelID,
-				x, y, tileUpdateHandler(coord), adapter.context.simpleStoreFailure("Tile"))
+		for _, coord := range coordinates {
+			x, y := coord.XY()
+			additionalQueries[TileCoordinateOf(x, y)] = true
+			additionalQueries[TileCoordinateOf(x-1, y)] = true
+			additionalQueries[TileCoordinateOf(x+1, y)] = true
+			additionalQueries[TileCoordinateOf(x, y-1)] = true
+			additionalQueries[TileCoordinateOf(x, y+1)] = true
+			adapter.store.SetTile(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), storeLevelID,
+				x, y, *properties,
+				func(model.TileProperties) {}, adapter.context.simpleStoreFailure("SetTile"))
+		}
+		for coord := range additionalQueries {
+			x, y := coord.XY()
+			if (x >= 0) && (x < 64) && (y >= 0) && (y < 64) {
+				adapter.store.Tile(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), storeLevelID,
+					x, y, tileUpdateHandler(coord), adapter.context.simpleStoreFailure("Tile"))
+			}
 		}
 	}
 }
@@ -407,12 +435,16 @@ func (adapter *LevelAdapter) ObjectSurveillanceInfo(index int) (source int, deat
 
 // RequestObjectSurveillance requests to modify the surveillance information of identified object.
 func (adapter *LevelAdapter) RequestObjectSurveillance(surveillanceIndex int, sourceObject *int, deathwatchObject *int) {
-	var data model.SurveillanceObject
+	levelID := adapter.ID()
 
-	data.SourceIndex = sourceObject
-	data.DeathwatchIndex = deathwatchObject
+	if levelID >= 0 {
+		var data model.SurveillanceObject
 
-	adapter.store.SetLevelSurveillanceObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), adapter.ID(),
-		surveillanceIndex, data,
-		adapter.onLevelSurveillance, adapter.context.simpleStoreFailure("SetLevelSurveillanceObject"))
+		data.SourceIndex = sourceObject
+		data.DeathwatchIndex = deathwatchObject
+
+		adapter.store.SetLevelSurveillanceObject(adapter.context.ActiveProjectID(), adapter.context.ActiveArchiveID(), levelID,
+			surveillanceIndex, data,
+			adapter.onLevelSurveillance, adapter.context.simpleStoreFailure("SetLevelSurveillanceObject"))
+	}
 }

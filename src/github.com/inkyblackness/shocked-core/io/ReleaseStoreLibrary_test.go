@@ -149,6 +149,24 @@ func (suite *ReleaseStoreLibrarySuite) TestModifyingChunkSourceSavesNewSink(c *c
 	c.Check(suite.sink.HasResource("source.res"), check.Equals, true)
 }
 
+func (suite *ReleaseStoreLibrarySuite) TestSaveAllSavesModifiedSink(c *check.C) {
+	suite.library = NewReleaseStoreLibrary(suite.source, suite.sink, 1000)
+	suite.createChunkResource(suite.source, "source.res", func(consumer chunk.Consumer) {
+		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	})
+	store, err := suite.library.ChunkStore("source.res")
+
+	c.Assert(err, check.IsNil)
+	c.Assert(store, check.NotNil)
+
+	store.Del(res.ResourceID(1))
+
+	suite.library.SaveAll()
+	time.Sleep(100 * time.Millisecond)
+
+	c.Check(suite.sink.HasResource("source.res"), check.Equals, true)
+}
+
 func (suite *ReleaseStoreLibrarySuite) TestChunkStoreReturnsSameInstances(c *check.C) {
 	suite.createChunkResource(suite.source, "source.res", func(consumer chunk.Consumer) {
 		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))

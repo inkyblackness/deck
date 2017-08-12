@@ -67,7 +67,7 @@ var wirePuzzleData = interpreters.New().
 	With("TargetObjectIndex", 0, 4).As(interpreters.ObjectIndex()).
 	With("Layout", 4, 1).As(interpreters.Bitfield(map[uint32]string{0x0F: "Wires", 0xF0: "Connectors"})).
 	With("TargetPowerLevel", 5, 1).
-	With("CurrentPowerLevel", 6, 1).
+	With("WireProperties", 6, 1).As(interpreters.Bitfield(map[uint32]string{0x01: "Colored", 0xF0: "Solved"})).
 	With("TargetState", 8, 4).As(wirePuzzleStateDescription).
 	With("CurrentState", 12, 4).As(wirePuzzleStateDescription)
 

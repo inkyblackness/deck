@@ -8,6 +8,9 @@ import (
 
 // StoreLibrary wraps the methods to contain stores for various data
 type StoreLibrary interface {
+	// SaveAll requests to persist all pending modifications.
+	SaveAll()
+
 	// ChunkStore returns a chunk store for given name.
 	ChunkStore(name string) (chunk.Store, error)
 

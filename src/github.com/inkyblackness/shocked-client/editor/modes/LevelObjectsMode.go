@@ -9,6 +9,7 @@ import (
 	mgl "github.com/go-gl/mathgl/mgl32"
 
 	"github.com/inkyblackness/res"
+	"github.com/inkyblackness/res/data"
 	"github.com/inkyblackness/res/data/interpreters"
 	"github.com/inkyblackness/res/data/levelobj"
 
@@ -103,6 +104,9 @@ type LevelObjectsMode struct {
 	selectedObjectsPropertiesMainArea   *ui.Area
 	selectedObjectsPropertiesHeaderArea *ui.Area
 	selectedObjectsPropertiesPanel      *propertyPanel
+
+	blockPuzzleArea  *ui.Area
+	blockPuzzleCells [][]*controls.Label
 }
 
 // NewLevelObjectsMode returns a new instance.
@@ -302,6 +306,52 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 		initialItem := mode.selectedObjectsBasePropertiesItem
 		mode.selectedObjectsPropertiesBox.SetSelectedItem(initialItem)
 		mode.onSelectedPropertiesDisplayChanged(initialItem)
+	}
+	{
+		cellSize := float32(25)
+		cellsPerSide := 9
+		areaSize := cellSize * float32(cellsPerSide)
+		areaLeft := ui.NewOffsetAnchor(mode.propertiesPanelRight, 5)
+		areaBottom := ui.NewOffsetAnchor(mode.area.Bottom(), 0)
+		areaTop := ui.NewOffsetAnchor(areaBottom, -areaSize)
+		{
+
+			builder := ui.NewAreaBuilder()
+			builder.SetParent(mode.area)
+			builder.SetLeft(areaLeft)
+			builder.SetTop(areaTop)
+			builder.SetRight(ui.NewOffsetAnchor(areaLeft, areaSize))
+			builder.SetBottom(areaBottom)
+			builder.SetVisible(false)
+			builder.OnRender(func(area *ui.Area) {
+				context.ForGraphics().RectangleRenderer().Fill(
+					area.Left().Value(), area.Top().Value(), area.Right().Value(), area.Bottom().Value(),
+					graphics.RGBA(0.5, 0.0, 0.5, 0.7))
+			})
+			builder.OnEvent(events.MouseMoveEventType, ui.SilentConsumer)
+			builder.OnEvent(events.MouseButtonUpEventType, ui.SilentConsumer)
+			builder.OnEvent(events.MouseButtonDownEventType, ui.SilentConsumer)
+			builder.OnEvent(events.MouseButtonClickedEventType, ui.SilentConsumer)
+			builder.OnEvent(events.MouseScrollEventType, mode.onBlockPuzzleScrolled)
+			mode.blockPuzzleArea = builder.Build()
+		}
+
+		mode.blockPuzzleCells = make([][]*controls.Label, cellsPerSide)
+		for cellRow := 0; cellRow < cellsPerSide; cellRow++ {
+			mode.blockPuzzleCells[cellRow] = make([]*controls.Label, cellsPerSide)
+			for cellColumn := 0; cellColumn < cellsPerSide; cellColumn++ {
+				labelBuilder := mode.context.ControlFactory().ForLabel()
+				cellTop := ui.NewOffsetAnchor(areaTop, cellSize*float32(cellRow))
+				cellLeft := ui.NewOffsetAnchor(areaLeft, cellSize*float32(cellColumn))
+				labelBuilder.SetParent(mode.blockPuzzleArea)
+				labelBuilder.SetTop(cellTop)
+				labelBuilder.SetLeft(cellLeft)
+				labelBuilder.SetRight(ui.NewOffsetAnchor(cellLeft, cellSize))
+				labelBuilder.SetBottom(ui.NewOffsetAnchor(cellTop, cellSize))
+				cell := labelBuilder.Build()
+				mode.blockPuzzleCells[cellRow][cellColumn] = cell
+			}
+		}
 	}
 	{
 		builder := ui.NewAreaBuilder()
@@ -646,6 +696,9 @@ func (mode *LevelObjectsMode) recreateLevelObjectClassProperties() {
 		func(objID res.ObjectID, object *model.LevelObject) *interpreters.Instance {
 			return interpreterFactory(objID, object.ClassData())
 		})
+	mode.updateBlockPuzzleArea(func(objID res.ObjectID, object *model.LevelObject) *interpreters.Instance {
+		return interpreterFactory(objID, object.ClassData())
+	})
 }
 
 func (mode *LevelObjectsMode) recreateLevelObjectProperties(panel *propertyPanel,
@@ -705,6 +758,113 @@ func (mode *LevelObjectsMode) recreateLevelObjectProperties(panel *propertyPanel
 			}
 		}
 	}
+}
+
+func (mode *LevelObjectsMode) updateBlockPuzzleArea(interpreterFactory func(res.ObjectID, *model.LevelObject) *interpreters.Instance) {
+	isBlockPuzzle := false
+
+	for _, row := range mode.blockPuzzleCells {
+		for _, cell := range row {
+			cell.SetText("")
+		}
+	}
+
+	if len(mode.selectedObjects) == 1 {
+		singleObject := mode.selectedObjects[0]
+		singleObjID := singleObject.ID()
+		singleResID := res.MakeObjectID(res.ObjectClass(singleObjID.Class()), res.ObjectSubclass(singleObjID.Subclass()), res.ObjectType(singleObjID.Type()))
+		singleInterpreter := interpreterFactory(singleResID, singleObject)
+		isBlockPuzzle = singleInterpreter.Refined("Puzzle").Get("Type") == 0x10
+
+		if isBlockPuzzle {
+			blockInfo := singleInterpreter.Refined("Puzzle").Refined("Block")
+			blockLayout := blockInfo.Get("Layout")
+			blockPuzzleDataIndex := blockInfo.Get("StateStoreObjectIndex")
+			dataObject := mode.levelAdapter.LevelObject(int(blockPuzzleDataIndex))
+
+			if (dataObject != nil) && (dataObject.ID() == model.MakeObjectID(12, 0, 1)) {
+				raw := dataObject.ClassData()[6 : 6+16]
+				blockWidth := int((blockLayout >> 20) & 7)
+				blockHeight := int((blockLayout >> 24) & 7)
+				state := data.NewBlockPuzzleState(raw, blockHeight, blockWidth)
+				startRow := 1 + (7-blockHeight)/2
+				startColumn := 1 + (7-blockWidth)/2
+				placeConnector := func(side, offset int, text string) {
+					xOffsets := []int{offset, offset, -1, blockWidth}
+					yOffsets := []int{-1, blockHeight, offset, offset}
+					y := startRow + yOffsets[side]
+					x := startColumn + xOffsets[side]
+
+					if (x >= 0) && (x < 9) && (y >= 0) && (y < 9) {
+						mode.blockPuzzleCells[y][x].SetText(text)
+					}
+				}
+				stateMapping := []string{".", "X", "+", "(+)", "F", "(F)", "H", "(H)"}
+
+				for row := 0; row < blockHeight; row++ {
+					for col := 0; col < blockWidth; col++ {
+						value := state.CellValue(row, col)
+						mode.blockPuzzleCells[startRow+row][startColumn+col].SetText(stateMapping[value])
+					}
+				}
+				placeConnector(int((blockLayout>>7)&3), int((blockLayout>>4)&7), "S")
+				placeConnector(int((blockLayout>>15)&3), int((blockLayout>>12)&7), "D")
+
+			} else {
+				isBlockPuzzle = false
+			}
+		}
+	}
+	mode.blockPuzzleArea.SetVisible(isBlockPuzzle)
+}
+
+func (mode *LevelObjectsMode) onBlockPuzzleScrolled(area *ui.Area, event events.Event) bool {
+	interpreterFactory := mode.classInterpreterFactory()
+	mouseEvent := event.(*events.MouseScrollEvent)
+
+	mouseX, mouseY := mouseEvent.Position()
+	_, scrollY := mouseEvent.Deltas()
+	areaTop := area.Top().Value()
+	areaLeft := area.Left().Value()
+	cellClickX := int((mouseX - areaLeft) / (area.Right().Value() - areaLeft) * float32(9))
+	cellClickY := int((mouseY - areaTop) / (area.Bottom().Value() - areaTop) * float32(9))
+	scrollOffset := 1
+
+	if scrollY < 0 {
+		scrollOffset = -1
+	}
+
+	singleObject := mode.selectedObjects[0]
+	singleObjID := singleObject.ID()
+	singleResID := res.MakeObjectID(res.ObjectClass(singleObjID.Class()), res.ObjectSubclass(singleObjID.Subclass()), res.ObjectType(singleObjID.Type()))
+	singleInterpreter := interpreterFactory(singleResID, singleObject.ClassData())
+	isBlockPuzzle := singleInterpreter.Refined("Puzzle").Get("Type") == 0x10
+
+	if isBlockPuzzle {
+		blockInfo := singleInterpreter.Refined("Puzzle").Refined("Block")
+		blockLayout := blockInfo.Get("Layout")
+		blockPuzzleDataIndex := blockInfo.Get("StateStoreObjectIndex")
+		dataObject := mode.levelAdapter.LevelObject(int(blockPuzzleDataIndex))
+
+		if (dataObject != nil) && (dataObject.ID() == model.MakeObjectID(12, 0, 1)) {
+			blockWidth := int((blockLayout >> 20) & 7)
+			blockHeight := int((blockLayout >> 24) & 7)
+			startRow := 1 + (7-blockHeight)/2
+			startColumn := 1 + (7-blockWidth)/2
+
+			clickRow := cellClickY - startRow
+			clickCol := cellClickX - startColumn
+			if (clickRow >= 0) && (clickRow < blockHeight) && (clickCol >= 0) && (clickCol < blockWidth) {
+				mode.updateObjectClassPropertiesRaw(dataObject, func(classData []byte) {
+					state := data.NewBlockPuzzleState(classData[6:6+16], blockHeight, blockWidth)
+					oldValue := state.CellValue(clickRow, clickCol)
+					state.SetCellValue(clickRow, clickCol, (8+oldValue+scrollOffset)%8)
+				})
+			}
+		}
+	}
+
+	return true
 }
 
 func (mode *LevelObjectsMode) classInterpreterFactory() interpreterFactoryFunc {
@@ -786,6 +946,9 @@ func (mode *LevelObjectsMode) createPropertyControls(panel *propertyPanel, key s
 			return uint32(util.ToBinaryCodedDecimal(uint16(parameter)))
 		})
 		slider.SetRange(0, 999)
+		slider.SetValueFormatter(func(value int64) string {
+			return fmt.Sprintf("%03d", value)
+		})
 		if unifiedValue != math.MinInt64 {
 			slider.SetValue(int64(util.FromBinaryCodedDecimal(uint16(unifiedValue))))
 		}
@@ -894,12 +1057,18 @@ func (mode *LevelObjectsMode) updateSelectedObjectsClassProperties(key string, v
 
 func (mode *LevelObjectsMode) updateSelectedObjectsClassPropertiesRaw(modifier func(objectID model.ObjectID, classData []byte)) {
 	for _, object := range mode.selectedObjects {
-		var properties dataModel.LevelObjectProperties
-
-		properties.ClassData = object.ClassData()
-		modifier(object.ID(), properties.ClassData)
-		mode.levelAdapter.RequestObjectPropertiesChange([]int{object.Index()}, &properties)
+		mode.updateObjectClassPropertiesRaw(object, func(classData []byte) {
+			modifier(object.ID(), classData)
+		})
 	}
+}
+
+func (mode *LevelObjectsMode) updateObjectClassPropertiesRaw(object *model.LevelObject, modifier func(classData []byte)) {
+	var properties dataModel.LevelObjectProperties
+
+	properties.ClassData = object.ClassData()
+	modifier(properties.ClassData)
+	mode.levelAdapter.RequestObjectPropertiesChange([]int{object.Index()}, &properties)
 }
 
 func (mode *LevelObjectsMode) updateSelectedObjectsExtraProperties(key string, value uint32, update propertyUpdateFunction) {
