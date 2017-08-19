@@ -5,10 +5,18 @@ import (
 	"image/color"
 )
 
+// MemoryBitmap is a bitmap held in memory.
 type MemoryBitmap struct {
 	header  BitmapHeader
 	data    []byte
 	palette color.Palette
+}
+
+var nullBitmap MemoryBitmap
+
+// NullBitmap returns a bitmap of zero size without a palette.
+func NullBitmap() Bitmap {
+	return &nullBitmap
 }
 
 // NewMemoryBitmap returns a MemoryBitmap instance based on the provided data.

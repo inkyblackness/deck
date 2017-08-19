@@ -17,7 +17,7 @@ import (
 )
 
 var bitmapCount = map[dataModel.ResourceType]int{
-	dataModel.ResourceTypeMfdDataImages: 40}
+	dataModel.ResourceTypeMfdDataImages: 64}
 
 // GameBitmapsMode is a mode for arbitrary game bitmaps.
 type GameBitmapsMode struct {

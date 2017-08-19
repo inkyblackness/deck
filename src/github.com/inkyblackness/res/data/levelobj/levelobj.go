@@ -14,6 +14,14 @@ var extraIced = interpreters.New().
 	With("ICE-presence", 1, 1).
 	With("ICE-level", 3, 1)
 
+var extraIcedPanels = interpreters.New().
+	With("PanelName", 0, 1).
+	With("ICE-presence", 1, 1).
+	With("ICE-level", 3, 1)
+
+var extraPanels = interpreters.New().
+	With("PanelName", 0, 1)
+
 func init() {
 
 	projectiles := newInterpreterEntry(baseProjectile)
@@ -48,9 +56,10 @@ func init() {
 	cyberspaceEntries.set(14, critters)
 
 	realWorldExtras = newInterpreterEntry(interpreters.New())
+	realWorldExtras.set(9, newInterpreterLeaf(extraPanels))
 	cyberspaceExtras = newInterpreterEntry(interpreters.New())
 	cyberspaceExtras.set(6, newInterpreterLeaf(extraIced))
 	cyberspaceExtras.set(7, newInterpreterLeaf(extraIced))
 	cyberspaceExtras.set(8, newInterpreterLeaf(extraIced))
-	cyberspaceExtras.set(9, newInterpreterLeaf(extraIced))
+	cyberspaceExtras.set(9, newInterpreterLeaf(extraIcedPanels))
 }

@@ -57,6 +57,24 @@ func NewElectronicMessages(library io.StoreLibrary) (messages *ElectronicMessage
 	return
 }
 
+// Remove tries to remove the message.
+func (messages *ElectronicMessages) Remove(messageType model.ElectronicMessageType, id int) (err error) {
+	msgRange, properType := electronicMessageBases[messageType]
+	if properType && msgRange.isRelativeIDValid(id) {
+		textChunkID := res.ResourceID(msgRange.start + id)
+		audioChunkID := res.ResourceID(msgRange.start + id + 300)
+
+		for languageIndex := 0; languageIndex < model.LanguageCount; languageIndex++ {
+			messages.cybstrng[languageIndex].Del(textChunkID)
+			messages.citalog[languageIndex].Del(audioChunkID)
+		}
+	} else {
+		err = fmt.Errorf("Wrong message type/range: %v", messageType)
+	}
+
+	return
+}
+
 // Message tries to retrieve the message data for given identification.
 func (messages *ElectronicMessages) Message(messageType model.ElectronicMessageType, id int) (message model.ElectronicMessage, err error) {
 	msgRange, properType := electronicMessageBases[messageType]

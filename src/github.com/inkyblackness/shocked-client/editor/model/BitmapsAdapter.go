@@ -37,7 +37,7 @@ func (adapter *BitmapsAdapter) refresh() {
 func (adapter *BitmapsAdapter) RequestBitmapChange(key model.ResourceKey, newBitmap *model.RawBitmap) {
 	adapter.store.SetBitmap(adapter.context.ActiveProjectID(), key, newBitmap,
 		func(resultKey model.ResourceKey, bmp *model.RawBitmap) {
-			adapter.bitmaps.setRawBitmap(key.ToInt(), bmp)
+			adapter.bitmaps.setRawBitmap(resultKey.ToInt(), bmp)
 		},
 		func() {
 			adapter.context.simpleStoreFailure(fmt.Sprintf("SetBitmap[%v]", key))()

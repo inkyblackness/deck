@@ -44,8 +44,10 @@ func (bitmaps *Bitmaps) Image(key model.ResourceKey) (bmp image.Bitmap, err erro
 		err = fmt.Errorf("Unsupported resource key: %v", key)
 	}
 
-	if err == nil {
+	if (err == nil) && (len(blockData) > 0) {
 		bmp, err = image.Read(bytes.NewReader(blockData))
+	} else {
+		bmp = image.NullBitmap()
 	}
 
 	return
@@ -55,14 +57,16 @@ func (bitmaps *Bitmaps) Image(key model.ResourceKey) (bmp image.Bitmap, err erro
 func (bitmaps *Bitmaps) SetImage(key model.ResourceKey, bmp image.Bitmap) (resultKey model.ResourceKey, err error) {
 	if (key.Type == model.ResourceTypeMfdDataImages) && key.HasValidLanguage() {
 		holder := bitmaps.mfdArt[key.Language.ToIndex()].Get(res.ResourceID(key.Type))
-		if key.Index < holder.BlockCount() {
-			writer := bytes.NewBuffer(nil)
-			image.Write(writer, bmp, image.CompressedBitmap, true, 0)
-			holder.SetBlockData(key.Index, writer.Bytes())
-			resultKey = key
-		} else {
-			err = fmt.Errorf("Adding images not supported")
+		insertIndex := key.Index
+		available := holder.BlockCount()
+
+		if insertIndex >= available {
+			insertIndex = available
 		}
+		writer := bytes.NewBuffer(nil)
+		image.Write(writer, bmp, image.CompressedBitmap, true, 0)
+		holder.SetBlockData(insertIndex, writer.Bytes())
+		resultKey = model.MakeLocalizedResourceKey(key.Type, key.Language, insertIndex)
 	} else {
 		err = fmt.Errorf("Unsupported resource key %v", key)
 	}

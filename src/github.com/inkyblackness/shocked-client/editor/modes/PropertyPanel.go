@@ -103,7 +103,8 @@ func (panel *propertyPanel) NewSimplifier(key string, unifiedValue int64) *inter
 		slider.SetValueFormatter(func(value int64) string { return formatter(value) })
 		slider.SetRange(minValue, maxValue)
 		if unifiedValue != math.MinInt64 {
-			slider.SetValue(unifiedValue)
+			castedValue := int32(unifiedValue)
+			slider.SetValue(int64(castedValue))
 		}
 	})
 

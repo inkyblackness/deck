@@ -27,6 +27,9 @@ const (
 	// ResourceTypePaperTexts refers to the texts written on lose papers.
 	ResourceTypePaperTexts = ResourceType(0x003C)
 
+	// ResourceTypePanelNames are specialized panel descriptions.
+	ResourceTypePanelNames = ResourceType(0x0869)
+
 	// ResourceTypeTrapAudio refers to the audio played along trap messages.
 	ResourceTypeTrapAudio = ResourceType(0x0C1C)
 )

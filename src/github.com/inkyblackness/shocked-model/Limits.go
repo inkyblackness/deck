@@ -11,6 +11,7 @@ const (
 	MaxAccessCardNames  = 32 * 2
 	MaxDataletMessages  = 256
 	MaxPaperTexts       = 16
+	MaxPanelNames       = 256
 )
 
 var maxEntriesByType = map[ResourceType]int{
@@ -22,7 +23,8 @@ var maxEntriesByType = map[ResourceType]int{
 	ResourceTypeInfoNodeMessages: MaxInfoNodeMessages,
 	ResourceTypeAccessCardNames:  MaxAccessCardNames,
 	ResourceTypeDataletMessages:  MaxDataletMessages,
-	ResourceTypePaperTexts:       MaxPaperTexts}
+	ResourceTypePaperTexts:       MaxPaperTexts,
+	ResourceTypePanelNames:       MaxPanelNames}
 
 // MaxEntriesFor returns the maximum count of resources of a given type.
 func MaxEntriesFor(resourceType ResourceType) int {

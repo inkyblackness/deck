@@ -427,6 +427,26 @@ func (inplace *InplaceDataStore) SetElectronicMessageAudio(projectID string,
 	})
 }
 
+// RemoveElectronicMessage implements the model.DataStore interface.
+func (inplace *InplaceDataStore) RemoveElectronicMessage(projectID string, messageType model.ElectronicMessageType, id int,
+	onSuccess func(), onFailure model.FailureFunc) {
+	inplace.in(func() {
+		project, err := inplace.workspace.Project(projectID)
+
+		if err == nil {
+			eMessages := project.ElectronicMessages()
+			err = eMessages.Remove(messageType, id)
+
+			if err == nil {
+				inplace.out(func() { onSuccess() })
+			}
+		}
+		if err != nil {
+			inplace.out(onFailure)
+		}
+	})
+}
+
 // Palette implements the model.DataStore interface
 func (inplace *InplaceDataStore) Palette(projectID string, paletteID string,
 	onSuccess func(colors [256]model.Color), onFailure model.FailureFunc) {

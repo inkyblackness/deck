@@ -29,7 +29,7 @@ import (
 
 const (
 	// Version contains the current version number
-	Version = "0.1.0"
+	Version = "1.0.0"
 	// Name is the name of the application
 	Name = "InkyBlackness Chunkie"
 	// Title contains a combined string of name and version
@@ -47,8 +47,8 @@ Usage:
 
 Options:
   <resource-file>        The resource file to work on.
-  <chunk-id>             The chunk identifier. Defaults to decimal, use "0x" as prefix for hexadecimal.
-  --block=<block-id>     The block identifier. Defaults to decimal, use "0x" as prefix for hexadecimal. [default: 0]
+  <chunk-id>             The chunk identifier. Defaults to decimal, use "0x" as prefix for hexadecimal. "all" for all.
+  --block=<block-id>     The block identifier. Defaults to decimal, use "0x" as prefix for hexadecimal. "all" for all. [default: 0]
   --raw                  With this flag, the chunk will be exported without conversion to a common file format.
   --compressed           With this flag, imported bitmaps will be compressed.
   --force-transparency   With this flag, imported bitmaps will be marked to have transparency. [default: false]
@@ -72,8 +72,16 @@ func main() {
 		inFile, _ := os.Open(resourceFile)
 		defer inFile.Close()
 		provider, _ := dos.NewChunkProvider(inFile)
-		chunkID, _ := strconv.ParseUint(arguments["<chunk-id>"].(string), 0, 16)
-		blockID, _ := strconv.ParseUint(arguments["--block"].(string), 0, 16)
+		chunkText := arguments["<chunk-id>"].(string)
+		chunkSelection := int64(-1)
+		if chunkText != "all" {
+			chunkSelection, _ = strconv.ParseInt(chunkText, 0, 16)
+		}
+		blockText := arguments["--block"].(string)
+		blockSelection := int64(-1)
+		if blockText != "all" {
+			blockSelection, _ = strconv.ParseInt(blockText, 0, 16)
+		}
 		framesPerSecond, _ := strconv.ParseFloat(arguments["--fps"].(string), 32)
 		raw := arguments["--raw"].(bool)
 		palArgument := arguments["--pal"]
@@ -94,9 +102,29 @@ func main() {
 		}
 		os.MkdirAll(folder, os.FileMode(0755))
 
-		holder := provider.Provide(res.ResourceID(chunkID))
-		outFileName := fmt.Sprintf("%04X_%03d", int(chunkID), blockID)
-		exportFile(provider, holder, uint16(blockID), path.Join(folder, outFileName), raw, palette, float32(framesPerSecond))
+		processBlock := func(chunkID res.ResourceID, holder chunk.BlockHolder, blockID uint16) {
+			outFileName := fmt.Sprintf("%04X_%03d", int(chunkID), blockID)
+			exportFile(provider, holder, blockID, path.Join(folder, outFileName), raw, palette, float32(framesPerSecond))
+		}
+		processChunk := func(chunkID res.ResourceID) {
+			holder := provider.Provide(chunkID)
+
+			if blockSelection == -1 {
+				for blockID := uint16(0); blockID < holder.BlockCount(); blockID++ {
+					processBlock(chunkID, holder, blockID)
+				}
+			} else {
+				processBlock(chunkID, holder, uint16(blockSelection))
+			}
+		}
+		if chunkSelection == -1 {
+			for _, chunkID := range provider.IDs() {
+				processChunk(chunkID)
+			}
+		} else {
+			processChunk(res.ResourceID(chunkSelection))
+		}
+
 	} else if arguments["import"].(bool) {
 		resourceFile := arguments["<resource-file>"].(string)
 		chunkID, _ := strconv.ParseUint(arguments["<chunk-id>"].(string), 0, 16)

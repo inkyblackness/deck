@@ -67,6 +67,9 @@ type DataStore interface {
 	// SetElectronicMessageAudio requests to update the audio part of a specific electronic message.
 	SetElectronicMessageAudio(projectID string, messageType ElectronicMessageType, id int, language ResourceLanguage, data audio.SoundData,
 		onSuccess func(), onFailure FailureFunc)
+	// RemoveElectronicMessage requests to remove the identified message from the resources.
+	RemoveElectronicMessage(projectID string, messageType ElectronicMessageType, id int,
+		onSuccess func(), onFailure FailureFunc)
 
 	// Palette queries a palette.
 	Palette(projectID string, paletteID string, onSuccess func(colors [256]Color), onFailure FailureFunc)

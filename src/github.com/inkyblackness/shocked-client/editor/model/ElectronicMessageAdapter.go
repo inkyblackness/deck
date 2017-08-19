@@ -104,6 +104,15 @@ func (adapter *ElectronicMessageAdapter) RequestAudioChange(language model.Resou
 	}
 }
 
+// RequestRemove requests to remove the current message.
+func (adapter *ElectronicMessageAdapter) RequestRemove() {
+	if adapter.id >= 0 {
+		adapter.store.RemoveElectronicMessage(adapter.context.ActiveProjectID(), adapter.messageType, adapter.id,
+			func() { adapter.RequestMessage(adapter.messageType, adapter.id) },
+			adapter.context.simpleStoreFailure("RemoveElectronicMessage"))
+	}
+}
+
 func (adapter *ElectronicMessageAdapter) onMessageData(messageType model.ElectronicMessageType, id int, message model.ElectronicMessage) {
 	if (adapter.messageType == messageType) && (adapter.id == id) {
 		adapter.data.set(&message)

@@ -38,6 +38,9 @@ type ElectronicMessagesMode struct {
 	selectedMessageIDSlider *controls.Slider
 	selectedMessageID       int
 
+	removeLabel  *controls.Label
+	removeButton *controls.TextButton
+
 	propertiesHeader *controls.Label
 
 	languageLabel *controls.Label
@@ -135,6 +138,9 @@ func NewElectronicMessagesMode(context Context, parent *ui.Area) *ElectronicMess
 		{
 			mode.selectedMessageIDLabel, mode.selectedMessageIDSlider = panelBuilder.addSliderProperty("Selected Message ID",
 				func(newValue int64) { mode.onMessageSelected(int(newValue)) })
+		}
+		{
+			mode.removeLabel, mode.removeButton = panelBuilder.addTextButton("Remove Selected", "Remove", mode.removeMessage)
 		}
 		mode.propertiesHeader = panelBuilder.addTitle("Properties")
 		{
@@ -365,6 +371,10 @@ func (mode *ElectronicMessagesMode) onMessageTypeChanged(boxItem controls.ComboB
 func (mode *ElectronicMessagesMode) onMessageSelected(id int) {
 	mode.selectedMessageID = id
 	mode.messageAdapter.RequestMessage(mode.messageType, id)
+}
+
+func (mode *ElectronicMessagesMode) removeMessage() {
+	mode.messageAdapter.RequestRemove()
 }
 
 func (mode *ElectronicMessagesMode) onMessageDataChanged() {

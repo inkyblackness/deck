@@ -24,7 +24,8 @@ var knownTexts = map[model.ResourceType]textInfo{
 	model.ResourceTypeInfoNodeMessages: {false, model.MaxInfoNodeMessages},
 	model.ResourceTypeAccessCardNames:  {false, model.MaxAccessCardNames},
 	model.ResourceTypeDataletMessages:  {false, model.MaxDataletMessages},
-	model.ResourceTypePaperTexts:       {true, model.MaxPaperTexts}}
+	model.ResourceTypePaperTexts:       {true, model.MaxPaperTexts},
+	model.ResourceTypePanelNames:       {false, model.MaxPanelNames}}
 
 // Texts is the adapter for general texts.
 type Texts struct {
