@@ -29,7 +29,7 @@ import (
 
 const (
 	// Version contains the current version number
-	Version = "1.0.0"
+	Version = "1.0.1"
 	// Name is the name of the application
 	Name = "InkyBlackness Chunkie"
 	// Title contains a combined string of name and version
@@ -145,30 +145,36 @@ func main() {
 
 func exportFile(provider chunk.Provider, holder chunk.BlockHolder, blockID uint16,
 	outFileName string, raw bool, palette color.Palette, framesPerSecond float32) {
-	blockData := holder.BlockData(blockID)
-	contentType := holder.ContentType()
-	exportRaw := raw
+	// Some chunks have zero blocks (gamescr.res)
+	if holder.BlockCount() > 0 {
+		blockData := holder.BlockData(blockID)
+		contentType := holder.ContentType()
+		exportRaw := raw
 
-	if !exportRaw {
-		if contentType == res.Sound {
-			soundData, _ := audio.DecodeSoundChunk(blockData)
-			wav.ExportToWav(outFileName+".wav", soundData)
-		} else if contentType == res.Media {
-			exportRaw = exportMedia(blockData, outFileName, framesPerSecond)
-		} else if contentType == res.Bitmap {
-			exportRaw = !convert.ToPng(outFileName+".png", blockData, palette)
-		} else if contentType == res.Geometry {
-			exportRaw = !convert.ToWavefrontObj(outFileName, blockData, palette)
-		} else if contentType == res.VideoClip {
-			exportRaw = exportVideoClip(provider, blockData, outFileName, framesPerSecond, palette)
-		} else if contentType == res.Text {
-			exportRaw = !convert.ToTxt(outFileName+".xml", holder)
-		} else {
-			exportRaw = true
+		if !exportRaw {
+			if contentType == res.Sound {
+				soundData, _ := audio.DecodeSoundChunk(blockData)
+				wav.ExportToWav(outFileName+".wav", soundData)
+			} else if contentType == res.Media {
+				exportRaw = exportMedia(blockData, outFileName, framesPerSecond)
+			} else if contentType == res.Bitmap {
+				exportRaw = !convert.ToPng(outFileName+".png", blockData, palette)
+			} else if contentType == res.Geometry {
+				exportRaw = !convert.ToWavefrontObj(outFileName, blockData, palette)
+			} else if contentType == res.VideoClip {
+				exportRaw = exportVideoClip(provider, blockData, outFileName, framesPerSecond, palette)
+			} else if contentType == res.Text {
+				// Don't recreate whole XML for each block since convert.ToTxt merge them into one file
+				if blockID == 0 {
+					exportRaw = !convert.ToTxt(outFileName+".xml", holder)
+				}
+			} else {
+				exportRaw = true
+			}
 		}
-	}
-	if exportRaw {
-		ioutil.WriteFile(outFileName+".bin", blockData, os.FileMode(0644))
+		if exportRaw {
+			ioutil.WriteFile(outFileName+".bin", blockData, os.FileMode(0644))
+		}
 	}
 }
 
