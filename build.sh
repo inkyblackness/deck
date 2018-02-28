@@ -24,7 +24,7 @@ function buildNative() {
    GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CXX=x86_64-w64-mingw32-g++ CC=x86_64-w64-mingw32-gcc go build -o $DECK_BASE/dist/win/inkyblackness-deck/$name.exe .
 }
 
-for name in "construct" "chunkie" "hacker" "shocked-client"
+for name in "construct" "chunkie" "hacker" "shocked-client" "reactor-rng"
 do
    cd $DECK_BASE/src/github.com/inkyblackness/$name
    buildNative $name

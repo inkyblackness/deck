@@ -38,3 +38,7 @@ This is a resource import/export tool for the console. Some raw media formats ar
 
 ### InkyBlackness - Hacker
 This is a low-level file access tool for the console; A better hex-editor if you will. One can modify all bytes of the resources in any way. One can also crash the game with it.
+
+
+### InkyBlackness - Reactor RNG
+This command-line tool randomizes the reactor code of save-game files that specific versions of the "System Shock Enhanced Edition" set to a static value.

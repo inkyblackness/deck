@@ -4,7 +4,7 @@ pushd $(dirname "${0}") > /dev/null
 DECK_BASE=$(pwd -L)
 export GOPATH=$DECK_BASE
 
-COMPONENTS="construct chunkie hacker shocked-client"
+COMPONENTS="construct chunkie hacker shocked-client reactor-rng"
 
 rm -rf $DECK_BASE/src
 
