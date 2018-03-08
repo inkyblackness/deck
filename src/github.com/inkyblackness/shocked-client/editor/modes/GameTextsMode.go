@@ -53,6 +53,10 @@ func NewGameTextsMode(context Context, parent *ui.Area) *GameTextsMode {
 		soundAdapter:   context.ModelAdapter().SoundAdapter(),
 		selectedTextID: -1}
 
+	scaled := func(value float32) float32 {
+		return value * context.ControlFactory().Scale()
+	}
+
 	{
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(parent)
@@ -141,7 +145,7 @@ func NewGameTextsMode(context Context, parent *ui.Area) *GameTextsMode {
 		mode.onTextTypeChanged(initialTypeItem)
 	}
 	{
-		padding := float32(5.0)
+		padding := scaled(5.0)
 
 		{
 			dropBuilder := ui.NewAreaBuilder()

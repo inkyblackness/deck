@@ -52,6 +52,10 @@ func NewGameBitmapsMode(context Context, parent *ui.Area) *GameBitmapsMode {
 		bitmapsAdapter:   context.ModelAdapter().BitmapsAdapter(),
 		selectedBitmapID: -1}
 
+	scaled := func(value float32) float32 {
+		return value * context.ControlFactory().Scale()
+	}
+
 	{
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(parent)
@@ -122,9 +126,9 @@ func NewGameBitmapsMode(context Context, parent *ui.Area) *GameBitmapsMode {
 		mode.onBitmapTypeChanged(initialTypeItem)
 	}
 	{
-		padding := float32(5.0)
+		padding := scaled(5.0)
 		runningLeft := mode.propertiesArea.Right()
-		displayWidth := float32(256)
+		displayWidth := scaled(256)
 
 		{
 			dropBuilder := ui.NewAreaBuilder()

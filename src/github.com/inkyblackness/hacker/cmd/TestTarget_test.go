@@ -3,13 +3,12 @@ package cmd
 import "fmt"
 
 type testTarget struct {
-	loadParam  [][]interface{}
-	saveParam  [][]interface{}
-	infoParam  [][]interface{}
-	cdParam    [][]interface{}
-	dumpParam  [][]interface{}
-	putParam   [][]interface{}
-	queryParam [][]interface{}
+	loadParam [][]interface{}
+	saveParam [][]interface{}
+	infoParam [][]interface{}
+	cdParam   [][]interface{}
+	dumpParam [][]interface{}
+	putParam  [][]interface{}
 }
 
 func (target *testTarget) Load(path1, path2 string) string {
@@ -51,10 +50,4 @@ func (target *testTarget) Put(offset uint32, data []byte) string {
 	target.putParam = append(target.putParam, []interface{}{offset, data})
 
 	return fmt.Sprintf(`Put(%d, %v)`, offset, data)
-}
-
-func (target *testTarget) Query(info string) string {
-	target.queryParam = append(target.queryParam, []interface{}{info})
-
-	return fmt.Sprintf(`Query(%s)`, info)
 }

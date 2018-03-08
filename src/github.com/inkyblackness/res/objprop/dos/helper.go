@@ -35,11 +35,11 @@ func codeObjectData(coder serial.PositioningCoder, entry *typeEntry, data *objpr
 	}
 
 	coder.SetCurPos(entry.genericOffset)
-	coder.CodeBytes(data.Generic)
+	coder.Code(data.Generic)
 	coder.SetCurPos(entry.specificOffset)
-	coder.CodeBytes(data.Specific)
+	coder.Code(data.Specific)
 	coder.SetCurPos(entry.commonOffset)
-	coder.CodeBytes(data.Common)
+	coder.Code(data.Common)
 }
 
 func expectedDataLength(descriptors []objprop.ClassDescriptor) uint32 {

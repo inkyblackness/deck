@@ -25,16 +25,19 @@ Drop-down lists are those with the three dots (...) on the right.
 This is currently the "Welcome" mode.
 Click on the drop-down list to open it and select another mode to get started. 
 `
+	scaled := func(value float32) float32 {
+		return value * context.ControlFactory().Scale()
+	}
 
 	{
 		horizontalCenter := ui.NewRelativeAnchor(parent.Left(), parent.Right(), 0.5)
 		verticalCenter := ui.NewRelativeAnchor(parent.Top(), parent.Bottom(), 0.5)
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(parent)
-		builder.SetLeft(ui.NewOffsetAnchor(horizontalCenter, -300))
-		builder.SetTop(ui.NewOffsetAnchor(verticalCenter, -100))
-		builder.SetRight(ui.NewOffsetAnchor(horizontalCenter, 300))
-		builder.SetBottom(ui.NewOffsetAnchor(verticalCenter, 100))
+		builder.SetLeft(ui.NewOffsetAnchor(horizontalCenter, scaled(-300)))
+		builder.SetTop(ui.NewOffsetAnchor(verticalCenter, scaled(-100)))
+		builder.SetRight(ui.NewOffsetAnchor(horizontalCenter, scaled(300)))
+		builder.SetBottom(ui.NewOffsetAnchor(verticalCenter, scaled(100)))
 		builder.SetVisible(false)
 		builder.OnRender(func(area *ui.Area) {
 			context.ForGraphics().RectangleRenderer().Fill(
@@ -46,10 +49,10 @@ Click on the drop-down list to open it and select another mode to get started.
 	{
 		builder := context.ControlFactory().ForLabel()
 		builder.SetParent(mode.infoArea)
-		builder.SetLeft(ui.NewOffsetAnchor(mode.infoArea.Left(), 20))
-		builder.SetTop(ui.NewOffsetAnchor(mode.infoArea.Top(), 20))
-		builder.SetRight(ui.NewOffsetAnchor(mode.infoArea.Right(), -20))
-		builder.SetBottom(ui.NewOffsetAnchor(mode.infoArea.Bottom(), -20))
+		builder.SetLeft(ui.NewOffsetAnchor(mode.infoArea.Left(), scaled(20)))
+		builder.SetTop(ui.NewOffsetAnchor(mode.infoArea.Top(), scaled(20)))
+		builder.SetRight(ui.NewOffsetAnchor(mode.infoArea.Right(), scaled(-20)))
+		builder.SetBottom(ui.NewOffsetAnchor(mode.infoArea.Bottom(), scaled(-20)))
 		builder.AlignedHorizontallyBy(controls.LeftAligner)
 		builder.AlignedVerticallyBy(controls.LeftAligner)
 		mode.infoLabel = builder.Build()

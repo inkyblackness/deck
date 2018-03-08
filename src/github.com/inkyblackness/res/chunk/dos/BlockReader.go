@@ -48,14 +48,14 @@ func (reader *blockReader) ensureBlocksBuffered() {
 			blockCount := uint16(0)
 			firstStartOffset := uint32(0)
 
-			reader.coder.CodeUint16(&blockCount)
+			reader.coder.Code(&blockCount)
 			reader.blocks = make([][]byte, blockCount)
 
-			reader.coder.CodeUint32(&firstStartOffset)
+			reader.coder.Code(&firstStartOffset)
 			lastStartOffset := firstStartOffset
 			for i := uint16(0); i < blockCount; i++ {
 				nextStartOffset := uint32(0)
-				reader.coder.CodeUint32(&nextStartOffset)
+				reader.coder.Code(&nextStartOffset)
 				reader.blocks[i] = make([]byte, nextStartOffset-lastStartOffset)
 				lastStartOffset = nextStartOffset
 			}
@@ -70,7 +70,7 @@ func (reader *blockReader) ensureBlocksBuffered() {
 		}
 
 		for _, data := range reader.blocks {
-			blockCoder.CodeBytes(data)
+			blockCoder.Code(data)
 		}
 	}
 }

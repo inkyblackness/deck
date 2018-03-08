@@ -46,12 +46,13 @@ type MapDisplay struct {
 }
 
 // NewMapDisplay returns a new instance.
-func NewMapDisplay(context Context, parent *ui.Area) *MapDisplay {
+func NewMapDisplay(context Context, parent *ui.Area, scale float32) *MapDisplay {
 	tileBaseLength := fineCoordinatesPerTileSide
 	tileBaseHalf := tileBaseLength / 2.0
 	camLimit := tilesPerMapSide*tileBaseLength - tileBaseHalf
-	zoomLevelMin := float32(-5)
-	zoomLevelMax := float32(1)
+	zoomShift := scale - 1.0
+	zoomLevelMin := float32(-5) + zoomShift
+	zoomLevelMax := float32(1) + zoomShift
 
 	display := &MapDisplay{
 		context:      context,
@@ -60,7 +61,7 @@ func NewMapDisplay(context Context, parent *ui.Area) *MapDisplay {
 		moveCapture:  func(float32, float32) {}}
 
 	centerX, centerY := float32(tilesPerMapSide*tileBaseLength)/-2.0, float32(tilesPerMapSide*tileBaseLength)/-2.0
-	display.camera.ZoomAt(-3, centerX, centerY)
+	display.camera.ZoomAt(-3+zoomShift, centerX, centerY)
 	display.camera.MoveTo(centerX, centerY)
 
 	{

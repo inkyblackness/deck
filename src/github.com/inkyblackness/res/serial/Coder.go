@@ -1,15 +1,12 @@
 package serial
 
-// Coder represents an encoder/decoder for binary data
+// Coder represents an Encoder/Decoder for binary data.
 type Coder interface {
-	// CodeUint16 serializes an unsigned 16bit integer value
-	CodeUint16(value *uint16)
-	// CodeUint24 serializes an unsigned 24bit integer value
-	CodeUint24(value *uint32)
-	// CodeUint32 serializes an unsigned 32bit integer value
-	CodeUint32(value *uint32)
-	// CodeBytes serializes a slice
-	CodeBytes(value []byte)
-	// CodeByte serializes a single byte
-	CodeByte(value *byte)
+	// FirstError returns the first error this coder encountered.
+	FirstError() error
+
+	// Code serializes the given value.
+	// Any error state will be provided via FirstError(). Code will do nothing
+	// if the coder is already in error state.
+	Code(value interface{})
 }

@@ -27,7 +27,7 @@ func newBlockDataNode(parentNode DataNode, blockIndex uint16, data []byte, dataS
 func (node *blockDataNode) Info() string {
 	info := ""
 	if node.dataStruct != nil {
-		serial.MapData(node.dataStruct, serial.NewDecoder(bytes.NewReader(node.Data())))
+		serial.NewDecoder(bytes.NewReader(node.Data())).Code(node.dataStruct)
 		info = fmt.Sprintf("%v", node.dataStruct)
 	}
 
@@ -38,11 +38,12 @@ func (node *blockDataNode) UnknownData() []byte {
 	originalData := node.Data()
 	maskedData := originalData
 
-	if node.dataStruct != nil {
-		maskedData = make([]byte, len(originalData))
-		copy(maskedData, originalData)
-		serial.MapData(node.dataStruct, NewMaskingCoder(maskedData))
-	}
+	/*
+		if node.dataStruct != nil {
+			maskedData = make([]byte, len(originalData))
+			copy(maskedData, originalData)
+		}
+	*/
 
 	return maskedData
 }

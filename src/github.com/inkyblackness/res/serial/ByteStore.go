@@ -4,9 +4,13 @@ import (
 	"io"
 )
 
+// TODO: write tests
+// TODO: remove Close functionality
+// TODO: remove unused code (e.g.: Len function)
+
 const bufferCapacityIncrement = 1024 * 1024
 
-// ByteStore is implementing a WriteSeeker storing in memory
+// ByteStore is implementing a ReadWriteSeeker storing data in memory.
 type ByteStore struct {
 	data    []byte
 	offset  int

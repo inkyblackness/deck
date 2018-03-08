@@ -31,7 +31,6 @@ func (suite *EvaluaterSuite) TestEvaluateUnderstandsCommands(c *check.C) {
 	suite.verifyCommand(c, `dump`, `Dump()`)
 	suite.verifyCommand(c, `save`, `Save()`)
 	suite.verifyCommand(c, `put 0 01`, `Put(0, [1])`)
-	suite.verifyCommand(c, `query local`, `Query(local)`)
 }
 
 func (suite *EvaluaterSuite) verifyCommand(c *check.C, input string, output string) {

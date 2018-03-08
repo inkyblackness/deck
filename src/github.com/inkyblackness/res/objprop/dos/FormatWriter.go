@@ -36,7 +36,7 @@ func (writer *formatWriter) Finish() {
 	header := MagicHeader
 
 	writer.coder.SetCurPos(0)
-	writer.coder.CodeUint32(&header)
+	writer.coder.Code(&header)
 	writer.dest.Close()
 }
 
@@ -50,7 +50,7 @@ func ensureCoderLength(coder serial.Coder, length uint32) {
 		if toCopy > remaining {
 			toCopy = remaining
 		}
-		coder.CodeBytes(zero[:toCopy])
+		coder.Code(zero[:toCopy])
 		remaining -= toCopy
 	}
 }

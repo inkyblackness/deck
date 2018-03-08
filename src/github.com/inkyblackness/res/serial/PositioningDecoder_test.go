@@ -2,28 +2,60 @@ package serial
 
 import (
 	"bytes"
+	"testing"
 
-	check "gopkg.in/check.v1"
+	"github.com/stretchr/testify/assert"
 )
 
-type PositioningDecoderSuite struct {
-	coder PositioningCoder
-}
-
-var _ = check.Suite(&PositioningDecoderSuite{})
-
-func (suite *PositioningDecoderSuite) SetUpTest(c *check.C) {
-}
-
-func (suite *PositioningDecoderSuite) TestSetCurPosRepositionsReadOffset(c *check.C) {
+func TestPositioningDecoderSetCurPosRepositionsReadOffset(t *testing.T) {
 	var source = bytes.NewReader([]byte{0x78, 0x12, 0x34})
+	coder := NewPositioningDecoder(source)
 	arrayValue := make([]byte, 3)
 	var intValue uint16
 
-	suite.coder = NewPositioningDecoder(source)
-	suite.coder.CodeBytes(arrayValue)
-	suite.coder.SetCurPos(1)
-	suite.coder.CodeUint16(&intValue)
+	coder.Code(arrayValue)
+	coder.SetCurPos(1)
+	coder.Code(&intValue)
 
-	c.Assert(intValue, check.Equals, uint16(0x3412))
+	assert.Equal(t, uint16(0x3412), intValue)
+}
+
+func TestPositioningDecoderCurPosReturnsCurrentOffset(t *testing.T) {
+	var source = bytes.NewReader([]byte{0x78, 0x12, 0x34})
+	coder := NewPositioningDecoder(source)
+
+	coder.Code(uint16(0))
+
+	assert.Equal(t, uint32(2), coder.CurPos())
+}
+
+func TestPositioningDecoderFirstErrorBySetCurPos(t *testing.T) {
+	var target errorBuffer
+	coder := NewPositioningDecoder(&target)
+
+	coder.Code(uint32(0))
+	target.errorOnNextCall = true
+	coder.SetCurPos(0)
+
+	assert.EqualError(t, coder.FirstError(), "errorBuffer on call number 2")
+}
+
+func TestPositioningDecoderSetCurPosDoesNothingOnPreviousError(t *testing.T) {
+	var target errorBuffer
+	coder := NewPositioningDecoder(&target)
+	target.errorOnNextCall = true
+	coder.Code(uint32(0))
+	target.errorOnNextCall = true
+	coder.SetCurPos(0)
+
+	assert.Equal(t, target.callCounter, 1)
+	assert.EqualError(t, coder.FirstError(), "errorBuffer on call number 1")
+}
+
+func TestCurPosIsNotChangedOnSetError(t *testing.T) {
+	var target errorBuffer
+	coder := NewPositioningDecoder(&target)
+	target.errorOnNextCall = true
+	coder.SetCurPos(4)
+	assert.Equal(t, uint32(0), coder.CurPos())
 }

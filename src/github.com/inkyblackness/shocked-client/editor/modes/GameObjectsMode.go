@@ -62,6 +62,10 @@ func NewGameObjectsMode(context Context, parent *ui.Area) *GameObjectsMode {
 
 		selectedBitmapIndex: -1}
 
+	scaled := func(value float32) float32 {
+		return value * context.ControlFactory().Scale()
+	}
+
 	{
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(parent)
@@ -122,8 +126,8 @@ func NewGameObjectsMode(context Context, parent *ui.Area) *GameObjectsMode {
 		mode.onSelectedPropertiesDisplayChanged(mode.commonPropertiesItem)
 	}
 	{
-		padding := float32(5.0)
-		displayWidth := float32(256)
+		padding := scaled(5.0)
+		displayWidth := scaled(256)
 
 		{
 			dropBuilder := ui.NewAreaBuilder()

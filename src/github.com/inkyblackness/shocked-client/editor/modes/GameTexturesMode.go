@@ -66,6 +66,10 @@ func NewGameTexturesMode(context Context, parent *ui.Area) *GameTexturesMode {
 		imageDisplayDrops: make(map[dataModel.TextureSize]*ui.Area),
 		imageDisplays:     make(map[dataModel.TextureSize]*controls.ImageDisplay)}
 
+	scaled := func(value float32) float32 {
+		return value * context.ControlFactory().Scale()
+	}
+
 	{
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(parent)
@@ -142,13 +146,13 @@ func NewGameTexturesMode(context Context, parent *ui.Area) *GameTexturesMode {
 		}
 	}
 	{
-		padding := float32(5.0)
+		padding := scaled(5.0)
 		runningLeft := mode.propertiesArea.Right()
 		pixelSizes := map[dataModel.TextureSize]float32{
-			dataModel.TextureLarge:  128,
-			dataModel.TextureMedium: 64,
-			dataModel.TextureSmall:  32,
-			dataModel.TextureIcon:   16}
+			dataModel.TextureLarge:  scaled(128),
+			dataModel.TextureMedium: scaled(64),
+			dataModel.TextureSmall:  scaled(32),
+			dataModel.TextureIcon:   scaled(16)}
 
 		for _, textureSize := range dataModel.TextureSizes() {
 			dropBuilder := ui.NewAreaBuilder()

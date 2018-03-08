@@ -26,6 +26,7 @@ type MainApplication struct {
 	store        dataModel.DataStore
 	modelAdapter *model.Adapter
 
+	scale                     float32
 	glWindow                  env.OpenGlWindow
 	windowWidth, windowHeight float32
 	gl                        opengl.OpenGl
@@ -51,11 +52,12 @@ type MainApplication struct {
 }
 
 // NewMainApplication returns a new instance of MainApplication.
-func NewMainApplication(store dataModel.DataStore) *MainApplication {
+func NewMainApplication(store dataModel.DataStore, scale float32) *MainApplication {
 	app := &MainApplication{
 		projectionMatrix:   mgl.Ident4(),
 		lastElapsedTick:    time.Now(),
 		store:              store,
+		scale:              scale,
 		modelAdapter:       model.NewAdapter(store),
 		defaultFontPainter: graphics.NewBitmapTextPainter(defaultFont),
 		worldTextures:      make(map[dataModel.TextureSize]*graphics.BufferedTextureStore)}
@@ -368,10 +370,15 @@ func (app *MainApplication) ControlFactory() controls.Factory {
 	return app
 }
 
+// Scale implements the controls.Factory interface.
+func (app *MainApplication) Scale() float32 {
+	return app.scale
+}
+
 // ForLabel implements the controls.Factory interface.
 func (app *MainApplication) ForLabel() *controls.LabelBuilder {
 	builder := controls.NewLabelBuilder(app.defaultFontPainter, app.Texturize, app.uiTextRenderer)
-	builder.SetScale(2.0)
+	builder.SetScale(2.0 * app.Scale())
 	return builder
 }
 

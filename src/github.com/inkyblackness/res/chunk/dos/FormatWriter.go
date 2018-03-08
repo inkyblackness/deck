@@ -37,23 +37,23 @@ func codeHeader(coder serial.PositioningCoder) {
 	var blank byte = 0x00
 	commentTerminator := CommentTerminator
 
-	coder.CodeBytes([]byte(HeaderString))
-	coder.CodeByte(&commentTerminator)
+	coder.Code([]byte(HeaderString))
+	coder.Code(&commentTerminator)
 	for coder.CurPos() < ChunkDirectoryFileOffsetPos {
-		coder.CodeByte(&blank)
+		coder.Code(&blank)
 	}
 }
 
 func (writer *formatWriter) writeDirectoryOffset(offset uint32) {
 	writer.coder.SetCurPos(ChunkDirectoryFileOffsetPos)
-	writer.coder.CodeUint32(&offset)
+	writer.coder.Code(&offset)
 }
 
 func (writer *formatWriter) alignToBoundary() {
 	blank := byte(0)
 
 	for writer.coder.CurPos()%BoundarySize != 0 {
-		writer.coder.CodeByte(&blank)
+		writer.coder.Code(&blank)
 	}
 }
 
@@ -78,7 +78,7 @@ func (writer *formatWriter) Consume(id res.ResourceID, chunk chunk.BlockHolder) 
 
 	for blockIndex := uint16(0); blockIndex < chunk.BlockCount(); blockIndex++ {
 		block := chunk.BlockData(blockIndex)
-		blockCoder.CodeBytes(block)
+		blockCoder.Code(block)
 		address.uncompressedLength += uint32(len(block))
 	}
 	chunkFinish()
@@ -100,16 +100,16 @@ func (writer *formatWriter) writeBlockDirectory(address *chunkAddress, chunk chu
 	blockCount := chunk.BlockCount()
 	blockStart := uint32(2+4*blockCount+4) + padding
 
-	writer.coder.CodeUint16(&blockCount)
+	writer.coder.Code(&blockCount)
 	for blockIndex := uint16(0); blockIndex < blockCount; blockIndex++ {
 		block := chunk.BlockData(blockIndex)
-		writer.coder.CodeUint32(&blockStart)
+		writer.coder.Code(&blockStart)
 		blockStart += uint32(len(block))
 	}
-	writer.coder.CodeUint32(&blockStart)
+	writer.coder.Code(&blockStart)
 	for i := uint32(0); i < padding; i++ {
 		zero := byte(0x00)
-		writer.coder.CodeByte(&zero)
+		writer.coder.Code(&zero)
 	}
 	address.uncompressedLength = writer.coder.CurPos() - address.startOffset
 }
@@ -122,12 +122,12 @@ func (writer *formatWriter) Finish() {
 	writer.writeDirectoryOffset(directoryStart)
 	writer.coder.SetCurPos(directoryStart)
 	chunksWritten := uint16(len(writer.resourceIDs))
-	writer.coder.CodeUint16(&chunksWritten)
-	writer.coder.CodeUint32(&writer.firstChunkOffset)
+	writer.coder.Code(&chunksWritten)
+	writer.coder.Code(&writer.firstChunkOffset)
 
 	for _, resourceID := range writer.resourceIDs {
 		address := writer.chunkAddresses[resourceID]
-		writer.coder.CodeUint16(&resourceID)
+		writer.coder.Code(&resourceID)
 		address.code(writer.coder)
 	}
 	writer.dest.Close()

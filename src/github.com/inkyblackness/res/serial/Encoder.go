@@ -1,51 +1,51 @@
 package serial
 
-import "io"
+import (
+	"encoding/binary"
+	"io"
+)
 
-// encoder implements the Coder interface to write to a writer
-type encoder struct {
-	offset uint32
-	dest   io.Writer
+// Encoder implements the Coder interface to write to a writer.
+// It also implements the Writer interface.
+type Encoder struct {
+	target     io.Writer
+	firstError error
+	offset     uint32
 }
 
-// NewEncoder creates and returns a fresh encoder
-func NewEncoder(dest io.Writer) Coder {
-	coder := &encoder{
-		offset: 0,
-		dest:   dest}
-
-	return coder
+// NewEncoder creates and returns a fresh Encoder.
+func NewEncoder(target io.Writer) *Encoder {
+	return &Encoder{target: target}
 }
 
-// CodeByte encodes a single byte
-func (coder *encoder) CodeByte(value *byte) {
-	coder.writeBytes(*value)
+// FirstError returns the error this Encoder encountered the first time.
+func (coder *Encoder) FirstError() error {
+	return coder.firstError
 }
 
-// CodeBytes encodes the provided bytes
-func (coder *encoder) CodeBytes(value []byte) {
-	coder.writeBytes(value...)
-}
-
-// CodeUint16 encodes an unsigned 16bit value
-func (coder *encoder) CodeUint16(value *uint16) {
-	coder.writeBytes(byte((*value>>0)&0xFF), byte((*value>>8)&0xFF))
-}
-
-// CodeUint24 encodes an unsigned 24bit value
-func (coder *encoder) CodeUint24(value *uint32) {
-	coder.writeBytes(byte((*value>>0)&0xFF), byte((*value>>8)&0xFF), byte((*value>>16)&0xFF))
-}
-
-// CodeUint32 encodes an unsigned 32bit value
-func (coder *encoder) CodeUint32(value *uint32) {
-	coder.writeBytes(byte((*value>>0)&0xFF), byte((*value>>8)&0xFF), byte((*value>>16)&0xFF), byte((*value>>24)&0xFF))
-}
-
-func (coder *encoder) writeBytes(bytes ...byte) {
-	written, err := coder.dest.Write(bytes)
-	coder.offset += uint32(written)
-	if err != nil {
-		panic(err)
+// Code serializes the given value in little endian format using binary.Write().
+func (coder *Encoder) Code(value interface{}) {
+	if coder.firstError != nil {
+		return
 	}
+	if codable, isCodable := value.(Codable); isCodable {
+		codable.Code(coder)
+	} else {
+		coder.firstError = binary.Write(coder, binary.LittleEndian, value)
+	}
+}
+
+// Write serializes the given data to the contained writer.
+// If the encoder is in the error state, the result of FirstError() is
+// returned and nothing else is done.
+func (coder *Encoder) Write(data []byte) (written int, err error) {
+	if coder.firstError != nil {
+		return 0, coder.firstError
+	}
+	written, err = coder.target.Write(data)
+	coder.offset += uint32(written)
+	if coder.firstError == nil {
+		coder.firstError = err
+	}
+	return
 }

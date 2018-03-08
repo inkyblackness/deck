@@ -12,14 +12,14 @@ func emptyResourceFile() []byte {
 	// write offset to dictionary - in this case right after header
 	{
 		dictionaryOffset := uint32(store.Len() + 4)
-		encoder.CodeUint32(&dictionaryOffset)
+		encoder.Code(&dictionaryOffset)
 	}
 	{
 		numberOfChunks := uint16(0)
 		firstChunkOffset := uint32(store.Len())
 
-		encoder.CodeUint16(&numberOfChunks)
-		encoder.CodeUint32(&firstChunkOffset)
+		encoder.Code(&numberOfChunks)
+		encoder.Code(&firstChunkOffset)
 	}
 
 	return store.Data()

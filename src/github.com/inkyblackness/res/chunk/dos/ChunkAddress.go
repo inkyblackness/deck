@@ -14,8 +14,12 @@ type chunkAddress struct {
 }
 
 func (addr *chunkAddress) code(coder serial.Coder) {
-	coder.CodeUint24(&addr.uncompressedLength)
-	coder.CodeByte(&addr.chunkType)
-	coder.CodeUint24(&addr.chunkLength)
-	coder.CodeByte(&addr.contentType)
+	fieldA := (addr.uncompressedLength & 0x00FFFFFF) | uint32(addr.chunkType)<<24
+	coder.Code(&fieldA)
+	addr.uncompressedLength = fieldA & 0x00FFFFFF
+	addr.chunkType = byte(fieldA >> 24)
+	fieldB := (addr.chunkLength & 0x00FFFFFF) | uint32(addr.contentType)<<24
+	coder.Code(&fieldB)
+	addr.chunkLength = fieldB & 0x00FFFFFF
+	addr.contentType = byte(fieldB >> 24)
 }

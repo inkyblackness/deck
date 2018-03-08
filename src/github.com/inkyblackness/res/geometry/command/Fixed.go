@@ -19,7 +19,7 @@ func ToFixed(value float32) Fixed {
 // CodeFixed serializes a Fixed value with a coder.
 func CodeFixed(coder serial.Coder, fixed *Fixed) {
 	raw := uint32(*fixed)
-	coder.CodeUint32(&raw)
+	coder.Code(&raw)
 	*fixed = Fixed(raw)
 }
 

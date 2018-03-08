@@ -33,6 +33,6 @@ func (reader *wordReader) read() (value word) {
 }
 
 func (reader *wordReader) bufferByte() {
-	reader.coder.CodeByte(&reader.buffer)
+	reader.coder.Code(&reader.buffer)
 	reader.bufferBitsAvailable = 8
 }

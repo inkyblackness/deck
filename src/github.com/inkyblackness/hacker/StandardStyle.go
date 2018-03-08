@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/inkyblackness/hacker/styling"
 
+	"fmt"
 	"github.com/fatih/color"
 )
 
@@ -23,6 +24,10 @@ func newStandardStyle() *standardStyle {
 		removed: color.New(color.FgCyan, color.Bold).SprintFunc()}
 
 	return style
+}
+
+func (style *standardStyle) Println(s string) {
+	fmt.Fprintln(color.Output, s)
 }
 
 func (style *standardStyle) Prompt() styling.StyleFunc {

@@ -31,7 +31,7 @@ func newTableDataNode(parentNode DataNode, id string, data []byte, table Table) 
 	for i := 0; i < entryCount; i++ {
 		entry := table.Entry(i)
 
-		serial.MapData(entry, decoder)
+		decoder.Code(entry)
 		endOffset := int(decoder.CurPos())
 		node.addChild(newBlockDataNode(node, uint16(i), data[startOffset:endOffset], entry))
 		startOffset = endOffset

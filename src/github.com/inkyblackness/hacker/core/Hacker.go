@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/inkyblackness/hacker/diff"
-	"github.com/inkyblackness/hacker/query"
 	"github.com/inkyblackness/hacker/styling"
 )
 
@@ -184,42 +182,39 @@ func (hacker *Hacker) Diff(source string) (result string) {
 }
 
 func (hacker *Hacker) diffData(sourceData []byte, targetData []byte) string {
-	var diffResult []diff.DiffRecord
-
-	if len(sourceData) == len(targetData) {
-		diffResult = make([]diff.DiffRecord, 0, len(targetData))
-		for index, targetByte := range targetData {
-			sourceByte := sourceData[index]
-			if sourceByte == targetByte {
-				diffResult = append(diffResult, diff.DiffRecord{Payload: targetByte, Delta: diff.Common})
-			} else {
-				diffResult = append(diffResult, diff.DiffRecord{Payload: targetByte, Delta: diff.RightOnly},
-					diff.DiffRecord{Payload: sourceByte, Delta: diff.LeftOnly})
-			}
-		}
-	} else {
-		diffResult = diff.OfData(sourceData, targetData)
+	sourceLen := len(sourceData)
+	targetLen := len(targetData)
+	styledSourceData := make([]styledData, sourceLen)
+	styledTargetData := make([]styledData, targetLen)
+	commonLimit := sourceLen
+	if targetLen < commonLimit {
+		commonLimit = targetLen
 	}
-
-	filterMap := func(filteredType diff.DeltaType, styleFunc styling.StyleFunc) []styledData {
-		styled := make([]styledData, 0, len(diffResult))
-
-		for _, entry := range diffResult {
-			if entry.Delta != filteredType {
-				styledEntry := styledData{value: entry.Payload, styleFunc: fmt.Sprint}
-
-				if entry.Delta != diff.Common {
-					styledEntry.styleFunc = styleFunc
-				}
-				styled = append(styled, styledEntry)
-			}
+	for index := 0; index < commonLimit; index++ {
+		targetByte := targetData[index]
+		sourceByte := sourceData[index]
+		styledSourceData[index].value = sourceByte
+		styledTargetData[index].value = targetByte
+		if sourceByte == targetByte {
+			styledSourceData[index].styleFunc = fmt.Sprint
+			styledTargetData[index].styleFunc = fmt.Sprint
+		} else {
+			styledSourceData[index].styleFunc = hacker.style.Added()
+			styledTargetData[index].styleFunc = hacker.style.Added()
 		}
-
-		return styled
 	}
-
-	styledSourceData := filterMap(diff.RightOnly, hacker.style.Removed())
-	styledTargetData := filterMap(diff.LeftOnly, hacker.style.Added())
+	if sourceLen > targetLen {
+		for index, sourceByte := range sourceData[targetLen:] {
+			styledSourceData[targetLen+index].value = sourceByte
+			styledSourceData[targetLen+index].styleFunc = hacker.style.Removed()
+		}
+	}
+	if targetLen > sourceLen {
+		for index, targetByte := range targetData[sourceLen:] {
+			styledTargetData[sourceLen+index].value = targetByte
+			styledTargetData[sourceLen+index].styleFunc = hacker.style.Removed()
+		}
+	}
 
 	return createDump(styledSourceData) + "\n" + createDump(styledTargetData)
 }
@@ -279,22 +274,6 @@ func (hacker *Hacker) Put(offset uint32, data []byte) (result string) {
 		}
 	} else {
 		result = hacker.style.Error()(`No data loaded`)
-	}
-	return
-}
-
-func (hacker *Hacker) Query(info string) (result string) {
-	if hacker.resolve("0FA0/0") != nil {
-		source := NewNodeDataSource(hacker.curNode, hacker)
-		if info == "local" {
-			result = query.Local(source)
-		} else if info == "static-archive" {
-			result = query.StaticArchive(source)
-		} else {
-			result = hacker.style.Error()("Unknown query")
-		}
-	} else {
-		result = hacker.style.Error()("Not at archive node")
 	}
 	return
 }

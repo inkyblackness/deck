@@ -55,7 +55,7 @@ func (handler *exportingMediaHandler) finish() {
 	handler.writeLastFramesUntil(handler.mediaDuration)
 	for _, entry := range handler.subtitles {
 		handler.finishSubtitle(entry, handler.mediaDuration)
-		entry.file.Close()
+		_ = entry.file.Close()
 	}
 	if len(handler.audio) > 0 {
 		soundData := mem.NewL8SoundData(handler.sampleRate, handler.audio)
@@ -112,15 +112,15 @@ func (handler *exportingMediaHandler) formatTimestamp(timestamp float32) string 
 func (handler *exportingMediaHandler) writeLastFramesUntil(timestamp float32) {
 	if handler.lastFrame != nil {
 		if handler.framesPerSecond > 0 {
-			limitFrameId := int((timestamp * handler.framesPerSecond) + 0.5)
-			lastFrameId := int((handler.lastFrameTimestamp * handler.framesPerSecond) + 0.5)
+			limitFrameID := int((timestamp * handler.framesPerSecond) + 0.5)
+			lastFrameID := int((handler.lastFrameTimestamp * handler.framesPerSecond) + 0.5)
 
-			for lastFrameId < limitFrameId {
+			for lastFrameID < limitFrameID {
 				name := fmt.Sprintf("%s_%04d.png", handler.fileBaseName, handler.frameCounter)
 				handler.frameCounter++
 
 				handler.writeFrame(handler.lastFrame, name)
-				lastFrameId++
+				lastFrameID++
 			}
 		} else {
 			name := handler.timedFileName(handler.lastFrameTimestamp)

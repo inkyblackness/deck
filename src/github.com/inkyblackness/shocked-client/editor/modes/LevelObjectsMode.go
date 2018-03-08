@@ -121,6 +121,10 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 
 		mapDisplay: mapDisplay}
 
+	scaled := func(value float32) float32 {
+		return value * context.ControlFactory().Scale()
+	}
+
 	{
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(parent)
@@ -135,9 +139,9 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 		mode.area = builder.Build()
 	}
 	{
-		minRight := ui.NewOffsetAnchor(mode.area.Left(), 100)
+		minRight := ui.NewOffsetAnchor(mode.area.Left(), scaled(100))
 		maxRight := ui.NewRelativeAnchor(mode.area.Left(), mode.area.Right(), 0.5)
-		mode.propertiesPanelRight = ui.NewLimitedAnchor(minRight, maxRight, ui.NewOffsetAnchor(mode.area.Left(), 400))
+		mode.propertiesPanelRight = ui.NewLimitedAnchor(minRight, maxRight, ui.NewOffsetAnchor(mode.area.Left(), scaled(400)))
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(mode.area)
 		builder.SetLeft(ui.NewOffsetAnchor(mode.area.Left(), 0))
@@ -308,10 +312,10 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 		mode.onSelectedPropertiesDisplayChanged(initialItem)
 	}
 	{
-		cellSize := float32(25)
+		cellSize := scaled(25)
 		cellsPerSide := 9
 		areaSize := cellSize * float32(cellsPerSide)
-		areaLeft := ui.NewOffsetAnchor(mode.propertiesPanelRight, 5)
+		areaLeft := ui.NewOffsetAnchor(mode.propertiesPanelRight, scaled(5))
 		areaBottom := ui.NewOffsetAnchor(mode.area.Bottom(), 0)
 		areaTop := ui.NewOffsetAnchor(areaBottom, -areaSize)
 		{
@@ -356,7 +360,7 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 	{
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(mode.area)
-		builder.SetLeft(ui.NewOffsetAnchor(mode.area.Right(), -126))
+		builder.SetLeft(ui.NewOffsetAnchor(mode.area.Right(), scaled(-126)))
 		builder.SetTop(ui.NewOffsetAnchor(mode.area.Top(), 0))
 		builder.SetRight(ui.NewOffsetAnchor(mode.area.Right(), 0))
 		builder.SetBottom(ui.NewOffsetAnchor(mode.area.Bottom(), 0))

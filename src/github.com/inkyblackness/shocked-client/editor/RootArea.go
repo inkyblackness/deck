@@ -45,16 +45,19 @@ func newRootArea(context modes.Context) *ui.Area {
 	areaBuilder.SetBottom(ui.NewAbsoluteAnchor(0.0))
 	root.area = areaBuilder.Build()
 
+	scaled := func(value float32) float32 {
+		return value * context.ControlFactory().Scale()
+	}
 	var topLine *ui.Area
 
-	mapDisplay := display.NewMapDisplay(context, root.area)
+	mapDisplay := display.NewMapDisplay(context, root.area, context.ControlFactory().Scale())
 
-	topLineBottom := ui.NewOffsetAnchor(root.area.Top(), 25+4)
+	topLineBottom := ui.NewOffsetAnchor(root.area.Top(), scaled(25+4))
 	{
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(root.area)
 		builder.SetLeft(ui.NewOffsetAnchor(root.area.Left(), 0))
-		builder.SetTop(ui.NewOffsetAnchor(topLineBottom, 2))
+		builder.SetTop(ui.NewOffsetAnchor(topLineBottom, scaled(2)))
 		builder.SetRight(ui.NewOffsetAnchor(root.area.Right(), 0))
 		builder.SetBottom(ui.NewOffsetAnchor(root.area.Bottom(), 0))
 		root.modeArea = builder.Build()
@@ -79,7 +82,7 @@ func newRootArea(context modes.Context) *ui.Area {
 	root.bitmapsMode = root.addMode(modes.NewGameBitmapsMode(context, root.modeArea), "Bitmaps")
 	root.textsMode = root.addMode(modes.NewGameTextsMode(context, root.modeArea), "Texts")
 
-	boxMessageSeparator := ui.NewOffsetAnchor(topLine.Left(), 250)
+	boxMessageSeparator := ui.NewOffsetAnchor(topLine.Left(), scaled(250))
 	{
 		items := make([]controls.ComboBoxItem, len(root.allModes))
 		for index, selector := range root.allModes {
@@ -87,10 +90,10 @@ func newRootArea(context modes.Context) *ui.Area {
 		}
 		builder := context.ControlFactory().ForComboBox()
 		builder.SetParent(topLine)
-		builder.SetLeft(ui.NewOffsetAnchor(topLine.Left(), 2))
-		builder.SetTop(ui.NewOffsetAnchor(topLine.Top(), 2))
-		builder.SetRight(ui.NewOffsetAnchor(boxMessageSeparator, -2))
-		builder.SetBottom(ui.NewOffsetAnchor(topLine.Bottom(), -2))
+		builder.SetLeft(ui.NewOffsetAnchor(topLine.Left(), scaled(2)))
+		builder.SetTop(ui.NewOffsetAnchor(topLine.Top(), scaled(2)))
+		builder.SetRight(ui.NewOffsetAnchor(boxMessageSeparator, scaled(-2)))
+		builder.SetBottom(ui.NewOffsetAnchor(topLine.Bottom(), scaled(-2)))
 		builder.WithItems(items)
 		builder.WithSelectionChangeHandler(func(item controls.ComboBoxItem) {
 			root.setActiveMode(item.(*modeSelector))
@@ -100,10 +103,10 @@ func newRootArea(context modes.Context) *ui.Area {
 	{
 		builder := context.ControlFactory().ForLabel()
 		builder.SetParent(topLine)
-		builder.SetLeft(ui.NewOffsetAnchor(boxMessageSeparator, 2))
-		builder.SetTop(ui.NewOffsetAnchor(topLine.Top(), 2))
-		builder.SetRight(ui.NewOffsetAnchor(root.area.Right(), -2))
-		builder.SetBottom(ui.NewOffsetAnchor(topLine.Bottom(), -2))
+		builder.SetLeft(ui.NewOffsetAnchor(boxMessageSeparator, scaled(2)))
+		builder.SetTop(ui.NewOffsetAnchor(topLine.Top(), scaled(2)))
+		builder.SetRight(ui.NewOffsetAnchor(root.area.Right(), scaled(-2)))
+		builder.SetBottom(ui.NewOffsetAnchor(topLine.Bottom(), scaled(-2)))
 		builder.AlignedHorizontallyBy(controls.LeftAligner)
 		root.messageLabel = builder.Build()
 		context.ModelAdapter().OnMessageChanged(func() {

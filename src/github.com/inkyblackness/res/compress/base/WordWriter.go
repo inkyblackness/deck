@@ -38,5 +38,5 @@ func (writer *wordWriter) write(value word) {
 }
 
 func (writer *wordWriter) writeByte(value byte) {
-	writer.coder.CodeByte(&value)
+	writer.coder.Code(&value)
 }

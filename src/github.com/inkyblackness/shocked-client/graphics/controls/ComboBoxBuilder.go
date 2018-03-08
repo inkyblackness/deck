@@ -48,7 +48,9 @@ func (builder *ComboBoxBuilder) Build() *ComboBox {
 	builder.labelBuilder.SetBottom(ui.NewOffsetAnchor(box.area.Bottom(), 0))
 
 	hintRight := ui.NewOffsetAnchor(box.area.Right(), 0)
-	hintLeft := ui.NewOffsetAnchor(hintRight, -25)
+	hintLeft := ui.NewResolvingAnchor(func() ui.Anchor {
+		return ui.NewOffsetAnchor(hintRight, box.area.Top().Value()-box.area.Bottom().Value())
+	})
 	builder.labelBuilder.SetLeft(hintLeft)
 	builder.labelBuilder.SetRight(hintRight)
 	box.hintLabel = builder.labelBuilder.Build()

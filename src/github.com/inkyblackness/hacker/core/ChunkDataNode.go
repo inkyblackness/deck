@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/inkyblackness/res"
@@ -111,7 +112,7 @@ func getTableForBlock(chunkID res.ResourceID, blockData []byte) (table Table) {
 
 func getDataStructForBlock(dataType res.DataTypeID, chunkID res.ResourceID, blockData []byte) (dataStruct interface{}) {
 	if chunkID == res.ResourceID(0x0FA0) {
-		dataStruct = data.NewString("")
+		dataStruct = data.NewString(bytes.IndexByte(blockData, 0x00) + 1)
 	} else if chunkID == res.ResourceID(0x0FA1) {
 		dataStruct = data.DefaultGameState()
 	} else if isLevelChunk(chunkID, 4) {

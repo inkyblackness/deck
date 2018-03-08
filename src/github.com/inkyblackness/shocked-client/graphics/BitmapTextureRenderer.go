@@ -39,10 +39,10 @@ in vec2 uv;
 out vec4 fragColor;
 
 void main(void) {
-   vec4 pixel = texture2D(bitmap, uv);
+   vec4 pixel = texture(bitmap, uv);
 
    if (pixel.a > 0.0) {
-      fragColor = texture2D(palette, vec2(pixel.a, 0.5));
+      fragColor = texture(palette, vec2(pixel.a, 0.5));
    } else {
       discard;
    }

@@ -234,7 +234,7 @@ func exportVideoClip(provider chunk.Provider, blockData []byte, fileBaseName str
 	clipPalette[0] = color.NRGBA{R: 0, G: 0, B: 0, A: 0xFF}
 	copy(clipPalette[1:], pal[1:])
 
-	serial.MapData(sequence, serial.NewDecoder(reader))
+	sequence.Code(serial.NewDecoder(reader))
 	{
 		var times []float32
 		mediaDuration := float32(0.0)

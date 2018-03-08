@@ -47,9 +47,9 @@ func addData(consumer chunk.Consumer, chunkID res.ResourceID, data interface{}) 
 
 func addTypedData(consumer chunk.Consumer, chunkID res.ResourceID, typeID chunk.TypeID, data interface{}) {
 	store := serial.NewByteStore()
-	coder := serial.NewPositioningEncoder(store)
+	coder := serial.NewEncoder(store)
 
-	serial.MapData(data, coder)
+	coder.Code(data)
 	blocks := [][]byte{store.Data()}
 	consumer.Consume(chunkID, chunk.NewBlockHolder(typeID, res.Map, blocks))
 }
@@ -137,11 +137,6 @@ func AddLevelObjects(consumer chunk.Consumer, levelBaseID res.ResourceID) {
 		meta := data.LevelObjectClassMetaEntry(res.ObjectClass(classID))
 		addLevelObjectTables(consumer, levelBaseID, classID, meta.EntrySize, meta.EntryCount)
 	}
-}
-
-type tempStruct struct {
-	data.LevelObjectPrefix
-	Extra []byte
 }
 
 func addLevelObjectTables(consumer chunk.Consumer, levelBaseID res.ResourceID, classID int, entrySize int, entryCount int) {

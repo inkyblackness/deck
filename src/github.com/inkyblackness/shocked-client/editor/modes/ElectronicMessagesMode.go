@@ -88,6 +88,10 @@ func NewElectronicMessagesMode(context Context, parent *ui.Area) *ElectronicMess
 		selectedMessageID:  -1,
 		isInterruptItems:   make(map[bool]controls.ComboBoxItem)}
 
+	scaled := func(value float32) float32 {
+		return value * context.ControlFactory().Scale()
+	}
+
 	indexByMessageType := make(map[dataModel.ElectronicMessageType]uint32)
 	for index, messageType := range dataModel.ElectronicMessageTypes() {
 		mode.messageTypeByIndex[uint32(index)] = messageType
@@ -211,12 +215,13 @@ func NewElectronicMessagesMode(context Context, parent *ui.Area) *ElectronicMess
 		builder.OnEvent(events.MouseScrollEventType, ui.SilentConsumer)
 		mode.displayArea = builder.Build()
 	}
+	padding := scaled(5)
 	{
 		labelBuilder := mode.context.ControlFactory().ForLabel()
 
 		labelBuilder.SetParent(mode.displayArea)
-		labelBuilder.SetTop(ui.NewOffsetAnchor(mode.displayArea.Top(), 5))
-		labelBuilder.SetBottom(ui.NewOffsetAnchor(mode.displayArea.Bottom(), -5))
+		labelBuilder.SetTop(ui.NewOffsetAnchor(mode.displayArea.Top(), padding))
+		labelBuilder.SetBottom(ui.NewOffsetAnchor(mode.displayArea.Bottom(), -padding))
 		labelBuilder.SetLeft(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.25))
 		labelBuilder.SetRight(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.75))
 		labelBuilder.AlignedHorizontallyBy(controls.LeftAligner)
@@ -229,10 +234,10 @@ func NewElectronicMessagesMode(context Context, parent *ui.Area) *ElectronicMess
 		builder := mode.context.ControlFactory().ForImageDisplay()
 
 		builder.SetParent(mode.displayArea)
-		builder.SetTop(ui.NewOffsetAnchor(mode.displayArea.Top(), 5))
-		builder.SetBottom(ui.NewOffsetAnchor(mode.displayArea.Bottom(), -5))
-		builder.SetLeft(ui.NewOffsetAnchor(mode.displayArea.Left(), 5))
-		builder.SetRight(ui.NewOffsetAnchor(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.25), -5))
+		builder.SetTop(ui.NewOffsetAnchor(mode.displayArea.Top(), padding))
+		builder.SetBottom(ui.NewOffsetAnchor(mode.displayArea.Bottom(), -padding))
+		builder.SetLeft(ui.NewOffsetAnchor(mode.displayArea.Left(), padding))
+		builder.SetRight(ui.NewOffsetAnchor(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.25), -padding))
 		builder.WithProvider(mode.leftDisplayImage)
 		mode.leftDisplay = builder.Build()
 	}
@@ -240,10 +245,10 @@ func NewElectronicMessagesMode(context Context, parent *ui.Area) *ElectronicMess
 		builder := mode.context.ControlFactory().ForImageDisplay()
 
 		builder.SetParent(mode.displayArea)
-		builder.SetTop(ui.NewOffsetAnchor(mode.displayArea.Top(), 5))
-		builder.SetBottom(ui.NewOffsetAnchor(mode.displayArea.Bottom(), -5))
-		builder.SetLeft(ui.NewOffsetAnchor(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.75), 5))
-		builder.SetRight(ui.NewOffsetAnchor(mode.displayArea.Right(), -5))
+		builder.SetTop(ui.NewOffsetAnchor(mode.displayArea.Top(), padding))
+		builder.SetBottom(ui.NewOffsetAnchor(mode.displayArea.Bottom(), -padding))
+		builder.SetLeft(ui.NewOffsetAnchor(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.75), padding))
+		builder.SetRight(ui.NewOffsetAnchor(mode.displayArea.Right(), -padding))
 		builder.WithProvider(mode.rightDisplayImage)
 		mode.rightDisplay = builder.Build()
 	}
@@ -251,10 +256,10 @@ func NewElectronicMessagesMode(context Context, parent *ui.Area) *ElectronicMess
 		labelBuilder := mode.context.ControlFactory().ForLabel()
 
 		labelBuilder.SetParent(mode.displayArea)
-		labelBuilder.SetTop(ui.NewOffsetAnchor(mode.displayArea.Top(), 5))
+		labelBuilder.SetTop(ui.NewOffsetAnchor(mode.displayArea.Top(), padding))
 		labelBuilder.SetBottom(ui.NewRelativeAnchor(mode.displayArea.Top(), mode.displayArea.Bottom(), 0.5))
-		labelBuilder.SetLeft(ui.NewOffsetAnchor(mode.displayArea.Left(), 5))
-		labelBuilder.SetRight(ui.NewOffsetAnchor(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.25), -5))
+		labelBuilder.SetLeft(ui.NewOffsetAnchor(mode.displayArea.Left(), padding))
+		labelBuilder.SetRight(ui.NewOffsetAnchor(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.25), -padding))
 		labelBuilder.AlignedHorizontallyBy(controls.LeftAligner)
 		labelBuilder.AlignedVerticallyBy(controls.LeftAligner)
 		labelBuilder.SetFitToWidth()
@@ -266,9 +271,9 @@ func NewElectronicMessagesMode(context Context, parent *ui.Area) *ElectronicMess
 
 		labelBuilder.SetParent(mode.displayArea)
 		labelBuilder.SetTop(ui.NewRelativeAnchor(mode.displayArea.Top(), mode.displayArea.Bottom(), 0.5))
-		labelBuilder.SetBottom(ui.NewOffsetAnchor(mode.displayArea.Bottom(), -5))
-		labelBuilder.SetLeft(ui.NewOffsetAnchor(mode.displayArea.Left(), 5))
-		labelBuilder.SetRight(ui.NewOffsetAnchor(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.25), -5))
+		labelBuilder.SetBottom(ui.NewOffsetAnchor(mode.displayArea.Bottom(), -padding))
+		labelBuilder.SetLeft(ui.NewOffsetAnchor(mode.displayArea.Left(), padding))
+		labelBuilder.SetRight(ui.NewOffsetAnchor(ui.NewRelativeAnchor(mode.displayArea.Left(), mode.displayArea.Right(), 0.25), -padding))
 		labelBuilder.AlignedHorizontallyBy(controls.LeftAligner)
 		labelBuilder.AlignedVerticallyBy(controls.RightAligner)
 		labelBuilder.SetFitToWidth()

@@ -2,65 +2,138 @@ package serial
 
 import (
 	"bytes"
+	"io"
+	"testing"
 
-	check "gopkg.in/check.v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
 type DecoderSuite struct {
-	coder Coder
+	suite.Suite
+	errorBuf *errorBuffer
+	coder    *Decoder
 }
 
-var _ = check.Suite(&DecoderSuite{})
-
-func (suite *DecoderSuite) SetUpTest(c *check.C) {
+func TestDecoderSuite(t *testing.T) {
+	suite.Run(t, new(DecoderSuite))
 }
 
-func (suite *DecoderSuite) TestCodeUint32DecodesIntegerValue(c *check.C) {
-	var source = bytes.NewReader([]byte{0x78, 0x56, 0x34, 0x12})
+func (suite *DecoderSuite) SetupTest() {
+	suite.errorBuf = nil
+	suite.coder = nil
+}
+
+func (suite *DecoderSuite) TestImplementsCoderInterface() {
+	instance := (interface{})(suite.coder)
+	_, ok := instance.(Coder)
+	assert.True(suite.T(), ok)
+}
+
+func (suite *DecoderSuite) TestCodeUint32() {
+	suite.whenDecodingFrom([]byte{0x78, 0x56, 0x34, 0x12})
+
 	var value uint32
+	suite.coder.Code(&value)
 
-	suite.coder = NewDecoder(source)
-	suite.coder.CodeUint32(&value)
-
-	c.Assert(value, check.Equals, uint32(0x12345678))
+	assert.Equal(suite.T(), uint32(0x12345678), value)
 }
 
-func (suite *DecoderSuite) TestCodeUint24DecodesIntegerValue(c *check.C) {
-	var source = bytes.NewReader([]byte{0x78, 0x56, 0x34, 0x12})
-	var value uint32
+func (suite *DecoderSuite) TestCodeUint16() {
+	suite.whenDecodingFrom([]byte{0x45, 0x23})
 
-	suite.coder = NewDecoder(source)
-	suite.coder.CodeUint24(&value)
-
-	c.Assert(value, check.Equals, uint32(0x345678))
-}
-
-func (suite *DecoderSuite) TestCodeUint16DecodesIntegerValue(c *check.C) {
-	var source = bytes.NewReader([]byte{0x45, 0x23})
 	var value uint16
+	suite.coder.Code(&value)
 
-	suite.coder = NewDecoder(source)
-	suite.coder.CodeUint16(&value)
-
-	c.Assert(value, check.Equals, uint16(0x2345))
+	assert.Equal(suite.T(), uint16(0x2345), value)
 }
 
-func (suite *DecoderSuite) TestCodeByteDecodesByteValue(c *check.C) {
-	var source = bytes.NewReader([]byte{0x78})
+func (suite *DecoderSuite) TestCodeByte() {
+	suite.whenDecodingFrom([]byte{0xAB})
+
 	var value byte
+	suite.coder.Code(&value)
 
-	suite.coder = NewDecoder(source)
-	suite.coder.CodeByte(&value)
-
-	c.Assert(value, check.Equals, byte(0x78))
+	assert.Equal(suite.T(), byte(0xAB), value)
 }
 
-func (suite *DecoderSuite) TestCodeBytesDecodesByteArray(c *check.C) {
-	var source = bytes.NewReader([]byte{0x78, 0x12, 0x34})
+func (suite *DecoderSuite) TestCodeByteSlice() {
+	suite.whenDecodingFrom([]byte{0x78, 0x12, 0x34})
+
 	value := make([]byte, 3)
+	suite.coder.Code(value)
 
+	assert.Equal(suite.T(), []byte{0x78, 0x12, 0x34}, value)
+}
+
+func (suite *DecoderSuite) TestFirstErrorReturnsFirstError() {
+	suite.whenDecodingWithErrors()
+
+	suite.coder.Code(uint32(0))
+	suite.errorBuf.errorOnNextCall = true
+	suite.coder.Code(uint16(0))
+
+	assert.EqualError(suite.T(), suite.coder.FirstError(), "errorBuffer on call number 2")
+}
+
+func (suite *DecoderSuite) TestFirstErrorIgnoresFurtherErrors() {
+	suite.whenDecodingWithErrors()
+
+	suite.errorBuf.errorOnNextCall = true
+	suite.coder.Code(uint32(0))
+	suite.errorBuf.errorOnNextCall = true
+	suite.coder.Code(uint32(0))
+
+	assert.Equal(suite.T(), suite.errorBuf.callCounter, 1)
+	assert.EqualError(suite.T(), suite.coder.FirstError(), "errorBuffer on call number 1")
+}
+
+func (suite *DecoderSuite) TestImplementsReaderInterface() {
+	instance := (interface{})(suite.coder)
+	_, ok := instance.(io.Reader)
+	assert.True(suite.T(), ok)
+}
+
+func (suite *DecoderSuite) TestReadFromReader() {
+	suite.whenDecodingFrom([]byte{0x78, 0x12, 0x34})
+
+	value := make([]byte, 3)
+	suite.coder.Read(value)
+
+	assert.Equal(suite.T(), []byte{0x78, 0x12, 0x34}, value)
+}
+
+func (suite *DecoderSuite) TestReadReturnsReadAmount() {
+	suite.whenDecodingFrom([]byte{0x78, 0x12, 0x34})
+	n, _ := suite.coder.Read(make([]byte, 3))
+	assert.Equal(suite.T(), 3, n)
+}
+
+func (suite *DecoderSuite) TestReadHandlesErrors() {
+	suite.whenDecodingWithErrors()
+
+	suite.errorBuf.errorOnNextCall = true
+	suite.coder.Read(make([]byte, 3))
+	suite.coder.Read(make([]byte, 5))
+	assert.Equal(suite.T(), 1, suite.errorBuf.callCounter)
+	assert.NotNil(suite.T(), suite.coder.FirstError())
+}
+
+func (suite *DecoderSuite) TestCodeWithCodable() {
+	codable := new(MockedCodable)
+
+	suite.whenDecodingFrom([]byte{0x78, 0x12, 0x34})
+	suite.coder.Code(codable)
+
+	assert.Equal(suite.T(), suite.coder, codable.calledCoder, "Should be called with coder")
+}
+
+func (suite *DecoderSuite) whenDecodingFrom(data []byte) {
+	source := bytes.NewReader(data)
 	suite.coder = NewDecoder(source)
-	suite.coder.CodeBytes(value)
+}
 
-	c.Assert(value, check.DeepEquals, []byte{0x78, 0x12, 0x34})
+func (suite *DecoderSuite) whenDecodingWithErrors() {
+	suite.errorBuf = new(errorBuffer)
+	suite.coder = NewDecoder(suite.errorBuf)
 }

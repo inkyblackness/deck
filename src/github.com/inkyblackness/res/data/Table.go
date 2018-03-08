@@ -2,6 +2,8 @@ package data
 
 import (
 	"fmt"
+
+	"github.com/inkyblackness/res/serial"
 )
 
 // Table is a general container to keep a number of arbitrary entries.
@@ -20,6 +22,13 @@ func NewTable(entryCount int, factory func() interface{}) *Table {
 	}
 
 	return table
+}
+
+// Code serializes the entries of the table with the given coder.
+func (table *Table) Code(coder serial.Coder) {
+	for _, entry := range table.Entries {
+		coder.Code(entry)
+	}
 }
 
 func (table *Table) String() (result string) {

@@ -139,6 +139,10 @@ func NewLevelMapMode(context Context, parent *ui.Area, mapDisplay *display.MapDi
 		levelAdapter: context.ModelAdapter().ActiveLevel(),
 		mapDisplay:   mapDisplay}
 
+	scaled := func(value float32) float32 {
+		return value * context.ControlFactory().Scale()
+	}
+
 	{
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(parent)
@@ -152,9 +156,9 @@ func NewLevelMapMode(context Context, parent *ui.Area, mapDisplay *display.MapDi
 		mode.area = builder.Build()
 	}
 	{
-		minRight := ui.NewOffsetAnchor(mode.area.Left(), 100)
+		minRight := ui.NewOffsetAnchor(mode.area.Left(), scaled(100))
 		maxRight := ui.NewRelativeAnchor(mode.area.Left(), mode.area.Right(), 0.5)
-		mode.panelRight = ui.NewLimitedAnchor(minRight, maxRight, ui.NewOffsetAnchor(mode.area.Left(), 400))
+		mode.panelRight = ui.NewLimitedAnchor(minRight, maxRight, ui.NewOffsetAnchor(mode.area.Left(), scaled(400)))
 		builder := ui.NewAreaBuilder()
 		builder.SetParent(mode.area)
 		builder.SetLeft(ui.NewOffsetAnchor(mode.area.Left(), 0))

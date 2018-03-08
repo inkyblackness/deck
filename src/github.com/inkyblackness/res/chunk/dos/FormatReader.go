@@ -34,6 +34,9 @@ func NewChunkProvider(source io.ReadSeeker) (provider chunk.Provider, err error)
 	skipAndVerifyHeaderString(coder)
 	skipAndVerifyComment(coder)
 	ids, addresses := readAndVerifyDirectory(coder)
+	if coder.FirstError() != nil {
+		return nil, coder.FirstError()
+	}
 
 	formatReader := &formatReader{
 		resourceIDs: ids,
@@ -59,7 +62,7 @@ func (reader *formatReader) Provide(id res.ResourceID) chunk.BlockHolder {
 
 func skipAndVerifyHeaderString(coder serial.Coder) {
 	headerStringBuffer := make([]byte, len(HeaderString))
-	coder.CodeBytes(headerStringBuffer)
+	coder.Code(headerStringBuffer)
 	if string(headerStringBuffer) != HeaderString {
 		panic(errFormatMismatch)
 	}
@@ -70,7 +73,7 @@ func skipAndVerifyComment(coder serial.PositioningCoder) {
 
 	for remaining := ChunkDirectoryFileOffsetPos - coder.CurPos(); remaining > 0; remaining-- {
 		temp := byte(0x00)
-		coder.CodeByte(&temp)
+		coder.Code(&temp)
 		if temp == CommentTerminator {
 			terminatorFound = true
 		}
@@ -85,11 +88,11 @@ func readAndVerifyDirectory(coder serial.PositioningCoder) ([]res.ResourceID, ma
 	directoryEntries := uint16(0)
 	chunkFileOffset := uint32(0)
 
-	coder.CodeUint32(&directoryFileOffset)
+	coder.Code(&directoryFileOffset)
 	coder.SetCurPos(directoryFileOffset)
 
-	coder.CodeUint16(&directoryEntries)
-	coder.CodeUint32(&chunkFileOffset)
+	coder.Code(&directoryEntries)
+	coder.Code(&chunkFileOffset)
 	ids := make([]res.ResourceID, int(directoryEntries))
 	addresses := make(map[res.ResourceID]*chunkAddress)
 
@@ -97,7 +100,7 @@ func readAndVerifyDirectory(coder serial.PositioningCoder) ([]res.ResourceID, ma
 		resourceID := uint16(0xFFFF)
 		address := &chunkAddress{}
 
-		coder.CodeUint16(&resourceID)
+		coder.Code(&resourceID)
 		address.code(coder)
 
 		address.startOffset = chunkFileOffset

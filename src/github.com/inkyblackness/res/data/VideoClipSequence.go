@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/inkyblackness/res"
+	"github.com/inkyblackness/res/serial"
 )
 
 // VideoClipSequenceBaseSize is the amount of bytes a sequence needs at least.
@@ -34,6 +35,19 @@ func DefaultVideoClipSequence(entryCount int) *VideoClipSequence {
 	}
 
 	return sequence
+}
+
+// Code serializes the sequence with the given coder.
+func (sequence *VideoClipSequence) Code(coder serial.Coder) {
+	coder.Code(&sequence.Width)
+	coder.Code(&sequence.Height)
+	coder.Code(&sequence.FramesID)
+	coder.Code(sequence.Unknown0006)
+	coder.Code(&sequence.IntroFlag)
+	for _, entry := range sequence.Entries {
+		coder.Code(entry)
+	}
+	coder.Code(&sequence.EndTag)
 }
 
 func (sequence *VideoClipSequence) String() (result string) {

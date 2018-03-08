@@ -25,8 +25,8 @@ func LoadModel(source io.ReadSeeker) (model geometry.Model, err error) {
 
 	unknownHeader := make([]byte, 6)
 	expectedFaces := uint16(0)
-	coder.CodeBytes(unknownHeader)
-	coder.CodeUint16(&expectedFaces)
+	coder.Code(unknownHeader)
+	coder.Code(&expectedFaces)
 
 	dynamicModel := geometry.NewDynamicModel()
 
@@ -45,7 +45,7 @@ func loadNodeData(coder serial.PositioningCoder, model *geometry.DynamicModel, n
 		startPos := coder.CurPos()
 		rawCommand := uint16(0)
 
-		coder.CodeUint16(&rawCommand)
+		coder.Code(&rawCommand)
 		switch ModelCommandID(rawCommand) {
 		case CmdEndOfNode:
 			{
@@ -56,7 +56,7 @@ func loadNodeData(coder serial.PositioningCoder, model *geometry.DynamicModel, n
 				unknown := uint16(0)
 				vector := new(Vector)
 
-				coder.CodeUint16(&unknown)
+				coder.Code(&unknown)
 				vector.Code(coder)
 				model.AddVertex(geometry.NewSimpleVertex(NewFixedVector(*vector)))
 			}
@@ -65,8 +65,8 @@ func loadNodeData(coder serial.PositioningCoder, model *geometry.DynamicModel, n
 				unknown := uint16(0)
 				vertexCount := uint16(0)
 
-				coder.CodeUint16(&vertexCount)
-				coder.CodeUint16(&unknown)
+				coder.Code(&vertexCount)
+				coder.Code(&unknown)
 				for i := uint16(0); i < vertexCount; i++ {
 					vector := new(Vector)
 
@@ -113,8 +113,8 @@ func loadNodeData(coder serial.PositioningCoder, model *geometry.DynamicModel, n
 
 				normal.Code(coder)
 				reference.Code(coder)
-				coder.CodeUint16(&leftOffset)
-				coder.CodeUint16(&rightOffset)
+				coder.Code(&leftOffset)
+				coder.Code(&rightOffset)
 
 				left := geometry.NewDynamicNode()
 				right := geometry.NewDynamicNode()
@@ -129,7 +129,7 @@ func loadNodeData(coder serial.PositioningCoder, model *geometry.DynamicModel, n
 				reference := new(Vector)
 				size := uint16(0)
 
-				coder.CodeUint16(&size)
+				coder.Code(&size)
 				normal.Code(coder)
 				reference.Code(coder)
 
@@ -173,8 +173,8 @@ func loadDefineOffsetVertexOne(coder serial.PositioningCoder, model *geometry.Dy
 	referenceIndex := uint16(0)
 	fixedOffset := Fixed(0)
 
-	coder.CodeUint16(&newIndex)
-	coder.CodeUint16(&referenceIndex)
+	coder.Code(&newIndex)
+	coder.Code(&referenceIndex)
 	CodeFixed(coder, &fixedOffset)
 
 	if int(newIndex) != model.VertexCount() {
@@ -194,8 +194,8 @@ func loadDefineOffsetVertexTwo(coder serial.PositioningCoder, model *geometry.Dy
 	fixedOffset1 := Fixed(0)
 	fixedOffset2 := Fixed(0)
 
-	coder.CodeUint16(&newIndex)
-	coder.CodeUint16(&referenceIndex)
+	coder.Code(&newIndex)
+	coder.Code(&referenceIndex)
 	CodeFixed(coder, &fixedOffset1)
 	CodeFixed(coder, &fixedOffset2)
 
@@ -218,25 +218,25 @@ func loadFaces(coder serial.PositioningCoder, anchor *geometry.DynamicFaceAnchor
 	for startPos := coder.CurPos(); startPos < endPos; startPos = coder.CurPos() {
 		rawCommand := uint16(0)
 
-		coder.CodeUint16(&rawCommand)
+		coder.Code(&rawCommand)
 		switch ModelCommandID(rawCommand) {
 		case CmdSetColor:
 			{
-				coder.CodeUint16(&currentColor)
+				coder.Code(&currentColor)
 			}
 		case CmdSetColorAndShade:
 			{
-				coder.CodeUint16(&currentColor)
-				coder.CodeUint16(&currentShade)
+				coder.Code(&currentColor)
+				coder.Code(&currentShade)
 			}
 		case CmdColoredFace:
 			{
 				vertexCount := uint16(0)
-				coder.CodeUint16(&vertexCount)
+				coder.Code(&vertexCount)
 				vertices := make([]int, int(vertexCount))
 				for i := uint16(0); i < vertexCount; i++ {
 					index := uint16(0)
-					coder.CodeUint16(&index)
+					coder.Code(&index)
 					vertices[i] = int(index)
 				}
 				if currentShade == 0xFFFF {
@@ -248,14 +248,14 @@ func loadFaces(coder serial.PositioningCoder, anchor *geometry.DynamicFaceAnchor
 		case CmdTextureMapping:
 			{
 				entryCount := uint16(0)
-				coder.CodeUint16(&entryCount)
+				coder.Code(&entryCount)
 				textureCoordinates = make([]geometry.TextureCoordinate, int(entryCount))
 				for i := uint16(0); i < entryCount; i++ {
 					vertex := uint16(0)
 					u := Fixed(0)
 					v := Fixed(0)
 
-					coder.CodeUint16(&vertex)
+					coder.Code(&vertex)
 					CodeFixed(coder, &u)
 					CodeFixed(coder, &v)
 					textureCoordinates[i] = geometry.NewSimpleTextureCoordinate(int(vertex), u.Float(), v.Float())
@@ -265,12 +265,12 @@ func loadFaces(coder serial.PositioningCoder, anchor *geometry.DynamicFaceAnchor
 			{
 				textureId := uint16(0)
 				vertexCount := uint16(0)
-				coder.CodeUint16(&textureId)
-				coder.CodeUint16(&vertexCount)
+				coder.Code(&textureId)
+				coder.Code(&vertexCount)
 				vertices := make([]int, int(vertexCount))
 				for i := uint16(0); i < vertexCount; i++ {
 					index := uint16(0)
-					coder.CodeUint16(&index)
+					coder.Code(&index)
 					vertices[i] = int(index)
 				}
 				anchor.AddFace(geometry.NewSimpleTextureMappedFace(vertices, textureId, textureCoordinates))

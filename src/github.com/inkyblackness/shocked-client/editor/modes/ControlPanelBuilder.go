@@ -41,9 +41,13 @@ func (panelBuilder *controlPanelBuilder) bottom() ui.Anchor {
 	return panelBuilder.lastBottom
 }
 
+func (panelBuilder *controlPanelBuilder) scaled(value float32) float32 {
+	return value * panelBuilder.controlFactory.Scale()
+}
+
 func (panelBuilder *controlPanelBuilder) addTitle(labelText string) (label *controls.Label) {
-	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, 2)
-	bottom := ui.NewOffsetAnchor(top, 25)
+	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, panelBuilder.scaled(2))
+	bottom := ui.NewOffsetAnchor(top, panelBuilder.scaled(25))
 	{
 		builder := panelBuilder.controlFactory.ForLabel()
 		builder.SetParent(panelBuilder.parent)
@@ -61,8 +65,8 @@ func (panelBuilder *controlPanelBuilder) addTitle(labelText string) (label *cont
 }
 
 func (panelBuilder *controlPanelBuilder) addInfo(labelText string) (title *controls.Label, info *controls.Label) {
-	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, 2)
-	bottom := ui.NewOffsetAnchor(top, 25)
+	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, panelBuilder.scaled(2))
+	bottom := ui.NewOffsetAnchor(top, panelBuilder.scaled(25))
 	{
 		builder := panelBuilder.controlFactory.ForLabel()
 		builder.SetParent(panelBuilder.parent)
@@ -90,8 +94,8 @@ func (panelBuilder *controlPanelBuilder) addInfo(labelText string) (title *contr
 }
 
 func (panelBuilder *controlPanelBuilder) addTextButton(labelText, buttonText string, handler controls.ActionHandler) (title *controls.Label, button *controls.TextButton) {
-	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, 2)
-	bottom := ui.NewOffsetAnchor(top, 25)
+	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, panelBuilder.scaled(2))
+	bottom := ui.NewOffsetAnchor(top, panelBuilder.scaled(25))
 	{
 		builder := panelBuilder.controlFactory.ForLabel()
 		builder.SetParent(panelBuilder.parent)
@@ -120,8 +124,8 @@ func (panelBuilder *controlPanelBuilder) addTextButton(labelText, buttonText str
 }
 
 func (panelBuilder *controlPanelBuilder) addComboProperty(labelText string, handler controls.SelectionChangeHandler) (label *controls.Label, box *controls.ComboBox) {
-	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, 2)
-	bottom := ui.NewOffsetAnchor(top, 25)
+	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, panelBuilder.scaled(2))
+	bottom := ui.NewOffsetAnchor(top, panelBuilder.scaled(25))
 	{
 		builder := panelBuilder.controlFactory.ForLabel()
 		builder.SetParent(panelBuilder.parent)
@@ -149,8 +153,8 @@ func (panelBuilder *controlPanelBuilder) addComboProperty(labelText string, hand
 }
 
 func (panelBuilder *controlPanelBuilder) addSliderProperty(labelText string, handler controls.SliderChangeHandler) (label *controls.Label, slider *controls.Slider) {
-	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, 2)
-	bottom := ui.NewOffsetAnchor(top, 25)
+	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, panelBuilder.scaled(2))
+	bottom := ui.NewOffsetAnchor(top, panelBuilder.scaled(25))
 	{
 		builder := panelBuilder.controlFactory.ForLabel()
 		builder.SetParent(panelBuilder.parent)
@@ -179,8 +183,8 @@ func (panelBuilder *controlPanelBuilder) addSliderProperty(labelText string, han
 
 func (panelBuilder *controlPanelBuilder) addTextureProperty(labelText string, provider controls.TextureProvider,
 	handler controls.TextureSelectionChangeHandler) (label *controls.Label, selector *controls.TextureSelector) {
-	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, 2)
-	bottom := ui.NewOffsetAnchor(top, 64+4)
+	top := ui.NewOffsetAnchor(panelBuilder.lastBottom, panelBuilder.scaled(2))
+	bottom := ui.NewOffsetAnchor(top, panelBuilder.scaled(64+4))
 	{
 		builder := panelBuilder.controlFactory.ForLabel()
 		builder.SetParent(panelBuilder.parent)
