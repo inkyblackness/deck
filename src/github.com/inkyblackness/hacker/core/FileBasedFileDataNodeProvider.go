@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/inkyblackness/res/chunk"
-	chunkDos "github.com/inkyblackness/res/chunk/dos"
+	"github.com/inkyblackness/res/chunk/resfile"
 	"github.com/inkyblackness/res/objprop"
 	objDos "github.com/inkyblackness/res/objprop/dos"
 	"github.com/inkyblackness/res/textprop"
@@ -55,14 +55,17 @@ func (provider *fileBasedFileDataNodeProvider) Provide(parentNode DataNode, file
 				node = NewTexturePropertiesDataNode(parentNode, fileName, propProvider, consumerFactory)
 			}
 		} else {
-			chunkProvider, chunkErr := chunkDos.NewChunkProvider(reader)
+			chunkReader, chunkErr := resfile.ReaderFrom(reader)
 
 			if chunkErr == nil {
-				consumerFactory := func() chunk.Consumer {
-					outFile, _ := provider.access.createFile(filePathName)
-					return chunkDos.NewChunkConsumer(outFile)
+				saver := func(delegate func(chunk.Store)) {
+					store := chunk.NewProviderBackedStore(chunk.NullProvider())
+					delegate(store)
+					file, _ := provider.access.createFile(filePathName)
+					resfile.Write(file, store)
+					file.Close()
 				}
-				node = NewResourceDataNode(parentNode, fileName, chunkProvider, consumerFactory)
+				node = NewResourceDataNode(parentNode, fileName, chunkReader, saver)
 			}
 		}
 	}

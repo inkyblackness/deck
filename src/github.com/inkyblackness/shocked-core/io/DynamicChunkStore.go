@@ -3,20 +3,22 @@ package io
 import (
 	"sync"
 
-	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
 )
 
 // DynamicChunkStore wraps a chunk store instance that can be replaced during runtime.
 // Access to the underlying store is synchronized.
 type DynamicChunkStore struct {
-	mutex   sync.Mutex
-	wrapped chunk.Store
+	mutex          sync.Mutex
+	wrapped        chunk.Store
+	changeCallback func()
 }
 
-func NewDynamicChunkStore(wrapped chunk.Store) *DynamicChunkStore {
+// NewDynamicChunkStore returns a new instance of a dynamic chunk store.
+func NewDynamicChunkStore(wrapped chunk.Store, changeCallback func()) *DynamicChunkStore {
 	store := &DynamicChunkStore{
-		wrapped: wrapped}
+		wrapped:        wrapped,
+		changeCallback: changeCallback}
 
 	return store
 }
@@ -31,7 +33,7 @@ func (store *DynamicChunkStore) Swap(factory func(oldStore chunk.Store) chunk.St
 }
 
 // IDs returns a list of available IDs this store currently contains.
-func (store *DynamicChunkStore) IDs() []res.ResourceID {
+func (store *DynamicChunkStore) IDs() []chunk.Identifier {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 
@@ -39,38 +41,43 @@ func (store *DynamicChunkStore) IDs() []res.ResourceID {
 }
 
 // Get returns a chunk for the given identifier.
-func (store *DynamicChunkStore) Get(id res.ResourceID) (blockStore chunk.BlockStore) {
-	retriever := func(handler func(chunk.BlockStore)) {
+func (store *DynamicChunkStore) Get(id chunk.Identifier) (blockStore *DynamicBlockStore) {
+	retriever := func(handler func(*chunk.Chunk)) {
 		store.mutex.Lock()
 		defer store.mutex.Unlock()
-
-		handler(store.wrapped.Get(id))
+		retrieved, retrievedErr := store.wrapped.Chunk(id)
+		if retrievedErr != nil {
+			return
+		}
+		handler(retrieved)
 	}
 	exists := false
 
-	retriever(func(existing chunk.BlockStore) {
+	retriever(func(existing *chunk.Chunk) {
 		exists = existing != nil
 	})
 	if exists {
-		blockStore = newDynamicBlockStore(retriever)
+		blockStore = newDynamicBlockStore(retriever, store.changeCallback)
 	}
 
 	return blockStore
 }
 
 // Del ensures the chunk with given identifier is deleted.
-func (store *DynamicChunkStore) Del(id res.ResourceID) {
+func (store *DynamicChunkStore) Del(id chunk.Identifier) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 
 	store.wrapped.Del(id)
+	store.changeCallback()
 }
 
 // Put (re-)assigns an identifier with data. If no chunk with given ID exists,
 // then it is created. Existing chunks are overwritten with the provided data.
-func (store *DynamicChunkStore) Put(id res.ResourceID, holder chunk.BlockHolder) {
+func (store *DynamicChunkStore) Put(id chunk.Identifier, newChunk *chunk.Chunk) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 
-	store.wrapped.Put(id, holder)
+	store.wrapped.Put(id, newChunk)
+	store.changeCallback()
 }

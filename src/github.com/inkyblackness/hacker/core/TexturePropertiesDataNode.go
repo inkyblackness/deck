@@ -23,7 +23,7 @@ func NewTexturePropertiesDataNode(parentNode DataNode, name string,
 	for i := uint32(0); i < provider.EntryCount(); i++ {
 		blockData := provider.Provide(i)
 		dataStruct := &textprop.Entry{}
-		node.addChild(newBlockDataNode(node, uint16(i), blockData, dataStruct))
+		node.addChild(newBlockDataNode(node, int(i), blockData, dataStruct))
 	}
 
 	return node

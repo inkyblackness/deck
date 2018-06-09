@@ -46,6 +46,11 @@ type LevelObjectsMode struct {
 	limitsHeader2 *controls.Label
 	limitTitles   []*controls.Label
 	limitValues   []*controls.Label
+	posInfoTileX  *controls.Label
+	posInfoFineX  *controls.Label
+	posInfoTileY  *controls.Label
+	posInfoFineY  *controls.Label
+	posInfoZ      *controls.Label
 
 	propertiesPanel      *ui.Area
 	propertiesPanelRight ui.Anchor
@@ -379,15 +384,25 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 	}
 	{
 		panelBuilder := newControlPanelBuilder(mode.limitsPanel, context.ControlFactory())
-		mode.limitsHeader1, mode.limitsHeader2 = panelBuilder.addInfo("Class")
-		mode.limitsHeader2.SetText("Usage")
-		classes := len(maxObjectsPerClass)
-		mode.limitTitles = make([]*controls.Label, classes+1)
-		mode.limitValues = make([]*controls.Label, classes+1)
-		for class := 0; class < classes; class++ {
-			mode.limitTitles[class], mode.limitValues[class] = panelBuilder.addInfo(fmt.Sprintf("%d", class))
+		{
+			mode.limitsHeader1, mode.limitsHeader2 = panelBuilder.addInfo("Class")
+			mode.limitsHeader2.SetText("Usage")
+			classes := len(maxObjectsPerClass)
+			mode.limitTitles = make([]*controls.Label, classes+1)
+			mode.limitValues = make([]*controls.Label, classes+1)
+			for class := 0; class < classes; class++ {
+				mode.limitTitles[class], mode.limitValues[class] = panelBuilder.addInfo(fmt.Sprintf("%d", class))
+			}
+			mode.limitTitles[classes], mode.limitValues[classes] = panelBuilder.addInfo("Total")
 		}
-		mode.limitTitles[classes], mode.limitValues[classes] = panelBuilder.addInfo("Total")
+		{
+			panelBuilder.addInfo("")
+			_, mode.posInfoTileX = panelBuilder.addInfo("TileX")
+			_, mode.posInfoFineX = panelBuilder.addInfo("FineX")
+			_, mode.posInfoTileY = panelBuilder.addInfo("TileY")
+			_, mode.posInfoFineY = panelBuilder.addInfo("FineY")
+			_, mode.posInfoZ = panelBuilder.addInfo("Z")
+		}
 	}
 
 	mode.levelAdapter.OnIDChanged(func() {
@@ -404,6 +419,10 @@ func NewLevelObjectsMode(context Context, parent *ui.Area, mapDisplay *display.M
 
 func (mode *LevelObjectsMode) objectZToString(value int64) string {
 	return heightToString(mode.levelAdapter.HeightShift(), value, 256.0)
+}
+
+func (mode *LevelObjectsMode) objectZToShortString(value int64) string {
+	return fmt.Sprintf("%.3f", heightToValue(mode.levelAdapter.HeightShift(), value, 256.0))
 }
 
 func (mode *LevelObjectsMode) rotationToString(value int64) string {
@@ -515,7 +534,11 @@ func (mode *LevelObjectsMode) onMouseButtonClicked(area *ui.Area, event events.E
 		consumed = true
 	} else if mouseEvent.AffectedButtons() == env.MouseSecondary {
 		worldX, worldY := mode.mapDisplay.WorldCoordinatesForPixel(mouseEvent.Position())
-		mode.createNewObject(worldX, worldY)
+		atGrid := false
+		if keys.Modifier(mouseEvent.Modifier()) == keys.ModShift {
+			atGrid = true
+		}
+		mode.createNewObject(worldX, worldY, atGrid)
 	}
 
 	return
@@ -526,7 +549,7 @@ func (mode *LevelObjectsMode) updateClosestDisplayedObjects(worldX, worldY float
 		distance float32
 		object   *model.LevelObject
 	}
-	entries := []*resultEntry{}
+	var entries []*resultEntry
 	refPoint := mgl.Vec2{worldX, worldY}
 	limit := float32(48.0)
 
@@ -547,6 +570,9 @@ func (mode *LevelObjectsMode) updateClosestDisplayedObjects(worldX, worldY float
 	}
 	mode.closestObjectHighlightIndex = 0
 	mode.updateClosestObjectHighlight()
+	if len(mode.closestObjects) == 0 {
+		mode.showTileLocation(worldX, worldY)
+	}
 }
 
 func (mode *LevelObjectsMode) updateClosestObjectHighlight() {
@@ -554,9 +580,35 @@ func (mode *LevelObjectsMode) updateClosestObjectHighlight() {
 		object := mode.closestObjects[mode.closestObjectHighlightIndex]
 		mode.highlightedObjectInfoValue.SetText(fmt.Sprintf("%v: %v (%v)", object.Index(), object.ID(), mode.objectDisplayName(object.ID())))
 		mode.mapDisplay.SetHighlightedObject(object)
+
+		mode.posInfoTileX.SetText(fmt.Sprintf("%v", object.TileX()))
+		mode.posInfoFineX.SetText(fmt.Sprintf("%v", object.FineX()))
+		mode.posInfoTileY.SetText(fmt.Sprintf("%v", object.TileY()))
+		mode.posInfoFineY.SetText(fmt.Sprintf("%v", object.FineY()))
+		mode.posInfoZ.SetText(mode.objectZToShortString(int64(object.Z())))
 	} else {
 		mode.highlightedObjectInfoValue.SetText("")
 		mode.mapDisplay.SetHighlightedObject(nil)
+	}
+}
+
+func (mode *LevelObjectsMode) showTileLocation(worldX, worldY float32) {
+	integerX, integerY := int(worldX), int(worldY)
+	tileX, fineX := integerX>>8, integerX&0xFF
+	tileY, fineY := integerY>>8, integerY&0xFF
+	tile := mode.levelAdapter.TileMap().Tile(model.TileCoordinateOf(tileX, tileY))
+	if tile != nil {
+		mode.posInfoTileX.SetText(fmt.Sprintf("%v", tileX))
+		mode.posInfoFineX.SetText(fmt.Sprintf("%v", fineX))
+		mode.posInfoTileY.SetText(fmt.Sprintf("%v", tileY))
+		mode.posInfoFineY.SetText(fmt.Sprintf("%v", fineY))
+		mode.posInfoZ.SetText(mode.tileHeightUnitToShortString(int64(*tile.Properties().FloorHeight)))
+	} else {
+		mode.posInfoTileX.SetText("")
+		mode.posInfoFineX.SetText("")
+		mode.posInfoTileY.SetText("")
+		mode.posInfoFineY.SetText("")
+		mode.posInfoZ.SetText("")
 	}
 }
 
@@ -936,7 +988,8 @@ func (mode *LevelObjectsMode) createPropertyControls(panel *propertyPanel, key s
 			&enumItem{2, "Var <= Val"},
 			&enumItem{3, "Var > Val"},
 			&enumItem{4, "Var >= Val"},
-			&enumItem{5, "Var != Val"}}
+			&enumItem{5, "Var != Val"},
+			&enumItem{6, "Val > Random(0..254)"}}
 
 		if unifiedValue != math.MinInt64 {
 			selectedItem = items[unifiedValue>>13]
@@ -1018,11 +1071,19 @@ func (mode *LevelObjectsMode) createPropertyControls(panel *propertyPanel, key s
 
 func (mode *LevelObjectsMode) moveTileHeightUnitToString(value int64) (result string) {
 	if (value >= 0) && (value < 32) {
-		result = heightToString(mode.levelAdapter.HeightShift(), value, 32.0)
+		result = mode.tileHeightUnitToString(value)
 	} else {
 		result = fmt.Sprintf("Don't change  - raw: 0x%04X", value)
 	}
 	return
+}
+
+func (mode *LevelObjectsMode) tileHeightUnitToString(value int64) string {
+	return heightToString(mode.levelAdapter.HeightShift(), value, 32.0)
+}
+
+func (mode *LevelObjectsMode) tileHeightUnitToShortString(value int64) string {
+	return fmt.Sprintf("%.3f", heightToValue(mode.levelAdapter.HeightShift(), value, 32.0))
 }
 
 func (mode *LevelObjectsMode) levelTextures() []*graphics.BitmapTexture {
@@ -1153,8 +1214,8 @@ func (mode *LevelObjectsMode) onNewObjectTypeChanged(item controls.ComboBoxItem)
 	mode.newObjectID = typeItem.id
 }
 
-func (mode *LevelObjectsMode) createNewObject(worldX, worldY float32) {
-	mode.levelAdapter.RequestNewObject(worldX, worldY, mode.newObjectID)
+func (mode *LevelObjectsMode) createNewObject(worldX, worldY float32, atGrid bool) {
+	mode.levelAdapter.RequestNewObject(worldX, worldY, mode.newObjectID, atGrid)
 }
 
 func (mode *LevelObjectsMode) objectItemsForClass(objectClass int) []controls.ComboBoxItem {

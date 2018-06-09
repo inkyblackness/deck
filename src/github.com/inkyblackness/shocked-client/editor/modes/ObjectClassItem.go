@@ -26,3 +26,12 @@ type objectClassItem struct {
 func (item *objectClassItem) String() string {
 	return classNames[item.class]
 }
+
+func objectClassItems() enumItems {
+	classes := len(classNames)
+	items := make([]*enumItem, classes)
+	for classIndex := 0; classIndex < classes; classIndex++ {
+		items[classIndex] = &enumItem{uint32(classIndex), classNames[classIndex]}
+	}
+	return items
+}

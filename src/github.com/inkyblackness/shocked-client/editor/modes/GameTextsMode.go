@@ -5,7 +5,9 @@ import (
 	"os"
 	"path"
 
+	"github.com/inkyblackness/res/audio"
 	"github.com/inkyblackness/res/audio/wav"
+	"github.com/inkyblackness/shocked-client/editor/cmd"
 	"github.com/inkyblackness/shocked-client/editor/model"
 	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/graphics/controls"
@@ -24,17 +26,19 @@ type GameTextsMode struct {
 	area           *ui.Area
 	propertiesArea *ui.Area
 
-	typeLabel            *controls.Label
-	typeBox              *controls.ComboBox
+	resourceTypeLabel    *controls.Label
+	resourceTypeBox      *controls.ComboBox
+	resourceTypeItems    enumItems
 	selectedResourceType dataModel.ResourceType
 
-	languageLabel *controls.Label
-	languageBox   *controls.ComboBox
-	language      dataModel.ResourceLanguage
+	languageLabel    *controls.Label
+	languageBox      *controls.ComboBox
+	languageItems    enumItems
+	selectedLanguage dataModel.ResourceLanguage
 
-	selectedTextIDLabel  *controls.Label
-	selectedTextIDSlider *controls.Slider
-	selectedTextID       int
+	textIDLabel    *controls.Label
+	textIDSlider   *controls.Slider
+	selectedTextID int
 
 	textDrop  *ui.Area
 	textValue *controls.Label
@@ -89,37 +93,32 @@ func NewGameTextsMode(context Context, parent *ui.Area) *GameTextsMode {
 	}
 	{
 		panelBuilder := newControlPanelBuilder(mode.propertiesArea, context.ControlFactory())
-		var initialTypeItem controls.ComboBoxItem
-		var initialLanguageItem controls.ComboBoxItem
-
 		{
-			mode.typeLabel, mode.typeBox = panelBuilder.addComboProperty("Text Type", mode.onTextTypeChanged)
-			items := []controls.ComboBoxItem{
-				&enumItem{uint32(dataModel.ResourceTypeTrapMessages), "Trap Messages"},
-				&enumItem{uint32(dataModel.ResourceTypeWords), "Words"},
-				&enumItem{uint32(dataModel.ResourceTypeLogCategories), "Log Categories"},
-				&enumItem{uint32(dataModel.ResourceTypeVariousMessages), "Various Messages"},
-				&enumItem{uint32(dataModel.ResourceTypeScreenMessages), "Screen Messages"},
-				&enumItem{uint32(dataModel.ResourceTypeInfoNodeMessages), "Info Node Messages (8/5/6)"},
-				&enumItem{uint32(dataModel.ResourceTypeAccessCardNames), "Access Card Names"},
-				&enumItem{uint32(dataModel.ResourceTypeDataletMessages), "Datalet Messages (8/5/8)"},
-				&enumItem{uint32(dataModel.ResourceTypePaperTexts), "Paper Texts"},
-				&enumItem{uint32(dataModel.ResourceTypePanelNames), "Panel Names"}}
+			mode.resourceTypeLabel, mode.resourceTypeBox = panelBuilder.addComboProperty("Text Type", mode.onResourceTypeChanged)
+			mode.resourceTypeItems = []*enumItem{
+				{uint32(dataModel.ResourceTypeTrapMessages), "Trap Messages"},
+				{uint32(dataModel.ResourceTypeWords), "Words"},
+				{uint32(dataModel.ResourceTypeLogCategories), "Log Categories"},
+				{uint32(dataModel.ResourceTypeVariousMessages), "Various Messages"},
+				{uint32(dataModel.ResourceTypeScreenMessages), "Screen Messages"},
+				{uint32(dataModel.ResourceTypeInfoNodeMessages), "Info Node Messages (8/5/6)"},
+				{uint32(dataModel.ResourceTypeAccessCardNames), "Access Card Names"},
+				{uint32(dataModel.ResourceTypeDataletMessages), "Datalet Messages (8/5/8)"},
+				{uint32(dataModel.ResourceTypePaperTexts), "Paper Texts"},
+				{uint32(dataModel.ResourceTypePanelNames), "Panel Names"}}
 
-			mode.typeBox.SetItems(items)
-			initialTypeItem = items[0]
+			mode.resourceTypeBox.SetItems(mode.resourceTypeItems.forComboBox())
 		}
 		{
 			mode.languageLabel, mode.languageBox = panelBuilder.addComboProperty("Language", mode.onLanguageChanged)
-			items := []controls.ComboBoxItem{
-				&enumItem{uint32(dataModel.ResourceLanguageStandard), "STD"},
-				&enumItem{uint32(dataModel.ResourceLanguageFrench), "FRN"},
-				&enumItem{uint32(dataModel.ResourceLanguageGerman), "GER"}}
-			mode.languageBox.SetItems(items)
-			initialLanguageItem = items[0]
+			mode.languageItems = []*enumItem{
+				{uint32(dataModel.ResourceLanguageStandard), "STD"},
+				{uint32(dataModel.ResourceLanguageFrench), "FRN"},
+				{uint32(dataModel.ResourceLanguageGerman), "GER"}}
+			mode.languageBox.SetItems(mode.languageItems.forComboBox())
 		}
 		{
-			mode.selectedTextIDLabel, mode.selectedTextIDSlider = panelBuilder.addSliderProperty("Selected Text ID",
+			mode.textIDLabel, mode.textIDSlider = panelBuilder.addSliderProperty("Selected Text ID",
 				func(newValue int64) {
 					mode.onTextSelected(int(newValue))
 				})
@@ -139,10 +138,7 @@ func NewGameTextsMode(context Context, parent *ui.Area) *GameTextsMode {
 
 			mode.soundAdapter.OnAudioChanged(mode.onAudioChanged)
 		}
-		mode.languageBox.SetSelectedItem(initialLanguageItem)
-		mode.onLanguageChanged(initialLanguageItem)
-		mode.typeBox.SetSelectedItem(initialTypeItem)
-		mode.onTextTypeChanged(initialTypeItem)
+		mode.setState(dataModel.ResourceTypeTrapMessages, dataModel.ResourceLanguageStandard, 0)
 	}
 	{
 		padding := scaled(5.0)
@@ -170,7 +166,7 @@ func NewGameTextsMode(context Context, parent *ui.Area) *GameTextsMode {
 			displayBuilder.SetFitToWidth()
 			mode.textDrop = dropBuilder.Build()
 			mode.textValue = displayBuilder.Build()
-			mode.textValue.AllowTextChange(mode.onTextModified)
+			mode.textValue.AllowTextChange(mode.requestTextChange)
 		}
 	}
 	mode.context.ModelAdapter().OnProjectChanged(func() {
@@ -186,20 +182,14 @@ func (mode *GameTextsMode) SetActive(active bool) {
 	mode.area.SetVisible(active)
 }
 
-func (mode *GameTextsMode) onTextTypeChanged(boxItem controls.ComboBoxItem) {
+func (mode *GameTextsMode) onResourceTypeChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
-	mode.selectedResourceType = dataModel.ResourceType(item.value)
-
-	mode.audioArea.SetVisible(mode.selectedResourceType == dataModel.ResourceTypeTrapMessages)
-	mode.onTextSelected(0)
-	mode.selectedTextIDSlider.SetRange(0, int64(dataModel.MaxEntriesFor(mode.selectedResourceType))-1)
-	mode.selectedTextIDSlider.SetValue(0)
-	mode.requestData()
+	mode.setState(dataModel.ResourceType(item.value), mode.selectedLanguage, 0)
 }
 
 func (mode *GameTextsMode) onLanguageChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
-	mode.language = dataModel.ResourceLanguage(item.value)
+	mode.selectedLanguage = dataModel.ResourceLanguage(item.value)
 	mode.requestData()
 }
 
@@ -209,7 +199,7 @@ func (mode *GameTextsMode) onTextSelected(id int) {
 }
 
 func (mode *GameTextsMode) requestData() {
-	key := dataModel.MakeLocalizedResourceKey(mode.selectedResourceType, mode.language, uint16(mode.selectedTextID))
+	key := dataModel.MakeLocalizedResourceKey(mode.selectedResourceType, mode.selectedLanguage, uint16(mode.selectedTextID))
 	mode.textAdapter.RequestText(key)
 
 	if mode.selectedResourceType == dataModel.ResourceTypeTrapMessages {
@@ -221,13 +211,21 @@ func (mode *GameTextsMode) onTextChanged() {
 	mode.textValue.SetText(mode.textAdapter.Text())
 }
 
-func (mode *GameTextsMode) onTextModified(newText string) {
-	mode.textAdapter.RequestTextChange(newText)
+func (mode *GameTextsMode) requestTextChange(newText string) {
+	restoreState := mode.stateSnapshot()
+	mode.context.Perform(&cmd.SetStringPropertyCommand{
+		Setter: func(value string) error {
+			restoreState()
+			mode.textAdapter.RequestTextChange(value)
+			return nil
+		},
+		NewValue: newText,
+		OldValue: mode.textAdapter.Text()})
 }
 
 func (mode *GameTextsMode) requestAudio(resourceType dataModel.ResourceType) {
-	key := dataModel.MakeLocalizedResourceKey(resourceType, mode.language, uint16(mode.selectedTextID))
-	mode.context.ModelAdapter().SoundAdapter().RequestAudio(key)
+	key := dataModel.MakeLocalizedResourceKey(resourceType, mode.selectedLanguage, uint16(mode.selectedTextID))
+	mode.soundAdapter.RequestAudio(key)
 }
 
 func (mode *GameTextsMode) onAudioChanged() {
@@ -269,11 +267,13 @@ func (mode *GameTextsMode) exportAudio(filePath string) {
 	soundData := mode.soundAdapter.Audio()
 
 	if soundData != nil {
-		fileName := path.Join(filePath, fmt.Sprintf("traps_%02d_%v.wav", mode.selectedTextID, mode.language.ShortName()))
+		fileName := path.Join(filePath, fmt.Sprintf("traps_%02d_%v.wav", mode.selectedTextID, mode.selectedLanguage.ShortName()))
 		file, err := os.Create(fileName)
 
 		if err == nil {
-			defer file.Close()
+			defer func() {
+				_ = file.Close()
+			}()
 			wav.Save(file, soundData.SampleRate(), soundData.Samples(0, soundData.SampleCount()))
 			mode.context.ModelAdapter().SetMessage(fmt.Sprintf("Exported %s", fileName))
 		} else {
@@ -286,15 +286,62 @@ func (mode *GameTextsMode) importAudio(filePath string) {
 	file, fileErr := os.Open(filePath)
 
 	if (fileErr == nil) && (file != nil) {
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 		data, dataErr := wav.Load(file)
 
 		if dataErr == nil {
-			mode.soundAdapter.RequestAudioChange(data)
+			mode.requestAudioChange(data)
 		} else {
 			mode.context.ModelAdapter().SetMessage("File not supported. Only .wav files with 16bit or 8bit LPCM possible.")
 		}
 	} else {
 		mode.context.ModelAdapter().SetMessage(fmt.Sprintf("File could not be opened: %s", filePath))
 	}
+}
+
+func (mode *GameTextsMode) requestAudioChange(newData audio.SoundData) {
+	restoreState := mode.stateSnapshot()
+	mode.context.Perform(&cmd.SetAudioCommand{
+		Setter: func(data audio.SoundData) error {
+			restoreState()
+			mode.soundAdapter.RequestAudioChange(data)
+			return nil
+		},
+		NewValue: newData,
+		OldValue: mode.soundAdapter.Audio()})
+}
+
+func (mode *GameTextsMode) stateSnapshot() func() {
+	currentType := mode.selectedResourceType
+	currentLanguage := mode.selectedLanguage
+	currentID := mode.selectedTextID
+	return func() {
+		mode.setState(currentType, currentLanguage, currentID)
+	}
+}
+
+func (mode *GameTextsMode) setState(resourceType dataModel.ResourceType, language dataModel.ResourceLanguage, id int) {
+	{
+		mode.selectedResourceType = resourceType
+		for _, item := range mode.resourceTypeItems {
+			if item.value == uint32(resourceType) {
+				mode.resourceTypeBox.SetSelectedItem(item)
+			}
+		}
+		mode.audioArea.SetVisible(mode.selectedResourceType == dataModel.ResourceTypeTrapMessages)
+		mode.textIDSlider.SetRange(0, int64(dataModel.MaxEntriesFor(mode.selectedResourceType))-1)
+	}
+	{
+		mode.selectedLanguage = language
+		for _, item := range mode.languageItems {
+			if item.value == uint32(language) {
+				mode.languageBox.SetSelectedItem(item)
+			}
+		}
+	}
+	mode.selectedTextID = id
+	mode.textIDSlider.SetValue(int64(mode.selectedTextID))
+	mode.requestData()
 }

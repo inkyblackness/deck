@@ -2,6 +2,7 @@ package modes
 
 import (
 	"fmt"
+	"math"
 )
 
 func cloneBytes(original []byte) []byte {
@@ -27,6 +28,15 @@ func stringAsPointer(value string) (ptr *string) {
 	ptr = new(string)
 	*ptr = value
 	return
+}
+
+func heightToValue(heightShift int, value int64, scale float64) float64 {
+	tileHeights := []float64{32.0, 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25}
+	if (heightShift >= 0) && (heightShift < len(tileHeights)) {
+		return (float64(value) * tileHeights[heightShift]) / scale
+	} else {
+		return math.NaN()
+	}
 }
 
 func heightToString(heightShift int, value int64, scale float64) (result string) {

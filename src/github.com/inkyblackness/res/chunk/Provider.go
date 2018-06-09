@@ -1,12 +1,10 @@
 package chunk
 
-import "github.com/inkyblackness/res"
-
-// Provider provides chunks
+// Provider provides chunks from some storage.
 type Provider interface {
-	// IDs returns a list of available IDs this provider can provide
-	IDs() []res.ResourceID
+	// IDs returns a list of available IDs this provider can provide.
+	IDs() []Identifier
 
-	// Provide returns a chunk for the given identifier
-	Provide(id res.ResourceID) BlockHolder
+	// Provide returns a chunk for the given identifier.
+	Chunk(id Identifier) (*Chunk, error)
 }

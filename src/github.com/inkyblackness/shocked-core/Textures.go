@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 
 	"github.com/inkyblackness/res"
-	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/image"
 	"github.com/inkyblackness/res/text"
 	"github.com/inkyblackness/res/textprop"
@@ -15,16 +14,16 @@ import (
 
 // Textures is the adapter of texture information.
 type Textures struct {
-	cybstrng   [model.LanguageCount]chunk.Store
-	images     chunk.Store
+	cybstrng   [model.LanguageCount]*io.DynamicChunkStore
+	images     *io.DynamicChunkStore
 	cp         text.Codepage
 	properties textprop.Store
 }
 
 // NewTextures returns a new Textures instance, if possible.
 func NewTextures(library io.StoreLibrary) (textures *Textures, err error) {
-	var cybstrng [model.LanguageCount]chunk.Store
-	var images chunk.Store
+	var cybstrng [model.LanguageCount]*io.DynamicChunkStore
+	var images *io.DynamicChunkStore
 	var properties textprop.Store
 
 	for i := 0; i < model.LanguageCount && err == nil; i++ {

@@ -832,6 +832,7 @@ func (inplace *InplaceDataStore) AddLevelObject(projectID string, archiveID stri
 			}
 		}
 		if err != nil {
+			fmt.Printf("Failed to add: %v\n", err)
 			inplace.out(onFailure)
 		}
 	})

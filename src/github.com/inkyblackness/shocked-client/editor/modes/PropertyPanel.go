@@ -23,6 +23,16 @@ func (item *enumItem) String() string {
 	return item.displayName
 }
 
+type enumItems []*enumItem
+
+func (items enumItems) forComboBox() []controls.ComboBoxItem {
+	result := make([]controls.ComboBoxItem, len(items))
+	for index, item := range items {
+		result[index] = item
+	}
+	return result
+}
+
 type bitfieldItem struct {
 	displayName string
 	shift       uint32

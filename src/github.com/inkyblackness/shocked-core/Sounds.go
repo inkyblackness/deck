@@ -14,22 +14,21 @@ import (
 )
 
 type soundInfo struct {
-	dataType  res.DataTypeID
-	chunkType chunk.TypeID
-	limit     uint16
+	contentType chunk.ContentType
+	limit       uint16
 }
 
 var knownSounds = map[model.ResourceType]soundInfo{
-	model.ResourceTypeTrapAudio: {res.Media, chunk.BasicChunkType, model.MaxTrapMessages}}
+	model.ResourceTypeTrapAudio: {chunk.Media, model.MaxTrapMessages}}
 
 // Sounds is the adapter for general sounds.
 type Sounds struct {
-	citbark [model.LanguageCount]chunk.Store
+	citbark [model.LanguageCount]*io.DynamicChunkStore
 }
 
 // NewSounds returns a new Sounds instance, if possible.
 func NewSounds(library io.StoreLibrary) (sounds *Sounds, err error) {
-	var citbark [model.LanguageCount]chunk.Store
+	var citbark [model.LanguageCount]*io.DynamicChunkStore
 
 	for i := 0; i < model.LanguageCount && err == nil; i++ {
 		citbark[i], err = library.ChunkStore(localized[i].citbark)
@@ -42,7 +41,7 @@ func NewSounds(library io.StoreLibrary) (sounds *Sounds, err error) {
 	return
 }
 
-func (sounds *Sounds) store(key model.ResourceKey) (store chunk.Store) {
+func (sounds *Sounds) store(key model.ResourceKey) (store *io.DynamicChunkStore) {
 	if key.Type == model.ResourceTypeTrapAudio {
 		store = sounds.citbark[key.Language.ToIndex()]
 	}
@@ -56,7 +55,7 @@ func (sounds *Sounds) Audio(key model.ResourceKey) (data audio.SoundData, err er
 		store := sounds.store(key)
 		holder := store.Get(res.ResourceID(int(key.Type) + int(key.Index)))
 
-		if (holder != nil) && (info.dataType == res.Media) {
+		if (holder != nil) && (info.contentType == chunk.Media) {
 			blockData := holder.BlockData(0)
 			var container movi.Container
 			container, err = movi.Read(bytes.NewReader(blockData))
@@ -80,15 +79,24 @@ func (sounds *Sounds) Audio(key model.ResourceKey) (data audio.SoundData, err er
 }
 
 // SetAudio requests to set the audio of a sound resource.
-func (sounds *Sounds) SetAudio(key model.ResourceKey, data audio.SoundData) (resultKey model.ResourceKey, err error) {
+func (sounds *Sounds) SetAudio(key model.ResourceKey, soundData audio.SoundData) (resultKey model.ResourceKey, err error) {
 	info, known := knownSounds[key.Type]
 
 	if known && (key.Index < info.limit) && key.HasValidLanguage() {
 		store := sounds.store(key)
 
-		if info.dataType == res.Media {
-			data := movi.ContainSoundData(data)
-			store.Put(res.ResourceID(int(key.Type)+int(key.Index)), chunk.NewBlockHolder(info.chunkType, res.Media, [][]byte{data}))
+		if info.contentType == chunk.Media {
+			resourceID := res.ResourceID(int(key.Type) + int(key.Index))
+
+			if soundData != nil {
+				encodedData := movi.ContainSoundData(soundData)
+				store.Put(resourceID,
+					&chunk.Chunk{
+						ContentType:   info.contentType,
+						BlockProvider: chunk.MemoryBlockProvider([][]byte{encodedData})})
+			} else {
+				store.Del(resourceID)
+			}
 		}
 		resultKey = key
 	} else {

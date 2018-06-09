@@ -74,8 +74,14 @@ func (adapter *TextureAdapter) WorldTextureCount() int {
 }
 
 // GameTexture returns texture information for identified texture.
-func (adapter *TextureAdapter) GameTexture(id int) *GameTexture {
-	return adapter.gameTextureList()[id]
+func (adapter *TextureAdapter) GameTexture(id int) (texture *GameTexture) {
+	list := adapter.gameTextureList()
+	if (id >= 0) && (id < len(list)) {
+		texture = list[id]
+	} else {
+		texture = nullGameTexture(id)
+	}
+	return
 }
 
 // RequestTexturePropertiesChange requests to change properties of a single texture.
@@ -87,6 +93,11 @@ func (adapter *TextureAdapter) RequestTexturePropertiesChange(id int, properties
 			textures[id].properties = *updatedProperties
 			adapter.gameTextures.notifyObservers()
 		}, adapter.context.simpleStoreFailure("SetTextureProperties"))
+}
+
+// TextureBitmap returns the raw bitmap for given key - if available.
+func (adapter *TextureAdapter) TextureBitmap(id int, size model.TextureSize) *model.RawBitmap {
+	return adapter.worldTextures[size].RawBitmap(id)
 }
 
 // RequestTextureBitmapChange requests to change the bitmap of a single texture.

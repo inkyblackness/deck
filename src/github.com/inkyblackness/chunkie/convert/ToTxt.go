@@ -2,6 +2,7 @@ package convert
 
 import (
 	"encoding/xml"
+	"io/ioutil"
 	"os"
 
 	"github.com/inkyblackness/res/chunk"
@@ -9,7 +10,7 @@ import (
 )
 
 // ToTxt extracts all blocks from a given holder and writes
-func ToTxt(fileName string, holder chunk.BlockHolder) (result bool) {
+func ToTxt(fileName string, holder chunk.BlockProvider) (result bool) {
 	file, _ := os.Create(fileName)
 
 	if file != nil {
@@ -17,9 +18,10 @@ func ToTxt(fileName string, holder chunk.BlockHolder) (result bool) {
 		cp := text.DefaultCodepage()
 		var decoded Text
 
-		for blockID := uint16(0); blockID < holder.BlockCount(); blockID++ {
+		for blockID := 0; blockID < holder.BlockCount(); blockID++ {
 			temp := blockID
-			blockData := holder.BlockData(blockID)
+			blockReader, _ := holder.Block(blockID)
+			blockData, _ := ioutil.ReadAll(blockReader)
 			decoded.Entries = append(decoded.Entries, TextEntry{Block: &temp, CData: cp.Decode(blockData)})
 		}
 		enc := xml.NewEncoder(file)

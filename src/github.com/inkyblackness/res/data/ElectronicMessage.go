@@ -2,11 +2,11 @@ package data
 
 import (
 	"fmt"
+	"io/ioutil"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/text"
 )
@@ -56,14 +56,24 @@ func NewElectronicMessage() *ElectronicMessage {
 }
 
 // DecodeElectronicMessage tries to decode a message from given block holder.
-func DecodeElectronicMessage(cp text.Codepage, holder chunk.BlockHolder) (message *ElectronicMessage, err error) {
-	blockIndex := uint16(0)
+func DecodeElectronicMessage(cp text.Codepage, provider chunk.BlockProvider) (message *ElectronicMessage, err error) {
+	blockIndex := 0
 	nextBlockString := func() (line string) {
-		if err == nil {
-			if blockIndex < holder.BlockCount() {
-				line = cp.Decode(holder.BlockData(blockIndex))
-				blockIndex++
+		if err != nil {
+			return
+		}
+		if blockIndex < provider.BlockCount() {
+			blockReader, blockErr := provider.Block(blockIndex)
+			if blockErr != nil {
+				err = fmt.Errorf("failed to access block %v: %v", blockIndex, blockErr)
+				return
 			}
+			data, dataErr := ioutil.ReadAll(blockReader)
+			if dataErr != nil {
+				err = fmt.Errorf("failed to read data from block %v: %v", blockIndex, dataErr)
+			}
+			line = cp.Decode(data)
+			blockIndex++
 		}
 		return
 	}
@@ -109,7 +119,7 @@ func DecodeElectronicMessage(cp text.Codepage, holder chunk.BlockHolder) (messag
 }
 
 // Encode serializes the message into a block holder.
-func (message *ElectronicMessage) Encode(cp text.Codepage) chunk.BlockHolder {
+func (message *ElectronicMessage) Encode(cp text.Codepage) *chunk.Chunk {
 	blocks := [][]byte{}
 
 	blocks = append(blocks, cp.Encode(message.metaString()))
@@ -125,7 +135,11 @@ func (message *ElectronicMessage) Encode(cp text.Codepage) chunk.BlockHolder {
 	}
 	blocks = append(blocks, []byte{0x00})
 
-	return chunk.NewBlockHolder(chunk.BasicChunkType.WithDirectory(), res.Text, blocks)
+	return &chunk.Chunk{
+		Compressed:    false,
+		ContentType:   chunk.Text,
+		Fragmented:    true,
+		BlockProvider: chunk.MemoryBlockProvider(blocks)}
 }
 
 func (message *ElectronicMessage) metaString() string {

@@ -14,8 +14,9 @@ type SliderBuilder struct {
 
 	sliderChangeHandler SliderChangeHandler
 
-	valueMin int64
-	valueMax int64
+	valueMin       int64
+	valueMax       int64
+	invertedScroll bool
 }
 
 // NewSliderBuilder returns a new SliderBuilder instance.
@@ -37,7 +38,9 @@ func (builder *SliderBuilder) Build() *Slider {
 		formatter:           DefaultSliderValueFormatter,
 		valueMin:            builder.valueMin,
 		valueMax:            builder.valueMax,
-		valueUndefined:      true}
+		invertedScroll:      builder.invertedScroll,
+		valueUndefined:      true,
+	}
 
 	builder.areaBuilder.OnRender(slider.onRender)
 	builder.areaBuilder.OnEvent(events.MouseButtonDownEventType, slider.onMouseButtonDown)
@@ -99,5 +102,11 @@ func (builder *SliderBuilder) WithSliderChangeHandler(handler SliderChangeHandle
 func (builder *SliderBuilder) WithRange(valueMin, valueMax int64) *SliderBuilder {
 	builder.valueMin = valueMin
 	builder.valueMax = valueMax
+	return builder
+}
+
+// WithInvertedScroll sets whether scrolling up/down should be inverted.
+func (builder *SliderBuilder) WithInvertedScroll(value bool) *SliderBuilder {
+	builder.invertedScroll = value
 	return builder
 }

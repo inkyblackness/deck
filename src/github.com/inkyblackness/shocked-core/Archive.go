@@ -4,8 +4,6 @@ import (
 	"sync"
 
 	"github.com/inkyblackness/res"
-	"github.com/inkyblackness/res/chunk"
-
 	"github.com/inkyblackness/shocked-core/io"
 )
 
@@ -13,7 +11,7 @@ import (
 type Archive struct {
 	mutex sync.Mutex
 
-	store chunk.Store
+	store *io.DynamicChunkStore
 
 	levels [MaximumLevelsPerArchive]*Level
 }
@@ -21,7 +19,7 @@ type Archive struct {
 // NewArchive creates a new archive wrapper for given store name. This wrapper is
 // applicable for the "starting game" archive, as well as savegames.
 func NewArchive(library io.StoreLibrary, storeName string) (archive *Archive, err error) {
-	var store chunk.Store
+	var store *io.DynamicChunkStore
 
 	store, err = library.ChunkStore(storeName)
 

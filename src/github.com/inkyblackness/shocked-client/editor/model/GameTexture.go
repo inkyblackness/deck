@@ -15,6 +15,23 @@ func newGameTexture(id int) *GameTexture {
 	return &GameTexture{id: id}
 }
 
+func nullGameTexture(id int) *GameTexture {
+	texture := newGameTexture(id)
+	valFalse := false
+	valZero := 0
+	valEmpty := ""
+
+	for lang := 0; lang < model.LanguageCount; lang++ {
+		texture.properties.Name[lang] = &valEmpty
+		texture.properties.CantBeUsed[lang] = &valEmpty
+	}
+	texture.properties.Climbable = &valFalse
+	texture.properties.AnimationGroup = &valZero
+	texture.properties.AnimationIndex = &valZero
+	texture.properties.TransparencyControl = &valZero
+	return texture
+}
+
 // ID uniquely identifies the texture in the game.
 func (texture *GameTexture) ID() int {
 	return texture.id
@@ -41,11 +58,11 @@ func (texture *GameTexture) AnimationIndex() int {
 }
 
 // Name returns the name of the texture in given language.
-func (texture *GameTexture) Name(language int) string {
-	return *texture.properties.Name[language]
+func (texture *GameTexture) Name(language model.ResourceLanguage) string {
+	return *texture.properties.Name[language.ToIndex()]
 }
 
 // UseText returns the usage text of the texture in given language.
-func (texture *GameTexture) UseText(language int) string {
-	return *texture.properties.CantBeUsed[language]
+func (texture *GameTexture) UseText(language model.ResourceLanguage) string {
+	return *texture.properties.CantBeUsed[language.ToIndex()]
 }

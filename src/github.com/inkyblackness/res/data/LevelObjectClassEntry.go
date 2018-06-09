@@ -1,5 +1,7 @@
 package data
 
+import "github.com/inkyblackness/res/serial"
+
 // LevelObjectClassEntry is a basic entry for a class table, which contains
 // the prefix header together with an arbitrary data block.
 type LevelObjectClassEntry struct {
@@ -15,4 +17,10 @@ func NewLevelObjectClassEntry(dataSize int) *LevelObjectClassEntry {
 // Data returns a slice of the contained data.
 func (entry *LevelObjectClassEntry) Data() []byte {
 	return entry.data
+}
+
+// Code serializes the entry via the given coder.
+func (entry *LevelObjectClassEntry) Code(coder serial.Coder) {
+	coder.Code(&entry.LevelObjectPrefix)
+	coder.Code(entry.data)
 }

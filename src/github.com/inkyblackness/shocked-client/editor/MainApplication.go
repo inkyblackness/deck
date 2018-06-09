@@ -7,6 +7,7 @@ import (
 
 	mgl "github.com/go-gl/mathgl/mgl32"
 
+	"github.com/inkyblackness/shocked-client/editor/cmd"
 	"github.com/inkyblackness/shocked-client/editor/model"
 	"github.com/inkyblackness/shocked-client/env"
 	"github.com/inkyblackness/shocked-client/env/keys"
@@ -23,20 +24,23 @@ type MainApplication struct {
 	lastElapsedTick time.Time
 	elapsedMSec     int64
 
+	commandStack cmd.Stack
+
 	store        dataModel.DataStore
 	modelAdapter *model.Adapter
 
-	scale                     float32
-	glWindow                  env.OpenGlWindow
-	windowWidth, windowHeight float32
-	gl                        opengl.OpenGl
-	projectionMatrix          mgl.Mat4
+	scale                float32
+	invertedSliderScroll bool
+	glWindow             env.OpenGlWindow
+	gl                   opengl.OpenGl
+	projectionMatrix     mgl.Mat4
 
 	mouseX, mouseY      float32
 	mouseButtons        uint32
 	mouseButtonsDragged uint32
 	keyModifier         keys.Modifier
 
+	root               *rootArea
 	rootArea           *ui.Area
 	defaultFontPainter graphics.TextPainter
 	uiTextPalette      *graphics.PaletteTexture
@@ -52,15 +56,16 @@ type MainApplication struct {
 }
 
 // NewMainApplication returns a new instance of MainApplication.
-func NewMainApplication(store dataModel.DataStore, scale float32) *MainApplication {
+func NewMainApplication(store dataModel.DataStore, scale float32, invertedSliderScroll bool) *MainApplication {
 	app := &MainApplication{
-		projectionMatrix:   mgl.Ident4(),
-		lastElapsedTick:    time.Now(),
-		store:              store,
-		scale:              scale,
-		modelAdapter:       model.NewAdapter(store),
-		defaultFontPainter: graphics.NewBitmapTextPainter(defaultFont),
-		worldTextures:      make(map[dataModel.TextureSize]*graphics.BufferedTextureStore)}
+		projectionMatrix:     mgl.Ident4(),
+		lastElapsedTick:      time.Now(),
+		store:                store,
+		scale:                scale,
+		invertedSliderScroll: invertedSliderScroll,
+		modelAdapter:         model.NewAdapter(store),
+		defaultFontPainter:   graphics.NewBitmapTextPainter(defaultFont),
+		worldTextures:        make(map[dataModel.TextureSize]*graphics.BufferedTextureStore)}
 
 	return app
 }
@@ -217,7 +222,7 @@ func (app *MainApplication) initInterface() {
 	app.uiTextRenderer = graphics.NewBitmapTextureRenderer(uiRenderContext, app.uiTextPalette)
 	app.worldTextureRenderer = graphics.NewBitmapTextureRenderer(uiRenderContext, app.worldPalette)
 
-	app.rootArea = newRootArea(app)
+	app.root, app.rootArea = newRootArea(app)
 }
 
 func (app *MainApplication) updateElapsedNano() {
@@ -286,6 +291,13 @@ func (app *MainApplication) onKey(key keys.Key, modifier keys.Modifier) {
 	} else if key == keys.KeyPaste {
 		app.rootArea.DispatchPositionalEvent(events.NewClipboardEvent(events.ClipboardPasteEventType,
 			app.mouseX, app.mouseY, app.glWindow.Clipboard()))
+	} else if key == keys.KeyUndo {
+		app.undo()
+	} else if key == keys.KeyRedo {
+		app.redo()
+	} else if (key >= keys.KeyF1) && (key <= keys.KeyF9) {
+		modeIndex := key - keys.KeyF1
+		app.root.RequestActiveMode(app.root.ModeNames()[modeIndex])
 	}
 }
 
@@ -303,6 +315,28 @@ func (app *MainApplication) onFileDrop(filePaths []string) {
 func (app *MainApplication) sendFileDropEvent(filePaths []string) {
 	app.rootArea.DispatchPositionalEvent(events.NewFileDropEvent(
 		app.mouseX, app.mouseY, filePaths))
+}
+
+func (app *MainApplication) undo() {
+	err := app.commandStack.Undo()
+	if err != nil {
+		app.modelAdapter.SetMessage("Failed to undo command.")
+	}
+}
+
+func (app *MainApplication) redo() {
+	err := app.commandStack.Redo()
+	if err != nil {
+		app.modelAdapter.SetMessage("Failed to redo command.")
+	}
+}
+
+// Perform tries to execute the given command and puts it on the command stack.
+func (app *MainApplication) Perform(command cmd.Command) {
+	err := app.commandStack.Perform(command)
+	if err != nil {
+		app.modelAdapter.SetMessage("Failed to perform command.")
+	}
 }
 
 // ModelAdapter implements the Context interface.
@@ -394,12 +428,12 @@ func (app *MainApplication) ForComboBox() *controls.ComboBoxBuilder {
 
 // ForTextureSelector implements the controls.Factory interface.
 func (app *MainApplication) ForTextureSelector() *controls.TextureSelectorBuilder {
-	return controls.NewTextureSelectorBuilder(app.rectRenderer, app.worldTextureRenderer)
+	return controls.NewTextureSelectorBuilder(app.rectRenderer, app.worldTextureRenderer).WithInvertedScroll(app.invertedSliderScroll)
 }
 
 // ForSlider implements the controls.Factory interface.
 func (app *MainApplication) ForSlider() *controls.SliderBuilder {
-	return controls.NewSliderBuilder(app.ForLabel(), app.rectRenderer)
+	return controls.NewSliderBuilder(app.ForLabel(), app.rectRenderer).WithInvertedScroll(app.invertedSliderScroll)
 }
 
 // ForImageDisplay implements the controls.Factory interface.

@@ -1,20 +1,19 @@
 package io
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
-	dosChunk "github.com/inkyblackness/res/chunk/dos"
+	"github.com/inkyblackness/res/chunk/resfile"
 	"github.com/inkyblackness/res/objprop"
 	dosObjprop "github.com/inkyblackness/res/objprop/dos"
 	"github.com/inkyblackness/res/textprop"
 	dosTextprop "github.com/inkyblackness/res/textprop/dos"
 	"github.com/inkyblackness/shocked-core/release"
-)
 
-import (
-	check "gopkg.in/check.v1"
+	"gopkg.in/check.v1"
 )
 
 type ReleaseStoreLibrarySuite struct {
@@ -37,12 +36,21 @@ func (suite *ReleaseStoreLibrarySuite) SetUpTest(c *check.C) {
 	suite.library = NewReleaseStoreLibrary(suite.source, suite.sink, 0)
 }
 
-func (suite *ReleaseStoreLibrarySuite) createChunkResource(rel release.Release, name string, filler func(consumer chunk.Consumer)) {
+func (suite *ReleaseStoreLibrarySuite) aChunk() *chunk.Chunk {
+	return &chunk.Chunk{
+		BlockProvider: chunk.MemoryBlockProvider([][]byte{{}})}
+}
+
+func (suite *ReleaseStoreLibrarySuite) createChunkResource(rel release.Release, name string, filler func(consumer chunk.Store)) {
 	resource, _ := rel.NewResource(name, "")
 	writer, _ := resource.AsSink()
-	consumer := dosChunk.NewChunkConsumer(writer)
-	filler(consumer)
-	consumer.Finish()
+	store := chunk.NewProviderBackedStore(chunk.NullProvider())
+	filler(store)
+	writeErr := resfile.Write(writer, store)
+	if writeErr != nil {
+		panic(fmt.Errorf("failed to write store: %v", writeErr))
+	}
+	_ = writer.Close()
 }
 
 func (suite *ReleaseStoreLibrarySuite) createObjpropResource(rel release.Release, name string, filler func(consumer objprop.Consumer)) {
@@ -88,8 +96,8 @@ func (suite *ReleaseStoreLibrarySuite) someTextureProperties(seed byte) []byte {
 }
 
 func (suite *ReleaseStoreLibrarySuite) TestChunkStoreIsBackedBySinkIfExisting(c *check.C) {
-	suite.createChunkResource(suite.sink, "fromSink.res", func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	suite.createChunkResource(suite.sink, "fromSink.res", func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
 	store, err := suite.library.ChunkStore("fromSink.res")
 
@@ -100,9 +108,9 @@ func (suite *ReleaseStoreLibrarySuite) TestChunkStoreIsBackedBySinkIfExisting(c 
 }
 
 func (suite *ReleaseStoreLibrarySuite) TestChunkStoreIsBackedBySinkIfExistingInBoth(c *check.C) {
-	suite.createChunkResource(suite.source, "stillFromSink.res", func(consumer chunk.Consumer) {})
-	suite.createChunkResource(suite.sink, "stillFromSink.res", func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	suite.createChunkResource(suite.source, "stillFromSink.res", func(consumer chunk.Store) {})
+	suite.createChunkResource(suite.sink, "stillFromSink.res", func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
 	store, err := suite.library.ChunkStore("stillFromSink.res")
 
@@ -113,8 +121,8 @@ func (suite *ReleaseStoreLibrarySuite) TestChunkStoreIsBackedBySinkIfExistingInB
 }
 
 func (suite *ReleaseStoreLibrarySuite) TestChunkStoreIsBackedBySourceIfExisting(c *check.C) {
-	suite.createChunkResource(suite.source, "fromSource.res", func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	suite.createChunkResource(suite.source, "fromSource.res", func(consumer chunk.Store) {
+		consumer.Put(res.ResourceID(1), suite.aChunk())
 	})
 	store, err := suite.library.ChunkStore("fromSource.res")
 
@@ -134,8 +142,8 @@ func (suite *ReleaseStoreLibrarySuite) TestChunkStoreReturnsEmptyStoreIfNowhereE
 }
 
 func (suite *ReleaseStoreLibrarySuite) TestModifyingChunkSourceSavesNewSink(c *check.C) {
-	suite.createChunkResource(suite.source, "source.res", func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	suite.createChunkResource(suite.source, "source.res", func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
 	store, err := suite.library.ChunkStore("source.res")
 
@@ -151,8 +159,8 @@ func (suite *ReleaseStoreLibrarySuite) TestModifyingChunkSourceSavesNewSink(c *c
 
 func (suite *ReleaseStoreLibrarySuite) TestSaveAllSavesModifiedSink(c *check.C) {
 	suite.library = NewReleaseStoreLibrary(suite.source, suite.sink, 1000)
-	suite.createChunkResource(suite.source, "source.res", func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	suite.createChunkResource(suite.source, "source.res", func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
 	store, err := suite.library.ChunkStore("source.res")
 
@@ -168,8 +176,8 @@ func (suite *ReleaseStoreLibrarySuite) TestSaveAllSavesModifiedSink(c *check.C) 
 }
 
 func (suite *ReleaseStoreLibrarySuite) TestChunkStoreReturnsSameInstances(c *check.C) {
-	suite.createChunkResource(suite.source, "source.res", func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	suite.createChunkResource(suite.source, "source.res", func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
 	store1, err1 := suite.library.ChunkStore("source.res")
 	c.Assert(err1, check.IsNil)

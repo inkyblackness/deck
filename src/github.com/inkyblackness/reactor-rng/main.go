@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -10,10 +11,8 @@ import (
 
 	"github.com/docopt/docopt-go"
 
-	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
-	"github.com/inkyblackness/res/chunk/dos"
-	"github.com/inkyblackness/res/chunk/store"
+	"github.com/inkyblackness/res/chunk/resfile"
 	"github.com/inkyblackness/res/data"
 	"github.com/inkyblackness/res/serial"
 )
@@ -79,50 +78,59 @@ func patchSaveFile(filePath string, newCode reactorCode) {
 }
 
 func openSaveGameStore(filePath string) (archive chunk.Store, err error) {
-	file, err := os.Open(filePath)
+	fileData, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return
 	}
-	defer func() { _ = file.Close() }()
-	provider, err := dos.NewChunkProvider(file)
+	reader, err := resfile.ReaderFrom(bytes.NewReader(fileData))
 	if err != nil {
 		return
 	}
-	archive = store.NewProviderBacked(chunk.NullProvider(), func() {})
-	gameStateFound := false
-	for _, id := range provider.IDs() {
-		blockHolder := provider.Provide(id)
-		blockHolder.BlockCount() // this ensures the block data is buffered
-		if (id == GameStateResourceID) && isActiveGameState(blockHolder) {
-			gameStateFound = true
-		}
-		archive.Put(id, blockHolder)
+	archive = chunk.NewProviderBackedStore(reader)
+	gameState, gameStateErr := archive.Chunk(chunk.ID(GameStateResourceID))
+	if gameStateErr != nil {
+		err = fmt.Errorf("game state chunk not found: %v", gameStateErr)
+		return
 	}
-	if !gameStateFound {
-		err = fmt.Errorf("game state chunk not found. Probably not a save-game")
+	if !isActiveGameState(gameState) {
+		err = fmt.Errorf("game state does not describe a save-game")
 	}
 	return
 }
 
-func isActiveGameState(blockHolder chunk.BlockHolder) (isActive bool) {
-	if blockHolder.BlockCount() == 1 {
-		blockData := blockHolder.BlockData(0)
-		// Test that this is probably a game state block from an active save-game.
-		// Health should be more than zero at this point. Otherwise it might be a start-game archive.
-		isActive = (len(blockData) > HealthOffset) && (blockData[HealthOffset] != 0x00)
+func isActiveGameState(blockProvider chunk.BlockProvider) bool {
+	blockData, dataErr := extractDataFromBlockProvider(blockProvider)
+	if dataErr != nil {
+		return false
 	}
-	return
+
+	// Test that this is probably a game state block from an active save-game.
+	// Health should be more than zero at this point. Otherwise it might be a start-game archive.
+	return (len(blockData) > HealthOffset) && (blockData[HealthOffset] != 0x00)
+}
+
+func extractDataFromBlockProvider(blockProvider chunk.BlockProvider) ([]byte, error) {
+	blockReader, readerErr := blockProvider.Block(0)
+	if readerErr != nil {
+		return nil, readerErr
+	}
+	blockData, dataErr := ioutil.ReadAll(blockReader)
+	if dataErr != nil {
+		return nil, dataErr
+	}
+	return blockData, nil
 }
 
 func modifySaveGame(archive chunk.Store, newCode reactorCode) (err error) {
 	fmt.Println("Changing code.")
 	{
-		gameState := archive.Get(GameStateResourceID)
-		gameStateData := serial.NewByteStore()
-		_, _ = gameStateData.Write(gameState.BlockData(0))
-		_, _ = gameStateData.Seek(ReactorCodeOffset, io.SeekStart)
-		_ = binary.Write(gameStateData, binary.LittleEndian, &newCode)
-		gameState.SetBlockData(0, gameStateData.Data())
+		gameStateChunk, _ := archive.Chunk(chunk.ID(GameStateResourceID))
+		gameStateData, _ := extractDataFromBlockProvider(gameStateChunk)
+		gameStateStore := serial.NewByteStore()
+		_, _ = gameStateStore.Write(gameStateData)
+		_, _ = gameStateStore.Seek(ReactorCodeOffset, io.SeekStart)
+		_ = binary.Write(gameStateStore, binary.LittleEndian, &newCode)
+		gameStateChunk.SetBlock(0, gameStateStore.Data())
 	}
 
 	// The following code assumes all panels to be code input panels.
@@ -144,13 +152,14 @@ func modifySaveGame(archive chunk.Store, newCode reactorCode) (err error) {
 			Unknown        [4]byte
 		}
 
-		panelsClassInfo := archive.Get(ReactorLevelPanelClassDataResourceID)
-		if panelsClassInfo.BlockCount() == 1 {
-			panelsClassData := serial.NewByteStore()
-			_, _ = panelsClassData.Write(panelsClassInfo.BlockData(0))
+		panelsClassChunk, _ := archive.Chunk(chunk.ID(ReactorLevelPanelClassDataResourceID))
+		if (panelsClassChunk != nil) && (panelsClassChunk.BlockCount() == 1) {
+			panelsClassData, _ := extractDataFromBlockProvider(panelsClassChunk)
+			panelsClassStore := serial.NewByteStore()
+			_, _ = panelsClassStore.Write(panelsClassData)
 			var entries [PanelClassDataEntryCount]hackedPanelClassEntry
-			_, _ = panelsClassData.Seek(0, io.SeekStart)
-			_ = binary.Read(panelsClassData, binary.LittleEndian, &entries)
+			_, _ = panelsClassStore.Seek(0, io.SeekStart)
+			_ = binary.Read(panelsClassStore, binary.LittleEndian, &entries)
 
 			reactorPanel := &entries[ReactorCodePanelClassIndex]
 
@@ -164,9 +173,9 @@ func modifySaveGame(archive chunk.Store, newCode reactorCode) (err error) {
 				reactorPanel.Code1 = newCode.one
 				reactorPanel.Code2 = newCode.two
 
-				_, _ = panelsClassData.Seek(0, io.SeekStart)
-				_ = binary.Write(panelsClassData, binary.LittleEndian, &entries)
-				panelsClassInfo.SetBlockData(0, panelsClassData.Data())
+				_, _ = panelsClassStore.Seek(0, io.SeekStart)
+				_ = binary.Write(panelsClassStore, binary.LittleEndian, &entries)
+				panelsClassChunk.SetBlock(0, panelsClassStore.Data())
 
 				for codeDigitIndex := 0; codeDigitIndex < 6; codeDigitIndex++ {
 					err = modifyLevelScreen(archive, newCode, codeDigitIndex)
@@ -198,13 +207,14 @@ func modifyLevelScreen(archive chunk.Store, newCode reactorCode, codeDigitIndex 
 	sceneryResourceID := ResourceIDLevelBase + (ResourcesPerLevel * levelNumber) +
 		LevelObjectEntryListsResourceIDOffset + SceneryListResourceIDOffset
 
-	sceneryClassInfo := archive.Get(res.ResourceID(sceneryResourceID))
-	if sceneryClassInfo.BlockCount() == 1 {
-		sceneryClassData := serial.NewByteStore()
-		_, _ = sceneryClassData.Write(sceneryClassInfo.BlockData(0))
+	sceneryClassChunk, _ := archive.Chunk(chunk.ID(uint16(sceneryResourceID)))
+	if (sceneryClassChunk != nil) && (sceneryClassChunk.BlockCount() == 1) {
+		sceneryClassData, _ := extractDataFromBlockProvider(sceneryClassChunk)
+		sceneryClassStore := serial.NewByteStore()
+		_, _ = sceneryClassStore.Write(sceneryClassData)
 		var entries [SceneryClassDataEntryCount]hackedScreenClassEntry
-		_, _ = sceneryClassData.Seek(0, io.SeekStart)
-		_ = binary.Read(sceneryClassData, binary.LittleEndian, &entries)
+		_, _ = sceneryClassStore.Seek(0, io.SeekStart)
+		_ = binary.Read(sceneryClassStore, binary.LittleEndian, &entries)
 
 		codeScreenInfoList := levelCodeScreens[codeDigitIndex]
 		for _, codeScreenInfo := range codeScreenInfoList {
@@ -226,21 +236,19 @@ func modifyLevelScreen(archive chunk.Store, newCode reactorCode, codeDigitIndex 
 			}
 		}
 
-		_, _ = sceneryClassData.Seek(0, io.SeekStart)
-		_ = binary.Write(sceneryClassData, binary.LittleEndian, &entries)
-		sceneryClassInfo.SetBlockData(0, sceneryClassData.Data())
+		_, _ = sceneryClassStore.Seek(0, io.SeekStart)
+		_ = binary.Write(sceneryClassStore, binary.LittleEndian, &entries)
+		sceneryClassChunk.SetBlock(0, sceneryClassStore.Data())
 	}
 	return
 }
 
-func writeSaveGame(filePath string, archive chunk.Store) (err error) {
+func writeSaveGame(filePath string, archive chunk.Provider) (err error) {
 	buffer := serial.NewByteStore()
-	consumer := dos.NewChunkConsumer(buffer)
-	for _, id := range archive.IDs() {
-		consumer.Consume(id, archive.Get(id))
+	bufferErr := resfile.Write(buffer, archive)
+	if bufferErr != nil {
+		return bufferErr
 	}
-	consumer.Finish()
-
 	err = ioutil.WriteFile(filePath, buffer.Data(), 0666)
 
 	return

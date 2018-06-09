@@ -22,6 +22,9 @@ var extraIcedPanels = interpreters.New().
 var extraPanels = interpreters.New().
 	With("PanelName", 0, 1)
 
+var extraSurfaces = interpreters.New().
+	With("Index", 1, 1)
+
 func init() {
 
 	projectiles := newInterpreterEntry(baseProjectile)
@@ -57,6 +60,13 @@ func init() {
 
 	realWorldExtras = newInterpreterEntry(interpreters.New())
 	realWorldExtras.set(9, newInterpreterLeaf(extraPanels))
+	extraScenery := newInterpreterEntry(interpreters.New())
+	simpleSurfaces := newInterpreterLeaf(extraSurfaces)
+	surfaces := newInterpreterEntry(interpreters.New())
+	surfaces.set(1, simpleSurfaces)
+	surfaces.set(4, simpleSurfaces)
+	extraScenery.set(2, surfaces)
+	realWorldExtras.set(7, extraScenery)
 	cyberspaceExtras = newInterpreterEntry(interpreters.New())
 	cyberspaceExtras.set(6, newInterpreterLeaf(extraIced))
 	cyberspaceExtras.set(7, newInterpreterLeaf(extraIced))

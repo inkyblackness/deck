@@ -27,6 +27,8 @@ type TextureSelector struct {
 
 	provider TextureProvider
 
+	invertedScroll bool
+
 	firstDisplayedIndex int
 
 	selectedIndex          int
@@ -128,6 +130,11 @@ func (selector *TextureSelector) onListMouseScroll(area *ui.Area, event events.E
 	mouseEvent := event.(*events.MouseScrollEvent)
 	_, dy := mouseEvent.Deltas()
 
+	if !selector.invertedScroll {
+		// somehow, scrolling is already "inverted" in our chain,
+		// so correct always except requested to be inverted.
+		dy = -dy
+	}
 	if dy < 0 {
 		selector.firstDisplayedIndex--
 	} else {

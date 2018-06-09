@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"os"
 
+	"github.com/inkyblackness/shocked-client/editor/cmd"
 	"github.com/inkyblackness/shocked-client/editor/model"
 	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/graphics/controls"
@@ -24,11 +25,11 @@ type GameTexturesMode struct {
 	area           *ui.Area
 	propertiesArea *ui.Area
 
-	selectedTextureLabel    *controls.Label
-	selectedTextureSelector *controls.TextureSelector
-	selectedTextureIDLabel  *controls.Label
-	selectedTextureIDSlider *controls.Slider
-	selectedTextureID       int
+	textureLabel      *controls.Label
+	textureSelector   *controls.TextureSelector
+	textureIDLabel    *controls.Label
+	textureIDSlider   *controls.Slider
+	selectedTextureID int
 
 	propertiesHeader *controls.Label
 
@@ -45,13 +46,15 @@ type GameTexturesMode struct {
 	animationIndexLabel  *controls.Label
 	animationIndexSlider *controls.Slider
 
-	languageLabel *controls.Label
-	languageBox   *controls.ComboBox
-	languageIndex int
-	nameTitle     *controls.Label
-	nameValue     *controls.Label
-	useTextTitle  *controls.Label
-	useTextValue  *controls.Label
+	languageLabel    *controls.Label
+	languageBox      *controls.ComboBox
+	languageItems    enumItems
+	selectedLanguage dataModel.ResourceLanguage
+
+	nameTitle    *controls.Label
+	nameValue    *controls.Label
+	useTextTitle *controls.Label
+	useTextValue *controls.Label
 
 	imageDisplayDrops map[dataModel.TextureSize]*ui.Area
 	imageDisplays     map[dataModel.TextureSize]*controls.ImageDisplay
@@ -104,24 +107,26 @@ func NewGameTexturesMode(context Context, parent *ui.Area) *GameTexturesMode {
 		panelBuilder := newControlPanelBuilder(mode.propertiesArea, context.ControlFactory())
 
 		{
-			mode.selectedTextureIDLabel, mode.selectedTextureIDSlider = panelBuilder.addSliderProperty("Selected Texture ID",
+			mode.textureIDLabel, mode.textureIDSlider = panelBuilder.addSliderProperty("Selected Texture ID",
 				func(newValue int64) {
-					mode.selectedTextureSelector.SetSelectedIndex(int(newValue))
-					mode.selectedTextureSelector.DisplaySelectedIndex()
+					mode.textureSelector.SetSelectedIndex(int(newValue))
+					mode.textureSelector.DisplaySelectedIndex()
 					mode.onTextureSelected(int(newValue))
 				})
-			mode.selectedTextureLabel, mode.selectedTextureSelector = panelBuilder.addTextureProperty("Selected Texture",
+			mode.textureLabel, mode.textureSelector = panelBuilder.addTextureProperty("Selected Texture",
 				mode.worldTextures, func(newValue int) {
-					mode.selectedTextureIDSlider.SetValue(int64(newValue))
+					mode.textureIDSlider.SetValue(int64(newValue))
 					mode.onTextureSelected(newValue)
 				})
 		}
 		mode.propertiesHeader = panelBuilder.addTitle("Properties")
 		{
 			mode.languageLabel, mode.languageBox = panelBuilder.addComboProperty("Language", mode.onLanguageChanged)
-			items := []controls.ComboBoxItem{&enumItem{0, "STD"}, &enumItem{1, "FRN"}, &enumItem{2, "GER"}}
-			mode.languageBox.SetItems(items)
-			mode.languageBox.SetSelectedItem(items[0])
+			mode.languageItems = []*enumItem{
+				{uint32(dataModel.ResourceLanguageStandard), "STD"},
+				{uint32(dataModel.ResourceLanguageFrench), "FRN"},
+				{uint32(dataModel.ResourceLanguageGerman), "GER"}}
+			mode.languageBox.SetItems(mode.languageItems.forComboBox())
 
 			mode.nameTitle, mode.nameValue = panelBuilder.addInfo("Name")
 			mode.nameValue.AllowTextChange(mode.onNameChangeRequested)
@@ -144,6 +149,7 @@ func NewGameTexturesMode(context Context, parent *ui.Area) *GameTexturesMode {
 			mode.animationIndexLabel, mode.animationIndexSlider = panelBuilder.addSliderProperty("Animation Index", mode.onAnimationIndexChanged)
 			mode.animationIndexSlider.SetRange(0, 3)
 		}
+		mode.setState(dataModel.ResourceLanguageStandard, 0)
 	}
 	{
 		padding := scaled(5.0)
@@ -213,39 +219,42 @@ func (mode *GameTexturesMode) imageProvider(size dataModel.TextureSize) controls
 func (mode *GameTexturesMode) onGameTexturesChanged() {
 	textureCount := mode.textureAdapter.WorldTextureCount()
 
-	mode.selectedTextureIDSlider.SetRange(0, int64(textureCount)-1)
-	if mode.selectedTextureID >= 0 {
-		mode.onTextureSelected(mode.selectedTextureID)
-	}
+	mode.textureIDSlider.SetRange(0, int64(textureCount)-1)
+	mode.updateData()
 }
 
 func (mode *GameTexturesMode) onTextureSelected(id int) {
-	texture := mode.textureAdapter.GameTexture(id)
-
 	mode.selectedTextureID = id
-	if texture.Climbable() {
-		mode.climbableBox.SetSelectedItem(mode.climbableItems[1])
-	} else {
-		mode.climbableBox.SetSelectedItem(mode.climbableItems[0])
-	}
-	mode.transparencyControlBox.SetSelectedItem(mode.transparencyControlItems[texture.TransparencyControl()])
-	mode.animationGroupSlider.SetValue(int64(texture.AnimationGroup()))
-	mode.animationIndexSlider.SetValue(int64(texture.AnimationIndex()))
-	mode.updateTextureText()
-}
-
-func (mode *GameTexturesMode) requestTexturePropertiesChange(modifier func(*dataModel.TextureProperties)) {
-	if mode.selectedTextureID >= 0 {
-		var properties dataModel.TextureProperties
-
-		modifier(&properties)
-		mode.textureAdapter.RequestTexturePropertiesChange(mode.selectedTextureID, &properties)
-	}
+	mode.updateData()
 }
 
 func (mode *GameTexturesMode) onLanguageChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
-	mode.languageIndex = int(item.value)
+	mode.selectedLanguage = dataModel.ResourceLanguage(item.value)
+	mode.updateTextureText()
+}
+
+func (mode *GameTexturesMode) updateData() {
+	climbable := false
+	transparencyControl := 0
+	animationGroup := 0
+	animationIndex := 0
+
+	if texture := mode.textureAdapter.GameTexture(mode.selectedTextureID); texture != nil {
+		climbable = texture.Climbable()
+		transparencyControl = texture.TransparencyControl()
+		animationGroup = texture.AnimationGroup()
+		animationIndex = texture.AnimationIndex()
+	}
+
+	if climbable {
+		mode.climbableBox.SetSelectedItem(mode.climbableItems[1])
+	} else {
+		mode.climbableBox.SetSelectedItem(mode.climbableItems[0])
+	}
+	mode.transparencyControlBox.SetSelectedItem(mode.transparencyControlItems[transparencyControl])
+	mode.animationGroupSlider.SetValue(int64(animationGroup))
+	mode.animationIndexSlider.SetValue(int64(animationIndex))
 	mode.updateTextureText()
 }
 
@@ -253,52 +262,52 @@ func (mode *GameTexturesMode) updateTextureText() {
 	name := ""
 	useText := ""
 
-	if mode.selectedTextureID >= 0 {
-		texture := mode.textureAdapter.GameTexture(mode.selectedTextureID)
-
-		name = texture.Name(mode.languageIndex)
-		useText = texture.UseText(mode.languageIndex)
+	if texture := mode.textureAdapter.GameTexture(mode.selectedTextureID); texture != nil {
+		name = texture.Name(mode.selectedLanguage)
+		useText = texture.UseText(mode.selectedLanguage)
 	}
 	mode.nameValue.SetText(name)
 	mode.useTextValue.SetText(useText)
 }
 
 func (mode *GameTexturesMode) onNameChangeRequested(newValue string) {
-	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
-		properties.Name[mode.languageIndex] = stringAsPointer(newValue)
-	})
+	mode.requestStringPropertyChange(func(properties *dataModel.TextureProperties, value *string) {
+		properties.Name[mode.selectedLanguage.ToIndex()] = value
+	}, newValue, mode.textureAdapter.GameTexture(mode.selectedTextureID).Name(mode.selectedLanguage))
 }
 
 func (mode *GameTexturesMode) onUseTextChangeRequested(newValue string) {
-	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
-		properties.CantBeUsed[mode.languageIndex] = stringAsPointer(newValue)
-	})
+	mode.requestStringPropertyChange(func(properties *dataModel.TextureProperties, value *string) {
+		properties.CantBeUsed[mode.selectedLanguage.ToIndex()] = value
+	}, newValue, mode.textureAdapter.GameTexture(mode.selectedTextureID).UseText(mode.selectedLanguage))
 }
 
 func (mode *GameTexturesMode) onClimbableChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
-	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
-		properties.Climbable = boolAsPointer(item.value != 0)
-	})
+	newValue := item.value != 0
+	mode.requestBooleanPropertyChange(func(properties *dataModel.TextureProperties, value *bool) {
+		properties.Climbable = value
+	}, newValue, mode.textureAdapter.GameTexture(mode.selectedTextureID).Climbable())
 }
 
 func (mode *GameTexturesMode) onTransparencyControlChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
-	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
-		properties.TransparencyControl = intAsPointer(int(item.value))
-	})
+	newValue := int(item.value)
+	mode.requestIntPropertyChange(func(properties *dataModel.TextureProperties, value *int) {
+		properties.TransparencyControl = value
+	}, newValue, mode.textureAdapter.GameTexture(mode.selectedTextureID).TransparencyControl())
 }
 
 func (mode *GameTexturesMode) onAnimationGroupChanged(newValue int64) {
-	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
-		properties.AnimationGroup = intAsPointer(int(newValue))
-	})
+	mode.requestIntPropertyChange(func(properties *dataModel.TextureProperties, value *int) {
+		properties.AnimationGroup = value
+	}, int(newValue), mode.textureAdapter.GameTexture(mode.selectedTextureID).AnimationGroup())
 }
 
 func (mode *GameTexturesMode) onAnimationIndexChanged(newValue int64) {
-	mode.requestTexturePropertiesChange(func(properties *dataModel.TextureProperties) {
-		properties.AnimationIndex = intAsPointer(int(newValue))
-	})
+	mode.requestIntPropertyChange(func(properties *dataModel.TextureProperties, value *int) {
+		properties.AnimationIndex = value
+	}, int(newValue), mode.textureAdapter.GameTexture(mode.selectedTextureID).AnimationIndex())
 }
 
 func (mode *GameTexturesMode) textureDropHandler(textureSize dataModel.TextureSize) ui.EventHandler {
@@ -310,7 +319,9 @@ func (mode *GameTexturesMode) textureDropHandler(textureSize dataModel.TextureSi
 			var img image.Image
 
 			if err == nil {
-				defer file.Close()
+				defer func() {
+					_ = file.Close()
+				}()
 				img, _, err = image.Decode(file)
 				if err != nil {
 					mode.context.ModelAdapter().SetMessage(fmt.Sprintf("File <%v> has unknown image format", filePaths[0]))
@@ -319,14 +330,14 @@ func (mode *GameTexturesMode) textureDropHandler(textureSize dataModel.TextureSi
 				mode.context.ModelAdapter().SetMessage(fmt.Sprintf("Could not open file <%v>", filePaths[0]))
 			}
 			if err == nil {
-				mode.setTextureBitmap(textureSize, img)
+				mode.importTextureBitmap(textureSize, img)
 			}
 		}
 		return
 	}
 }
 
-func (mode *GameTexturesMode) setTextureBitmap(textureSize dataModel.TextureSize, img image.Image) {
+func (mode *GameTexturesMode) importTextureBitmap(textureSize dataModel.TextureSize, img image.Image) {
 	if mode.selectedTextureID >= 0 {
 		rawPalette := mode.context.ModelAdapter().GamePalette()
 		palette := make([]color.Color, len(rawPalette))
@@ -341,6 +352,97 @@ func (mode *GameTexturesMode) setTextureBitmap(textureSize dataModel.TextureSize
 		rawBitmap.Height = gfxBitmap.Height
 		rawBitmap.Pixels = base64.StdEncoding.EncodeToString(gfxBitmap.Pixels)
 
-		mode.textureAdapter.RequestTextureBitmapChange(mode.selectedTextureID, textureSize, &rawBitmap)
+		mode.requestTextureBitmapChange(textureSize, &rawBitmap)
 	}
+}
+
+func (mode *GameTexturesMode) requestTextureBitmapChange(textureSize dataModel.TextureSize, newBitmap *dataModel.RawBitmap) {
+	restoreState := mode.stateSnapshot()
+
+	mode.context.Perform(&cmd.SetBitmapCommand{
+		Setter: func(bmp *dataModel.RawBitmap) error {
+			restoreState()
+			mode.textureAdapter.RequestTextureBitmapChange(mode.selectedTextureID, textureSize, bmp)
+			return nil
+		},
+		NewValue: newBitmap,
+		OldValue: mode.textureAdapter.TextureBitmap(mode.selectedTextureID, textureSize)})
+}
+
+func (mode *GameTexturesMode) requestStringPropertyChange(modifier func(*dataModel.TextureProperties, *string),
+	newValue, oldValue string) {
+	if mode.existingTextureSelected() {
+		restoreState := mode.stateSnapshot()
+
+		mode.context.Perform(&cmd.SetStringPropertyCommand{
+			Setter: func(value string) error {
+				return mode.requestPropertyChange(restoreState, func(properties *dataModel.TextureProperties) { modifier(properties, &value) })
+			},
+			NewValue: newValue,
+			OldValue: oldValue})
+	}
+}
+
+func (mode *GameTexturesMode) requestBooleanPropertyChange(modifier func(*dataModel.TextureProperties, *bool),
+	newValue, oldValue bool) {
+	if mode.existingTextureSelected() {
+		restoreState := mode.stateSnapshot()
+
+		mode.context.Perform(&cmd.SetBooleanPropertyCommand{
+			Setter: func(value bool) error {
+				return mode.requestPropertyChange(restoreState, func(properties *dataModel.TextureProperties) { modifier(properties, &value) })
+			},
+			NewValue: newValue,
+			OldValue: oldValue})
+	}
+}
+
+func (mode *GameTexturesMode) requestIntPropertyChange(modifier func(*dataModel.TextureProperties, *int),
+	newValue, oldValue int) {
+	if mode.existingTextureSelected() {
+		restoreState := mode.stateSnapshot()
+
+		mode.context.Perform(&cmd.SetIntPropertyCommand{
+			Setter: func(value int) error {
+				return mode.requestPropertyChange(restoreState, func(properties *dataModel.TextureProperties) { modifier(properties, &value) })
+			},
+			NewValue: newValue,
+			OldValue: oldValue})
+	}
+}
+
+func (mode *GameTexturesMode) requestPropertyChange(restoreState func(), modifier func(*dataModel.TextureProperties)) error {
+	restoreState()
+	var properties dataModel.TextureProperties
+	modifier(&properties)
+	mode.textureAdapter.RequestTexturePropertiesChange(mode.selectedTextureID, &properties)
+	return nil
+}
+
+func (mode *GameTexturesMode) existingTextureSelected() bool {
+	return (mode.selectedTextureID >= 0) && (mode.selectedTextureID < mode.textureAdapter.WorldTextureCount())
+}
+
+func (mode *GameTexturesMode) stateSnapshot() func() {
+	currentLanguage := mode.selectedLanguage
+	currentID := mode.selectedTextureID
+	return func() {
+		mode.setState(currentLanguage, currentID)
+	}
+}
+
+func (mode *GameTexturesMode) setState(language dataModel.ResourceLanguage, id int) {
+	{
+		mode.selectedLanguage = language
+		for _, item := range mode.languageItems {
+			if item.value == uint32(language) {
+				mode.languageBox.SetSelectedItem(item)
+			}
+		}
+	}
+	mode.selectedTextureID = id
+	mode.textureIDSlider.SetValue(int64(mode.selectedTextureID))
+	mode.textureSelector.SetSelectedIndex(mode.selectedTextureID)
+	mode.textureSelector.DisplaySelectedIndex()
+	mode.updateData()
 }

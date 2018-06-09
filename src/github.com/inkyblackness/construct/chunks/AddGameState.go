@@ -1,14 +1,13 @@
 package chunks
 
 import (
-	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/data"
 	"github.com/inkyblackness/res/serial"
 )
 
-// AddGameState adds the chunk for the game state
-func AddGameState(consumer chunk.Consumer) {
+// AddGameState adds the chunk for the game state.
+func AddGameState(chunkStore chunk.Store) {
 	store := serial.NewByteStore()
 	coder := serial.NewPositioningEncoder(store)
 	state := data.DefaultGameState()
@@ -17,6 +16,5 @@ func AddGameState(consumer chunk.Consumer) {
 	coder.SetCurPos(0)
 	coder.Code(&state)
 
-	blocks := [][]byte{store.Data()}
-	consumer.Consume(res.ResourceID(0x0FA1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Map, blocks))
+	chunkStore.Put(chunk.ID(0x0FA1), mapChunk(false, store.Data()))
 }

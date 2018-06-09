@@ -33,6 +33,11 @@ func (adapter *BitmapsAdapter) clear() {
 func (adapter *BitmapsAdapter) refresh() {
 }
 
+// Bitmap returns the raw bitmap data for the given key (if loaded)
+func (adapter *BitmapsAdapter) Bitmap(key model.ResourceKey) *model.RawBitmap {
+	return adapter.bitmaps.RawBitmap(key.ToInt())
+}
+
 // RequestBitmapChange will update the bitmap data for identified key.
 func (adapter *BitmapsAdapter) RequestBitmapChange(key model.ResourceKey, newBitmap *model.RawBitmap) {
 	adapter.store.SetBitmap(adapter.context.ActiveProjectID(), key, newBitmap,

@@ -7,12 +7,12 @@ import (
 	"image/color"
 	"os"
 
+	"github.com/inkyblackness/shocked-client/editor/cmd"
 	"github.com/inkyblackness/shocked-client/editor/model"
 	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/graphics/controls"
 	"github.com/inkyblackness/shocked-client/ui"
 	"github.com/inkyblackness/shocked-client/ui/events"
-
 	dataModel "github.com/inkyblackness/shocked-model"
 )
 
@@ -27,19 +27,21 @@ type GameBitmapsMode struct {
 	area           *ui.Area
 	propertiesArea *ui.Area
 
-	typeLabel            *controls.Label
-	typeBox              *controls.ComboBox
+	resourceTypeLabel    *controls.Label
+	resourceTypeBox      *controls.ComboBox
+	resourceTypeItems    enumItems
 	selectedResourceType dataModel.ResourceType
 
-	languageLabel *controls.Label
-	languageBox   *controls.ComboBox
-	language      dataModel.ResourceLanguage
+	languageLabel    *controls.Label
+	languageBox      *controls.ComboBox
+	languageItems    enumItems
+	selectedLanguage dataModel.ResourceLanguage
 
-	selectedBitmapLabel    *controls.Label
-	selectedBitmapSelector *controls.TextureSelector
-	selectedBitmapIDLabel  *controls.Label
-	selectedBitmapIDSlider *controls.Slider
-	selectedBitmapID       int
+	bitmapLabel      *controls.Label
+	bitmapSelector   *controls.TextureSelector
+	bitmapIDLabel    *controls.Label
+	bitmapIDSlider   *controls.Slider
+	selectedBitmapID int
 
 	imageDisplayDrop *ui.Area
 	imageDisplay     *controls.ImageDisplay
@@ -88,42 +90,36 @@ func NewGameBitmapsMode(context Context, parent *ui.Area) *GameBitmapsMode {
 	}
 	{
 		panelBuilder := newControlPanelBuilder(mode.propertiesArea, context.ControlFactory())
-		var initialTypeItem controls.ComboBoxItem
-		var initialLanguageItem controls.ComboBoxItem
 
 		{
-			mode.typeLabel, mode.typeBox = panelBuilder.addComboProperty("Bitmap Type", mode.onBitmapTypeChanged)
-			items := []controls.ComboBoxItem{
-				&enumItem{uint32(dataModel.ResourceTypeMfdDataImages), "MFD Data Images"}}
+			mode.resourceTypeLabel, mode.resourceTypeBox = panelBuilder.addComboProperty("Bitmap Type", mode.onResourceTypeChanged)
+			mode.resourceTypeItems = []*enumItem{
+				{uint32(dataModel.ResourceTypeMfdDataImages), "MFD Data Images"}}
 
-			mode.typeBox.SetItems(items)
-			initialTypeItem = items[0]
+			mode.resourceTypeBox.SetItems(mode.resourceTypeItems.forComboBox())
 		}
 		{
 			mode.languageLabel, mode.languageBox = panelBuilder.addComboProperty("Language", mode.onLanguageChanged)
-			items := []controls.ComboBoxItem{
-				&enumItem{uint32(dataModel.ResourceLanguageStandard), "STD"},
-				&enumItem{uint32(dataModel.ResourceLanguageFrench), "FRN"},
-				&enumItem{uint32(dataModel.ResourceLanguageGerman), "GER"}}
-			mode.languageBox.SetItems(items)
-			initialLanguageItem = items[0]
+			mode.languageItems = []*enumItem{
+				{uint32(dataModel.ResourceLanguageStandard), "STD"},
+				{uint32(dataModel.ResourceLanguageFrench), "FRN"},
+				{uint32(dataModel.ResourceLanguageGerman), "GER"}}
+			mode.languageBox.SetItems(mode.languageItems.forComboBox())
 		}
 		{
-			mode.selectedBitmapIDLabel, mode.selectedBitmapIDSlider = panelBuilder.addSliderProperty("Selected Bitmap ID",
+			mode.bitmapIDLabel, mode.bitmapIDSlider = panelBuilder.addSliderProperty("Selected Bitmap ID",
 				func(newValue int64) {
-					mode.selectedBitmapSelector.SetSelectedIndex(int(newValue))
+					mode.bitmapSelector.SetSelectedIndex(int(newValue))
 					mode.onBitmapSelected(int(newValue))
 				})
-			mode.selectedBitmapLabel, mode.selectedBitmapSelector = panelBuilder.addTextureProperty("Selected Bitmap",
+			mode.bitmapLabel, mode.bitmapSelector = panelBuilder.addTextureProperty("Selected Bitmap",
 				mode.bitmapTextures, func(newValue int) {
-					mode.selectedBitmapIDSlider.SetValue(int64(newValue))
+					mode.bitmapIDSlider.SetValue(int64(newValue))
 					mode.onBitmapSelected(newValue)
 				})
 		}
-		mode.languageBox.SetSelectedItem(initialLanguageItem)
-		mode.onLanguageChanged(initialLanguageItem)
-		mode.typeBox.SetSelectedItem(initialTypeItem)
-		mode.onBitmapTypeChanged(initialTypeItem)
+
+		mode.setState(dataModel.ResourceTypeMfdDataImages, dataModel.ResourceLanguageStandard, 0)
 	}
 	{
 		padding := scaled(5.0)
@@ -169,7 +165,7 @@ func (mode *GameBitmapsMode) bitmapTextures() []*graphics.BitmapTexture {
 	store := mode.context.ForGraphics().BitmapsStore()
 
 	for index := 0; index < textureCount; index++ {
-		key := dataModel.MakeLocalizedResourceKey(mode.selectedResourceType, mode.language, uint16(index))
+		key := dataModel.MakeLocalizedResourceKey(mode.selectedResourceType, mode.selectedLanguage, uint16(index))
 		textures[index] = store.Texture(graphics.TextureKeyFromInt(key.ToInt()))
 	}
 
@@ -180,25 +176,20 @@ func (mode *GameBitmapsMode) imageProvider() (texture *graphics.BitmapTexture) {
 	store := mode.context.ForGraphics().BitmapsStore()
 
 	if mode.selectedBitmapID >= 0 {
-		key := dataModel.MakeLocalizedResourceKey(mode.selectedResourceType, mode.language, uint16(mode.selectedBitmapID))
+		key := dataModel.MakeLocalizedResourceKey(mode.selectedResourceType, mode.selectedLanguage, uint16(mode.selectedBitmapID))
 		texture = store.Texture(graphics.TextureKeyFromInt(key.ToInt()))
 	}
 	return
 }
 
-func (mode *GameBitmapsMode) onBitmapTypeChanged(boxItem controls.ComboBoxItem) {
+func (mode *GameBitmapsMode) onResourceTypeChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
-	mode.selectedResourceType = dataModel.ResourceType(item.value)
-
-	mode.onBitmapSelected(0)
-	mode.selectedBitmapIDSlider.SetRange(0, int64(bitmapCount[mode.selectedResourceType]-1))
-	mode.selectedBitmapIDSlider.SetValue(0)
-	mode.selectedBitmapSelector.SetSelectedIndex(0)
+	mode.setState(dataModel.ResourceType(item.value), mode.selectedLanguage, 0)
 }
 
 func (mode *GameBitmapsMode) onLanguageChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
-	mode.language = dataModel.ResourceLanguage(item.value)
+	mode.selectedLanguage = dataModel.ResourceLanguage(item.value)
 }
 
 func (mode *GameBitmapsMode) onBitmapSelected(id int) {
@@ -222,13 +213,13 @@ func (mode *GameBitmapsMode) bitmapDropHandler(area *ui.Area, event events.Event
 			mode.context.ModelAdapter().SetMessage(fmt.Sprintf("Could not open file <%v>", filePaths[0]))
 		}
 		if err == nil {
-			mode.setBitmap(img)
+			mode.importImage(img)
 		}
 	}
 	return
 }
 
-func (mode *GameBitmapsMode) setBitmap(img image.Image) {
+func (mode *GameBitmapsMode) importImage(img image.Image) {
 	if mode.selectedBitmapID >= 0 {
 		rawPalette := mode.context.ModelAdapter().GamePalette()
 		palette := make([]color.Color, len(rawPalette))
@@ -243,7 +234,52 @@ func (mode *GameBitmapsMode) setBitmap(img image.Image) {
 		rawBitmap.Height = gfxBitmap.Height
 		rawBitmap.Pixels = base64.StdEncoding.EncodeToString(gfxBitmap.Pixels)
 
-		key := dataModel.MakeLocalizedResourceKey(mode.selectedResourceType, mode.language, uint16(mode.selectedBitmapID))
-		mode.bitmapsAdapter.RequestBitmapChange(key, &rawBitmap)
+		mode.requestBitmapChange(&rawBitmap)
 	}
+}
+
+func (mode *GameBitmapsMode) requestBitmapChange(newBitmap *dataModel.RawBitmap) {
+	restoreState := mode.stateSnapshot()
+	key := dataModel.MakeLocalizedResourceKey(mode.selectedResourceType, mode.selectedLanguage, uint16(mode.selectedBitmapID))
+	mode.context.Perform(&cmd.SetBitmapCommand{
+		Setter: func(bmp *dataModel.RawBitmap) error {
+			restoreState()
+			mode.bitmapsAdapter.RequestBitmapChange(key, bmp)
+			return nil
+		},
+		NewValue: newBitmap,
+		OldValue: mode.bitmapsAdapter.Bitmap(key)})
+}
+
+func (mode *GameBitmapsMode) stateSnapshot() func() {
+	currentType := mode.selectedResourceType
+	currentLanguage := mode.selectedLanguage
+	currentID := mode.selectedBitmapID
+	return func() {
+		mode.setState(currentType, currentLanguage, currentID)
+	}
+}
+
+func (mode *GameBitmapsMode) setState(resourceType dataModel.ResourceType, language dataModel.ResourceLanguage, id int) {
+	{
+		mode.selectedResourceType = resourceType
+		for _, item := range mode.resourceTypeItems {
+			if item.value == uint32(resourceType) {
+				mode.resourceTypeBox.SetSelectedItem(item)
+			}
+		}
+		mode.bitmapIDSlider.SetRange(0, int64(bitmapCount[mode.selectedResourceType]-1))
+	}
+	{
+		mode.selectedLanguage = language
+		for _, item := range mode.languageItems {
+			if item.value == uint32(language) {
+				mode.languageBox.SetSelectedItem(item)
+			}
+		}
+	}
+	mode.selectedBitmapID = id
+	mode.bitmapIDSlider.SetValue(int64(mode.selectedBitmapID))
+	mode.bitmapSelector.SetSelectedIndex(mode.selectedBitmapID)
+	mode.bitmapSelector.DisplaySelectedIndex()
 }

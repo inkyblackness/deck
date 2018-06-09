@@ -5,6 +5,6 @@ type Text struct {
 }
 
 type TextEntry struct {
-	Block *uint16 `xml:"block,attr,omitempty"`
-	CData string  `xml:",cdata"`
+	Block *int   `xml:"block,attr,omitempty"`
+	CData string `xml:",cdata"`
 }

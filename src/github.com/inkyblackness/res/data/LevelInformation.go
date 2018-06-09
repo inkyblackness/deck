@@ -5,11 +5,11 @@ import (
 )
 
 const (
-	defaultMapDimension      uint32 = 64
-	defaultMapDimensionShift uint32 = 6
-	defaultHeightShift       uint32 = 3
-	defaultTimerValue1       uint32 = 64
-	defaultTimerValue2       uint32 = 8
+	defaultMapDimension      = 64
+	defaultMapDimensionShift = 6
+	defaultHeightShift       = 3
+	defaultTimerValue1       = 64
+	defaultTimerValue2       = 8
 )
 
 // LevelInformation contains information about a single level.
@@ -27,11 +27,12 @@ type LevelInformation struct {
 
 	Unknown001C [9]byte
 
-	TimerValue1 uint32
-	TimerCount  uint32
-	TimerValue2 uint32
-
-	Unknown0032 [9]byte
+	TimerValue1 byte
+	Unknown0026 [3]byte
+	TimerCount  byte
+	Unknown002A [3]byte
+	TimerValue2 byte
+	Unknown002E [12]byte
 }
 
 // DefaultLevelInformation returns an instance of LevelInformation with default values.

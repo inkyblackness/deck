@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"github.com/inkyblackness/shocked-client/editor/cmd"
 	"github.com/inkyblackness/shocked-client/editor/display"
 	"github.com/inkyblackness/shocked-client/editor/modes"
 	"github.com/inkyblackness/shocked-client/graphics/controls"
@@ -35,9 +36,10 @@ type rootArea struct {
 	electronicMessagesMode *modeSelector
 	textsMode              *modeSelector
 	allModes               []*modeSelector
+	activeMode             *modeSelector
 }
 
-func newRootArea(context modes.Context) *ui.Area {
+func newRootArea(context modes.Context) (*rootArea, *ui.Area) {
 	root := &rootArea{context: context}
 	areaBuilder := ui.NewAreaBuilder()
 
@@ -72,15 +74,15 @@ func newRootArea(context modes.Context) *ui.Area {
 		topLine = builder.Build()
 	}
 
-	root.welcomeMode = root.addMode(modes.NewWelcomeMode(context, root.modeArea), "Welcome")
-	root.levelControlMode = root.addMode(modes.NewLevelControlMode(context, root.modeArea, mapDisplay), "Level Control")
-	root.levelMapMode = root.addMode(modes.NewLevelMapMode(context, root.modeArea, mapDisplay), "Level Map")
-	root.levelObjectsMode = root.addMode(modes.NewLevelObjectsMode(context, root.modeArea, mapDisplay), "Level Objects")
-	root.electronicMessagesMode = root.addMode(modes.NewElectronicMessagesMode(context, root.modeArea), "Electronic Messages")
-	root.gameObjectsMode = root.addMode(modes.NewGameObjectsMode(context, root.modeArea), "Game Objects")
-	root.gameTexturesMode = root.addMode(modes.NewGameTexturesMode(context, root.modeArea), "Game Textures")
-	root.bitmapsMode = root.addMode(modes.NewGameBitmapsMode(context, root.modeArea), "Bitmaps")
-	root.textsMode = root.addMode(modes.NewGameTextsMode(context, root.modeArea), "Texts")
+	root.welcomeMode = root.addMode(modes.NewWelcomeMode(context, root.modeArea), "Welcome (F1)")
+	root.levelControlMode = root.addMode(modes.NewLevelControlMode(context, root.modeArea, mapDisplay), "Level Control (F2)")
+	root.levelMapMode = root.addMode(modes.NewLevelMapMode(context, root.modeArea, mapDisplay), "Level Map (F3)")
+	root.levelObjectsMode = root.addMode(modes.NewLevelObjectsMode(context, root.modeArea, mapDisplay), "Level Objects (F4)")
+	root.electronicMessagesMode = root.addMode(modes.NewElectronicMessagesMode(context, root.modeArea), "Electronic Messages (F5)")
+	root.gameObjectsMode = root.addMode(modes.NewGameObjectsMode(context, root.modeArea), "Game Objects (F6)")
+	root.gameTexturesMode = root.addMode(modes.NewGameTexturesMode(context, root.modeArea), "Game Textures (F7)")
+	root.bitmapsMode = root.addMode(modes.NewGameBitmapsMode(context, root.modeArea), "Bitmaps (F8)")
+	root.textsMode = root.addMode(modes.NewGameTextsMode(context, root.modeArea), "Texts (F9)")
 
 	boxMessageSeparator := ui.NewOffsetAnchor(topLine.Left(), scaled(250))
 	{
@@ -96,7 +98,7 @@ func newRootArea(context modes.Context) *ui.Area {
 		builder.SetBottom(ui.NewOffsetAnchor(topLine.Bottom(), scaled(-2)))
 		builder.WithItems(items)
 		builder.WithSelectionChangeHandler(func(item controls.ComboBoxItem) {
-			root.setActiveMode(item.(*modeSelector))
+			root.RequestActiveMode(item.(*modeSelector).name)
 		})
 		root.modeBox = builder.Build()
 	}
@@ -114,9 +116,17 @@ func newRootArea(context modes.Context) *ui.Area {
 		})
 	}
 
-	root.setActiveMode(root.welcomeMode)
+	root.setActiveMode(root.welcomeMode.name)
 
-	return root.area
+	return root, root.area
+}
+
+func (root *rootArea) ModeNames() []string {
+	names := make([]string, len(root.allModes))
+	for index, mode := range root.allModes {
+		names[index] = mode.name
+	}
+	return names
 }
 
 func (root *rootArea) addMode(mode Mode, name string) *modeSelector {
@@ -129,12 +139,22 @@ func (root *rootArea) addMode(mode Mode, name string) *modeSelector {
 	return selector
 }
 
-func (root *rootArea) setActiveMode(selector *modeSelector) {
+func (root *rootArea) RequestActiveMode(name string) {
+	command := cmd.SetEditorModeCommand{
+		Activator: root.setActiveMode,
+		OldMode:   root.activeMode.name,
+		NewMode:   name}
+	root.context.Perform(command)
+}
+
+func (root *rootArea) setActiveMode(name string) {
 	for _, other := range root.allModes {
-		if other != selector {
+		if other.name != name {
 			other.mode.SetActive(false)
+		} else {
+			root.activeMode = other
 		}
 	}
-	root.modeBox.SetSelectedItem(selector)
-	selector.mode.SetActive(true)
+	root.modeBox.SetSelectedItem(root.activeMode)
+	root.activeMode.mode.SetActive(true)
 }

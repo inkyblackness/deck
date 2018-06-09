@@ -29,13 +29,13 @@ var knownTexts = map[model.ResourceType]textInfo{
 
 // Texts is the adapter for general texts.
 type Texts struct {
-	cybstrng [model.LanguageCount]chunk.Store
+	cybstrng [model.LanguageCount]*io.DynamicChunkStore
 	cp       text.Codepage
 }
 
 // NewTexts returns a new Texts instance, if possible.
 func NewTexts(library io.StoreLibrary) (texts *Texts, err error) {
-	var cybstrng [model.LanguageCount]chunk.Store
+	var cybstrng [model.LanguageCount]*io.DynamicChunkStore
 
 	for i := 0; i < model.LanguageCount && err == nil; i++ {
 		cybstrng[i], err = library.ChunkStore(localized[i].cybstrng)
@@ -88,7 +88,10 @@ func (texts *Texts) SetText(key model.ResourceKey, value string) (resultKey mode
 			chunkID := res.ResourceID(int(key.Type) + int(key.Index))
 			blockData := [][]byte{texts.cp.Encode(value)}
 
-			store.Put(chunkID, chunk.NewBlockHolder(chunk.BasicChunkType.WithDirectory(), res.Text, blockData))
+			store.Put(chunkID, &chunk.Chunk{
+				ContentType:   chunk.Text,
+				Fragmented:    true,
+				BlockProvider: chunk.MemoryBlockProvider(blockData)})
 		} else {
 			holder := texts.cybstrng[key.Language.ToIndex()].Get(res.ResourceID(key.Type))
 

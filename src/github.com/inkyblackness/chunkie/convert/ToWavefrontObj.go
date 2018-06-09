@@ -77,22 +77,22 @@ func (writer *wavefrontWriter) useShadeColorMaterial(color geometry.ColorIndex, 
 	writer.useMaterial(name)
 }
 
-func (writer *wavefrontWriter) useTextureMaterial(textureId uint16) {
-	name := fmt.Sprintf("mat_tex_%04X", textureId)
+func (writer *wavefrontWriter) useTextureMaterial(textureID uint16) {
+	name := fmt.Sprintf("mat_tex_%04X", textureID)
 
 	if !writer.usedMaterials[name] {
 		writer.defineMaterial(name)
-		fmt.Fprintf(writer.mtlFile, "map_Kd %04X_000.png\n", 0x01DB+textureId)
+		fmt.Fprintf(writer.mtlFile, "map_Kd %04X_000.png\n", 0x01DB+textureID)
 	}
 	writer.useMaterial(name)
 }
 
 func (writer *wavefrontWriter) writeSimpleFaces(vertices []int) {
-	fmt.Fprintf(writer.objFile, "f")
+	fmt.Fprint(writer.objFile, "f")
 	for _, vertexIndex := range vertices {
 		fmt.Fprintf(writer.objFile, " %d", vertexIndex+1)
 	}
-	fmt.Fprintf(writer.objFile, "\n")
+	fmt.Fprint(writer.objFile, "\n")
 }
 
 func (writer *wavefrontWriter) FlatColored(face geometry.FlatColoredFace) {
@@ -115,11 +115,11 @@ func (writer *wavefrontWriter) TextureMapped(face geometry.TextureMappedFace) {
 		vertUV[coord.Vertex()] = index
 	}
 
-	fmt.Fprintf(writer.objFile, "f")
+	fmt.Fprint(writer.objFile, "f")
 	for _, vertexIndex := range face.Vertices() {
 		fmt.Fprintf(writer.objFile, " %d/%d/%d", vertexIndex+1, writer.vtCounter+vertUV[vertexIndex]+1, writer.vnCounter)
 	}
-	fmt.Fprintf(writer.objFile, "\n")
+	fmt.Fprint(writer.objFile, "\n")
 	writer.vtCounter += len(face.TextureCoordinates())
 }
 

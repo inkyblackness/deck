@@ -1,16 +1,12 @@
 package io
 
 import (
-	"bytes"
+	"io/ioutil"
+
 	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
-	"github.com/inkyblackness/res/chunk/dos"
-	"github.com/inkyblackness/res/chunk/store"
-	"github.com/inkyblackness/res/serial"
-)
 
-import (
-	check "gopkg.in/check.v1"
+	"gopkg.in/check.v1"
 )
 
 type DynamicChunkStoreSuite struct {
@@ -21,36 +17,37 @@ var _ = check.Suite(&DynamicChunkStoreSuite{})
 func (suite *DynamicChunkStoreSuite) SetUpTest(c *check.C) {
 }
 
-func (suite *DynamicChunkStoreSuite) createChunkProvider(filler func(consumer chunk.Consumer)) chunk.Provider {
-	store := serial.NewByteStore()
-	consumer := dos.NewChunkConsumer(store)
-	filler(consumer)
-	consumer.Finish()
+func (suite *DynamicChunkStoreSuite) createChunkProvider(filler func(chunk.Store)) chunk.Provider {
+	store := chunk.NewProviderBackedStore(chunk.NullProvider())
+	filler(store)
 
-	provider, _ := dos.NewChunkProvider(bytes.NewReader(store.Data()))
+	return store
+}
 
-	return provider
+func (suite *DynamicChunkStoreSuite) aChunk() *chunk.Chunk {
+	return &chunk.Chunk{
+		BlockProvider: chunk.MemoryBlockProvider([][]byte{{}})}
 }
 
 func (suite *DynamicChunkStoreSuite) TestIDsReturnsResultFromWrapped(c *check.C) {
-	provider := suite.createChunkProvider(func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	provider := suite.createChunkProvider(func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
 
-	wrappedStore := store.NewProviderBacked(provider, func() {})
-	store := NewDynamicChunkStore(wrappedStore)
+	wrappedStore := chunk.NewProviderBackedStore(provider)
+	store := NewDynamicChunkStore(wrappedStore, func() {})
 
 	ids := store.IDs()
 	c.Check(len(ids), check.Equals, 1)
 }
 
 func (suite *DynamicChunkStoreSuite) TestDelDeletesFromWrapped(c *check.C) {
-	provider := suite.createChunkProvider(func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	provider := suite.createChunkProvider(func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
 
-	wrappedStore := store.NewProviderBacked(provider, func() {})
-	store := NewDynamicChunkStore(wrappedStore)
+	wrappedStore := chunk.NewProviderBackedStore(provider)
+	store := NewDynamicChunkStore(wrappedStore, func() {})
 
 	store.Del(res.ResourceID(1))
 
@@ -59,24 +56,24 @@ func (suite *DynamicChunkStoreSuite) TestDelDeletesFromWrapped(c *check.C) {
 }
 
 func (suite *DynamicChunkStoreSuite) TestPutInsertsToWrapped(c *check.C) {
-	provider := suite.createChunkProvider(func(consumer chunk.Consumer) {})
+	provider := suite.createChunkProvider(func(consumer chunk.Store) {})
 
-	wrappedStore := store.NewProviderBacked(provider, func() {})
-	store := NewDynamicChunkStore(wrappedStore)
+	wrappedStore := chunk.NewProviderBackedStore(provider)
+	store := NewDynamicChunkStore(wrappedStore, func() {})
 
-	store.Put(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	store.Put(res.ResourceID(1), suite.aChunk())
 
 	ids := store.IDs()
 	c.Check(len(ids), check.Equals, 1)
 }
 
 func (suite *DynamicChunkStoreSuite) TestGetReturnsBlockFromWrapped(c *check.C) {
-	provider := suite.createChunkProvider(func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	provider := suite.createChunkProvider(func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
 
-	wrappedStore := store.NewProviderBacked(provider, func() {})
-	store := NewDynamicChunkStore(wrappedStore)
+	wrappedStore := chunk.NewProviderBackedStore(provider)
+	store := NewDynamicChunkStore(wrappedStore, func() {})
 
 	holder := store.Get(res.ResourceID(1))
 
@@ -84,10 +81,10 @@ func (suite *DynamicChunkStoreSuite) TestGetReturnsBlockFromWrapped(c *check.C) 
 }
 
 func (suite *DynamicChunkStoreSuite) TestGetReturnsNilIfWrappedDoesntHaveIt(c *check.C) {
-	provider := suite.createChunkProvider(func(consumer chunk.Consumer) {})
+	provider := suite.createChunkProvider(func(consumer chunk.Store) {})
 
-	wrappedStore := store.NewProviderBacked(provider, func() {})
-	store := NewDynamicChunkStore(wrappedStore)
+	wrappedStore := chunk.NewProviderBackedStore(provider)
+	store := NewDynamicChunkStore(wrappedStore, func() {})
 
 	holder := store.Get(res.ResourceID(2))
 
@@ -95,52 +92,63 @@ func (suite *DynamicChunkStoreSuite) TestGetReturnsNilIfWrappedDoesntHaveIt(c *c
 }
 
 func (suite *DynamicChunkStoreSuite) TestBlockHolderModifiesWrapped(c *check.C) {
-	provider := suite.createChunkProvider(func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	provider := suite.createChunkProvider(func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
 
-	wrappedStore := store.NewProviderBacked(provider, func() {})
-	store := NewDynamicChunkStore(wrappedStore)
+	wrappedStore := chunk.NewProviderBackedStore(provider)
+	store := NewDynamicChunkStore(wrappedStore, func() {})
 
 	data := []byte{0x01, 0x02}
 	holder := store.Get(res.ResourceID(1))
 	holder.SetBlockData(0, data)
 
-	c.Check(wrappedStore.Get(res.ResourceID(1)).BlockData(0), check.DeepEquals, data)
+	wrappedChunk, _ := wrappedStore.Chunk(chunk.ID(1))
+	wrappedReader, _ := wrappedChunk.Block(0)
+	wrappedData, _ := ioutil.ReadAll(wrappedReader)
+	c.Check(wrappedData, check.DeepEquals, data)
 }
 
 func (suite *DynamicChunkStoreSuite) TestSwapReplacesWrapped(c *check.C) {
-	provider1 := suite.createChunkProvider(func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	provider1 := suite.createChunkProvider(func(consumer chunk.Store) {
+		consumer.Put(chunk.ID(1), suite.aChunk())
 	})
-	provider2 := suite.createChunkProvider(func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(2), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	provider2 := suite.createChunkProvider(func(consumer chunk.Store) {
+		consumer.Put(res.ResourceID(2), suite.aChunk())
 	})
 
-	testStore := NewDynamicChunkStore(store.NewProviderBacked(provider1, func() {}))
+	testStore := NewDynamicChunkStore(chunk.NewProviderBackedStore(provider1), func() {})
 	testStore.Swap(func(oldStore chunk.Store) chunk.Store {
-		return store.NewProviderBacked(provider2, func() {})
+		return chunk.NewProviderBackedStore(provider2)
 	})
 
-	c.Check(testStore.IDs(), check.DeepEquals, []res.ResourceID{res.ResourceID(2)})
+	ids := testStore.IDs()
+	values := make([]uint16, len(ids))
+	for index, id := range ids {
+		values[index] = id.Value()
+	}
+	c.Check(values, check.DeepEquals, []uint16{2})
 }
 
 func (suite *DynamicChunkStoreSuite) TestBlockHolderModifiesWrappedAfterSwap(c *check.C) {
-	provider1 := suite.createChunkProvider(func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	provider1 := suite.createChunkProvider(func(consumer chunk.Store) {
+		consumer.Put(res.ResourceID(1), suite.aChunk())
 	})
-	provider2 := suite.createChunkProvider(func(consumer chunk.Consumer) {
-		consumer.Consume(res.ResourceID(1), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{[]byte{}}))
+	provider2 := suite.createChunkProvider(func(consumer chunk.Store) {
+		consumer.Put(res.ResourceID(1), suite.aChunk())
 	})
 
-	testStore := NewDynamicChunkStore(store.NewProviderBacked(provider1, func() {}))
+	testStore := NewDynamicChunkStore(chunk.NewProviderBackedStore(provider1), func() {})
 	holder := testStore.Get(res.ResourceID(1))
 
-	wrapped2 := store.NewProviderBacked(provider2, func() {})
+	wrapped2 := chunk.NewProviderBackedStore(provider2)
 	testStore.Swap(func(oldStore chunk.Store) chunk.Store { return wrapped2 })
 
 	data := []byte{0x01, 0x02}
 	holder.SetBlockData(0, data)
 
-	c.Check(wrapped2.Get(res.ResourceID(1)).BlockData(0), check.DeepEquals, data)
+	wrappedChunk, _ := wrapped2.Chunk(chunk.ID(1))
+	wrappedReader, _ := wrappedChunk.Block(0)
+	wrappedData, _ := ioutil.ReadAll(wrappedReader)
+	c.Check(wrappedData, check.DeepEquals, data)
 }

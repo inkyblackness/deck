@@ -13,13 +13,14 @@ import (
 	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/data/gameobj"
 	"github.com/inkyblackness/res/data/interpreters"
+	"github.com/inkyblackness/shocked-client/editor/cmd"
 	"github.com/inkyblackness/shocked-client/editor/model"
 	"github.com/inkyblackness/shocked-client/graphics"
 	"github.com/inkyblackness/shocked-client/graphics/controls"
 	"github.com/inkyblackness/shocked-client/ui"
 	"github.com/inkyblackness/shocked-client/ui/events"
 
-	datamodel "github.com/inkyblackness/shocked-model"
+	dataModel "github.com/inkyblackness/shocked-model"
 )
 
 // GameObjectsMode is a mode for game object properties.
@@ -30,15 +31,17 @@ type GameObjectsMode struct {
 	area           *ui.Area
 	propertiesArea *ui.Area
 
-	selectedObjectClassLabel *controls.Label
-	selectedObjectClassBox   *controls.ComboBox
-	selectedObjectLabel      *controls.Label
-	selectedObjectBox        *controls.ComboBox
-	selectedObjectID         model.ObjectID
+	objectClassLabel *controls.Label
+	objectClassBox   *controls.ComboBox
+	objectClassItems enumItems
+	objectTypeLabel  *controls.Label
+	objectTypeBox    *controls.ComboBox
+	objectTypeItems  []controls.ComboBoxItem
+	selectedObjectID model.ObjectID
 
-	selectedBitmapLabel  *controls.Label
-	selectedBitmapSlider *controls.Slider
-	selectedBitmapIndex  int
+	bitmapIndexLabel    *controls.Label
+	bitmapIndexSlider   *controls.Slider
+	selectedBitmapIndex int
 
 	selectedPropertiesTitle *controls.Label
 	selectedPropertiesBox   *controls.ComboBox
@@ -100,16 +103,18 @@ func NewGameObjectsMode(context Context, parent *ui.Area) *GameObjectsMode {
 		panelBuilder := newControlPanelBuilder(mode.propertiesArea, context.ControlFactory())
 
 		{
-			mode.selectedObjectClassLabel, mode.selectedObjectClassBox = panelBuilder.addComboProperty("Object Class", mode.onSelectedObjectClassChanged)
-			mode.selectedObjectLabel, mode.selectedObjectBox = panelBuilder.addComboProperty("Selected Object", func(item controls.ComboBoxItem) {
+			mode.objectClassLabel, mode.objectClassBox = panelBuilder.addComboProperty("Object Class", mode.onSelectedObjectClassChanged)
+			mode.objectTypeLabel, mode.objectTypeBox = panelBuilder.addComboProperty("Selected Object", func(item controls.ComboBoxItem) {
 				typeItem := item.(*objectTypeItem)
 				mode.onSelectedObjectTypeChanged(typeItem.id)
 			})
 
+			mode.objectClassItems = objectClassItems()
+			mode.objectClassBox.SetItems(mode.objectClassItems.forComboBox())
 			mode.objectsAdapter.OnObjectsChanged(mode.onObjectsChanged)
 		}
 
-		mode.selectedBitmapLabel, mode.selectedBitmapSlider = panelBuilder.addSliderProperty("Bitmap", mode.onSelectedBitmapChanged)
+		mode.bitmapIndexLabel, mode.bitmapIndexSlider = panelBuilder.addSliderProperty("Bitmap", mode.onSelectedBitmapChanged)
 
 		mode.selectedPropertiesTitle, mode.selectedPropertiesBox = panelBuilder.addComboProperty("Show Properties", mode.onSelectedPropertiesDisplayChanged)
 
@@ -161,49 +166,6 @@ func (mode *GameObjectsMode) SetActive(active bool) {
 	mode.area.SetVisible(active)
 }
 
-func (mode *GameObjectsMode) onObjectsChanged() {
-	classItems := make([]controls.ComboBoxItem, len(classNames))
-
-	for index := range classNames {
-		classItems[index] = &objectClassItem{index}
-	}
-	mode.selectedObjectClassBox.SetItems(classItems)
-	mode.selectedObjectClassBox.SetSelectedItem(classItems[mode.selectedObjectID.Class()])
-	mode.updateSelectedObjectClass(mode.selectedObjectID.Class())
-}
-
-func (mode *GameObjectsMode) onSelectedObjectClassChanged(item controls.ComboBoxItem) {
-	classItem := item.(*objectClassItem)
-	mode.updateSelectedObjectClass(classItem.class)
-}
-
-func (mode *GameObjectsMode) updateSelectedObjectClass(objectClass int) {
-	typeItems := mode.objectItemsForClass(objectClass)
-	selectedIndex := -1
-
-	mode.selectedObjectBox.SetItems(typeItems)
-	for index, item := range typeItems {
-		typeItem := item.(*objectTypeItem)
-		if typeItem.id == mode.selectedObjectID {
-			selectedIndex = index
-		}
-	}
-
-	if selectedIndex >= 0 {
-		mode.selectedObjectBox.SetSelectedItem(typeItems[selectedIndex])
-		mode.recreatePropertyControls()
-		mode.onSelectedBitmapChanged(0)
-		mode.selectedBitmapSlider.SetValue(int64(mode.selectedBitmapIndex))
-	} else {
-		mode.selectedObjectBox.SetSelectedItem(nil)
-		mode.selectedBitmapSlider.SetValueUndefined()
-		mode.onSelectedBitmapChanged(-1)
-		mode.commonPropertiesPanel.Reset()
-		mode.genericPropertiesPanel.Reset()
-		mode.specificPropertiesPanel.Reset()
-	}
-}
-
 func (mode *GameObjectsMode) objectItemsForClass(objectClass int) []controls.ComboBoxItem {
 	availableGameObjects := mode.objectsAdapter.ObjectsOfClass(objectClass)
 	typeItems := make([]controls.ComboBoxItem, len(availableGameObjects))
@@ -215,29 +177,33 @@ func (mode *GameObjectsMode) objectItemsForClass(objectClass int) []controls.Com
 	return typeItems
 }
 
+func (mode *GameObjectsMode) onObjectsChanged() {
+	mode.setState(mode.selectedObjectID, mode.selectedBitmapIndex)
+}
+
+func (mode *GameObjectsMode) onSelectedObjectClassChanged(item controls.ComboBoxItem) {
+	classItem := item.(*enumItem)
+	mode.setState(model.MakeObjectID(int(classItem.value), 0, 0), 0)
+}
+
 func (mode *GameObjectsMode) onSelectedObjectTypeChanged(id model.ObjectID) {
-	mode.selectedObjectID = id
-	mode.recreatePropertyControls()
-	mode.onSelectedBitmapChanged(0)
-	mode.selectedBitmapSlider.SetValue(int64(mode.selectedBitmapIndex))
+	mode.setState(id, mode.selectedBitmapIndex)
 }
 
 func (mode *GameObjectsMode) onSelectedBitmapChanged(newValue int64) {
-	mode.selectedBitmapIndex = int(newValue)
+	mode.setState(mode.selectedObjectID, int(newValue))
 }
 
-func (mode *GameObjectsMode) recreatePropertyControls() {
+func (mode *GameObjectsMode) recreatePropertyControls(bitmapCount int) {
 	object := mode.objectsAdapter.Object(mode.selectedObjectID)
 
 	mode.commonPropertiesPanel.Reset()
 	mode.genericPropertiesPanel.Reset()
 	mode.specificPropertiesPanel.Reset()
-	mode.selectedBitmapSlider.SetRange(0, 2)
+	mode.bitmapIndexSlider.SetRange(0, 2)
 	if object != nil {
-		commonProperties := gameobj.CommonProperties(object.CommonData())
-
-		mode.selectedBitmapSlider.SetRange(0, 3+int64(commonProperties.Get("Extra")>>4)-1)
-		mode.createPropertyControls(commonProperties, mode.commonPropertiesPanel)
+		mode.bitmapIndexSlider.SetRange(0, int64(bitmapCount)-1)
+		mode.createPropertyControls(gameobj.CommonProperties(object.CommonData()), mode.commonPropertiesPanel)
 		mode.createPropertyControls(gameobj.GenericProperties(res.ObjectClass(mode.selectedObjectID.Class()),
 			object.GenericData()), mode.genericPropertiesPanel)
 		mode.createPropertyControls(gameobj.SpecificProperties(
@@ -272,7 +238,7 @@ func (mode *GameObjectsMode) onSelectedPropertiesDisplayChanged(item controls.Co
 }
 
 func (mode *GameObjectsMode) updateCommonProperty(fullPath string, parameter uint32, update propertyUpdateFunction) {
-	mode.requestObjectPropertiesChange(func(object *model.GameObject, properties *datamodel.GameObjectProperties) {
+	mode.requestObjectPropertiesChange(func(object *model.GameObject, properties *dataModel.GameObjectProperties) {
 		properties.Data.Common = cloneBytes(object.CommonData())
 		interpreter := gameobj.CommonProperties(properties.Data.Common)
 		mode.updateObjectProperty(interpreter, fullPath, parameter, update)
@@ -280,7 +246,7 @@ func (mode *GameObjectsMode) updateCommonProperty(fullPath string, parameter uin
 }
 
 func (mode *GameObjectsMode) updateGenericProperty(fullPath string, parameter uint32, update propertyUpdateFunction) {
-	mode.requestObjectPropertiesChange(func(object *model.GameObject, properties *datamodel.GameObjectProperties) {
+	mode.requestObjectPropertiesChange(func(object *model.GameObject, properties *dataModel.GameObjectProperties) {
 		properties.Data.Generic = cloneBytes(object.GenericData())
 		interpreter := gameobj.GenericProperties(res.ObjectClass(object.ID().Class()), properties.Data.Generic)
 		mode.updateObjectProperty(interpreter, fullPath, parameter, update)
@@ -288,7 +254,7 @@ func (mode *GameObjectsMode) updateGenericProperty(fullPath string, parameter ui
 }
 
 func (mode *GameObjectsMode) updateSpecificProperty(fullPath string, parameter uint32, update propertyUpdateFunction) {
-	mode.requestObjectPropertiesChange(func(object *model.GameObject, properties *datamodel.GameObjectProperties) {
+	mode.requestObjectPropertiesChange(func(object *model.GameObject, properties *dataModel.GameObjectProperties) {
 		properties.Data.Specific = cloneBytes(object.SpecificData())
 		interpreter := gameobj.SpecificProperties(
 			res.MakeObjectID(res.ObjectClass(object.ID().Class()), res.ObjectSubclass(object.ID().Subclass()), res.ObjectType(object.ID().Type())),
@@ -297,9 +263,9 @@ func (mode *GameObjectsMode) updateSpecificProperty(fullPath string, parameter u
 	})
 }
 
-func (mode *GameObjectsMode) requestObjectPropertiesChange(modifier func(*model.GameObject, *datamodel.GameObjectProperties)) {
+func (mode *GameObjectsMode) requestObjectPropertiesChange(modifier func(*model.GameObject, *dataModel.GameObjectProperties)) {
 	object := mode.objectsAdapter.Object(mode.selectedObjectID)
-	var properties datamodel.GameObjectProperties
+	var properties dataModel.GameObjectProperties
 
 	modifier(object, &properties)
 	mode.objectsAdapter.RequestObjectPropertiesChange(object.ID(), &properties)
@@ -321,7 +287,7 @@ func (mode *GameObjectsMode) imageProvider() (texture *graphics.BitmapTexture) {
 	store := mode.context.ForGraphics().GameObjectBitmapsStore()
 
 	if mode.selectedBitmapIndex >= 0 {
-		id := model.ObjectBitmapID{mode.selectedObjectID, mode.selectedBitmapIndex}
+		id := model.ObjectBitmapID{ObjectID: mode.selectedObjectID, Index: mode.selectedBitmapIndex}
 		texture = store.Texture(graphics.TextureKeyFromInt(id.ToInt()))
 	}
 	return
@@ -357,14 +323,14 @@ func (mode *GameObjectsMode) exportBitmap(filePath string) {
 
 		if err == nil {
 			defer file.Close()
-			key := model.ObjectBitmapID{mode.selectedObjectID, mode.selectedBitmapIndex}
+			key := model.ObjectBitmapID{ObjectID: mode.selectedObjectID, Index: mode.selectedBitmapIndex}
 			rawBitmap := mode.objectsAdapter.Bitmaps().RawBitmap(key.ToInt())
 			pixBitmap := graphics.BitmapFromRaw(*rawBitmap)
 			gamePalette := mode.context.ModelAdapter().GamePalette()
 			imgPalette := make([]color.Color, len(gamePalette))
 
-			for index, color := range gamePalette {
-				imgPalette[index] = color
+			for index, paletteColor := range gamePalette {
+				imgPalette[index] = paletteColor
 			}
 
 			img := image.NewPaletted(image.Rect(0, 0, pixBitmap.Width, pixBitmap.Height), imgPalette)
@@ -394,11 +360,11 @@ func (mode *GameObjectsMode) importBitmap(filePath string) {
 		mode.context.ModelAdapter().SetMessage(fmt.Sprintf("Could not open file <%v>", filePath))
 	}
 	if err == nil {
-		mode.setBitmap(img)
+		mode.importBitmapImage(img)
 	}
 }
 
-func (mode *GameObjectsMode) setBitmap(img image.Image) {
+func (mode *GameObjectsMode) importBitmapImage(img image.Image) {
 	if mode.selectedBitmapIndex >= 0 {
 		rawPalette := mode.context.ModelAdapter().GamePalette()
 		palette := make([]color.Color, len(rawPalette))
@@ -407,13 +373,74 @@ func (mode *GameObjectsMode) setBitmap(img image.Image) {
 		}
 		bitmapper := graphics.NewStandardBitmapper(palette)
 		gfxBitmap := bitmapper.Map(img)
-		var rawBitmap datamodel.RawBitmap
+		var rawBitmap dataModel.RawBitmap
 
 		rawBitmap.Width = gfxBitmap.Width
 		rawBitmap.Height = gfxBitmap.Height
 		rawBitmap.Pixels = base64.StdEncoding.EncodeToString(gfxBitmap.Pixels)
 
-		key := model.ObjectBitmapID{mode.selectedObjectID, mode.selectedBitmapIndex}
-		mode.objectsAdapter.RequestBitmapChange(key, &rawBitmap)
+		mode.requestBitmapChange(&rawBitmap)
+	}
+}
+
+func (mode *GameObjectsMode) requestBitmapChange(newBitmap *dataModel.RawBitmap) {
+	restoreState := mode.stateSnapshot()
+	key := model.ObjectBitmapID{ObjectID: mode.selectedObjectID, Index: mode.selectedBitmapIndex}
+	mode.context.Perform(&cmd.SetBitmapCommand{
+		Setter: func(bmp *dataModel.RawBitmap) error {
+			restoreState()
+			mode.objectsAdapter.RequestBitmapChange(key, bmp)
+			return nil
+		},
+		NewValue: newBitmap,
+		OldValue: mode.objectsAdapter.Bitmap(key)})
+}
+
+func (mode *GameObjectsMode) stateSnapshot() func() {
+	currentObjectID := mode.selectedObjectID
+	currentBitmapIndex := mode.selectedBitmapIndex
+	return func() {
+		mode.setState(currentObjectID, currentBitmapIndex)
+	}
+}
+
+func (mode *GameObjectsMode) setState(objectID model.ObjectID, bitmapIndex int) {
+	var selectedTypeItem controls.ComboBoxItem
+
+	mode.selectedObjectID = objectID
+	mode.objectTypeItems = mode.objectItemsForClass(objectID.Class())
+	mode.objectTypeBox.SetItems(mode.objectTypeItems)
+	for _, item := range mode.objectTypeItems {
+		typeItem := item.(*objectTypeItem)
+		if typeItem.id == mode.selectedObjectID {
+			selectedTypeItem = typeItem
+		}
+	}
+
+	mode.objectClassBox.SetSelectedItem(mode.objectClassItems[mode.selectedObjectID.Class()])
+	if selectedTypeItem != nil {
+		object := mode.objectsAdapter.Object(mode.selectedObjectID)
+		bitmapCount := 2
+
+		if object != nil {
+			commonProperties := gameobj.CommonProperties(object.CommonData())
+			bitmapCount = 3 + int(commonProperties.Get("Extra")>>4)
+		}
+
+		mode.objectTypeBox.SetSelectedItem(selectedTypeItem)
+		mode.recreatePropertyControls(bitmapCount)
+		if (bitmapIndex >= 0) && (bitmapIndex < bitmapCount) {
+			mode.selectedBitmapIndex = bitmapIndex
+		} else {
+			mode.selectedBitmapIndex = 0
+		}
+		mode.bitmapIndexSlider.SetValue(int64(mode.selectedBitmapIndex))
+	} else {
+		mode.objectTypeBox.SetSelectedItem(nil)
+		mode.bitmapIndexSlider.SetValueUndefined()
+		mode.selectedBitmapIndex = -1
+		mode.commonPropertiesPanel.Reset()
+		mode.genericPropertiesPanel.Reset()
+		mode.specificPropertiesPanel.Reset()
 	}
 }

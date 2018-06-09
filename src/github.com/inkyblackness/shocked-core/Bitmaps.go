@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/inkyblackness/res"
-	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/image"
 	"github.com/inkyblackness/shocked-core/io"
 	model "github.com/inkyblackness/shocked-model"
@@ -13,12 +12,12 @@ import (
 
 // Bitmaps is the adapter for general bitmaps.
 type Bitmaps struct {
-	mfdArt [model.LanguageCount]chunk.Store
+	mfdArt [model.LanguageCount]*io.DynamicChunkStore
 }
 
 // NewBitmaps returns a new Bitmaps instance, if possible.
 func NewBitmaps(library io.StoreLibrary) (bitmaps *Bitmaps, err error) {
-	var mfdArt [model.LanguageCount]chunk.Store
+	var mfdArt [model.LanguageCount]*io.DynamicChunkStore
 
 	for i := 0; i < model.LanguageCount && err == nil; i++ {
 		mfdArt[i], err = library.ChunkStore(localized[i].mfdart)

@@ -15,6 +15,8 @@ type TextureSelectorBuilder struct {
 
 	provider TextureProvider
 
+	invertedScroll bool
+
 	selectionChangeHandler TextureSelectionChangeHandler
 }
 
@@ -36,6 +38,7 @@ func (builder *TextureSelectorBuilder) Build() *TextureSelector {
 		rectangleRenderer:      builder.rectangleRenderer,
 		textureRenderer:        builder.textureRenderer,
 		provider:               builder.provider,
+		invertedScroll:         builder.invertedScroll,
 		selectedIndex:          -1,
 		selectionChangeHandler: builder.selectionChangeHandler}
 
@@ -100,5 +103,11 @@ func (builder *TextureSelectorBuilder) WithProvider(provider TextureProvider) *T
 // WithSelectionChangeHandler registers the callback for a changed selection.
 func (builder *TextureSelectorBuilder) WithSelectionChangeHandler(handler TextureSelectionChangeHandler) *TextureSelectorBuilder {
 	builder.selectionChangeHandler = handler
+	return builder
+}
+
+// WithInvertedScroll sets whether scrolling up/down should be inverted.
+func (builder *TextureSelectorBuilder) WithInvertedScroll(value bool) *TextureSelectorBuilder {
+	builder.invertedScroll = value
 	return builder
 }

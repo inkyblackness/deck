@@ -109,6 +109,11 @@ func (adapter *ObjectsAdapter) RequestIcon(id ObjectID) {
 		adapter.context.simpleStoreFailure(fmt.Sprintf("GameObjectIcon[%v]", id)))
 }
 
+// Bitmap returns the raw bitmap data for the given key (if loaded)
+func (adapter *ObjectsAdapter) Bitmap(id ObjectBitmapID) *model.RawBitmap {
+	return adapter.bitmaps.RawBitmap(id.ToInt())
+}
+
 // RequestBitmapChange will update the bitmap data for identified object.
 func (adapter *ObjectsAdapter) RequestBitmapChange(id ObjectBitmapID, newBitmap *model.RawBitmap) {
 	adapter.store.SetGameObjectBitmap(adapter.context.ActiveProjectID(),

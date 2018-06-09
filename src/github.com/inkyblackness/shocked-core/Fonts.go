@@ -14,12 +14,12 @@ import (
 
 // Fonts represents the game fonts accessor
 type Fonts struct {
-	gamescr chunk.Store
+	gamescr *io.DynamicChunkStore
 }
 
 // NewFonts returns a new instance of Fonts.
 func NewFonts(library io.StoreLibrary) (fonts *Fonts, err error) {
-	var gamescr chunk.Store
+	var gamescr *io.DynamicChunkStore
 
 	gamescr, err = library.ChunkStore("gamescr.res")
 
@@ -33,7 +33,7 @@ func NewFonts(library io.StoreLibrary) (fonts *Fonts, err error) {
 // Font returns the font data for the identified font.
 func (fonts *Fonts) Font(id res.ResourceID) (font *model.Font, err error) {
 	fontChunk := fonts.gamescr.Get(id)
-	if fontChunk.ContentType() == res.Font {
+	if fontChunk.ContentType() == chunk.Font {
 		fontBlockData := fontChunk.BlockData(0)
 		var fontData resFont.Font
 		fontData, err = resFont.Load(bytes.NewReader(fontBlockData))

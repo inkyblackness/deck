@@ -13,7 +13,7 @@ type blockDataNode struct {
 	dataStruct interface{}
 }
 
-func newBlockDataNode(parentNode DataNode, blockIndex uint16, data []byte, dataStruct interface{}) *blockDataNode {
+func newBlockDataNode(parentNode DataNode, blockIndex int, data []byte, dataStruct interface{}) *blockDataNode {
 	node := &blockDataNode{
 		rawDataNode: rawDataNode{
 			parentNode: parentNode,

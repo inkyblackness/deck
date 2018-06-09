@@ -53,18 +53,18 @@ func (suite *DynamicObjPropStoreSuite) testData(baseValue byte) objprop.ObjectDa
 }
 
 func (suite *DynamicObjPropStoreSuite) TestPutInsertsToWrapped(c *check.C) {
-	objId := res.MakeObjectID(res.ObjectClass(0), res.ObjectSubclass(0), res.ObjectType(0))
+	objID := res.MakeObjectID(res.ObjectClass(0), res.ObjectSubclass(0), res.ObjectType(0))
 	provider := suite.createProvider(func(consumer objprop.Consumer) {
-		consumer.Consume(objId, suite.testData(0))
+		consumer.Consume(objID, suite.testData(0))
 	})
 
 	wrappedStore := store.NewProviderBacked(provider, func() {})
 	testStore := NewDynamicObjPropStore(wrappedStore)
 	newData := suite.testData(1)
 
-	testStore.Put(objId, newData)
+	testStore.Put(objID, newData)
 
-	wrappedData := wrappedStore.Get(objId)
+	wrappedData := wrappedStore.Get(objID)
 
 	c.Check(wrappedData.Common, check.DeepEquals, newData.Common)
 	c.Check(wrappedData.Generic, check.DeepEquals, newData.Generic)
@@ -72,16 +72,16 @@ func (suite *DynamicObjPropStoreSuite) TestPutInsertsToWrapped(c *check.C) {
 }
 
 func (suite *DynamicObjPropStoreSuite) TestGetReturnsBlockFromWrapped(c *check.C) {
-	objId := res.MakeObjectID(res.ObjectClass(0), res.ObjectSubclass(0), res.ObjectType(0))
+	objID := res.MakeObjectID(res.ObjectClass(0), res.ObjectSubclass(0), res.ObjectType(0))
 	initData := suite.testData(4)
 	provider := suite.createProvider(func(consumer objprop.Consumer) {
-		consumer.Consume(objId, initData)
+		consumer.Consume(objID, initData)
 	})
 
 	wrappedStore := store.NewProviderBacked(provider, func() {})
 	testStore := NewDynamicObjPropStore(wrappedStore)
 
-	retrievedData := testStore.Get(objId)
+	retrievedData := testStore.Get(objID)
 
 	c.Check(retrievedData.Common, check.DeepEquals, initData.Common)
 	c.Check(retrievedData.Generic, check.DeepEquals, initData.Generic)
@@ -89,16 +89,16 @@ func (suite *DynamicObjPropStoreSuite) TestGetReturnsBlockFromWrapped(c *check.C
 }
 
 func (suite *DynamicObjPropStoreSuite) TestSwapReplacesWrapped(c *check.C) {
-	objId0 := res.MakeObjectID(res.ObjectClass(0), res.ObjectSubclass(0), res.ObjectType(0))
-	objId1 := res.MakeObjectID(res.ObjectClass(0), res.ObjectSubclass(0), res.ObjectType(1))
+	objID0 := res.MakeObjectID(res.ObjectClass(0), res.ObjectSubclass(0), res.ObjectType(0))
+	objID1 := res.MakeObjectID(res.ObjectClass(0), res.ObjectSubclass(0), res.ObjectType(1))
 	secondData := suite.testData(6)
 	provider0 := suite.createProvider(func(consumer objprop.Consumer) {
-		consumer.Consume(objId0, suite.testData(3))
-		consumer.Consume(objId1, suite.testData(3))
+		consumer.Consume(objID0, suite.testData(3))
+		consumer.Consume(objID1, suite.testData(3))
 	})
 	provider1 := suite.createProvider(func(consumer objprop.Consumer) {
-		consumer.Consume(objId0, suite.testData(5))
-		consumer.Consume(objId1, secondData)
+		consumer.Consume(objID0, suite.testData(5))
+		consumer.Consume(objID1, secondData)
 	})
 
 	testStore := NewDynamicObjPropStore(store.NewProviderBacked(provider0, func() {}))
@@ -106,7 +106,7 @@ func (suite *DynamicObjPropStoreSuite) TestSwapReplacesWrapped(c *check.C) {
 		return store.NewProviderBacked(provider1, func() {})
 	})
 
-	retrievedData := testStore.Get(objId1)
+	retrievedData := testStore.Get(objID1)
 
 	c.Check(retrievedData.Common, check.DeepEquals, secondData.Common)
 	c.Check(retrievedData.Generic, check.DeepEquals, secondData.Generic)

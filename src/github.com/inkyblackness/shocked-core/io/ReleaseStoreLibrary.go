@@ -1,13 +1,14 @@
 package io
 
 import (
+	"bytes"
+	"io/ioutil"
 	"log"
 	"time"
 
 	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
-	dosChunk "github.com/inkyblackness/res/chunk/dos"
-	storeChunk "github.com/inkyblackness/res/chunk/store"
+	"github.com/inkyblackness/res/chunk/resfile"
 	"github.com/inkyblackness/res/objprop"
 	dosObjprop "github.com/inkyblackness/res/objprop/dos"
 	storeObjprop "github.com/inkyblackness/res/objprop/store"
@@ -25,7 +26,7 @@ type ReleaseStoreLibrary struct {
 	source      release.Release
 	sink        release.Release
 	timeoutMSec int
-	chunkStores map[string]chunk.Store
+	chunkStores map[string]*DynamicChunkStore
 
 	descriptors   []objprop.ClassDescriptor
 	objpropStores map[string]objprop.Store
@@ -42,7 +43,7 @@ func NewReleaseStoreLibrary(source release.Release, sink release.Release, timeou
 		source:      source,
 		sink:        sink,
 		timeoutMSec: timeoutMSec,
-		chunkStores: make(map[string]chunk.Store),
+		chunkStores: make(map[string]*DynamicChunkStore),
 
 		descriptors:   objprop.StandardProperties(),
 		objpropStores: make(map[string]objprop.Store),
@@ -63,7 +64,7 @@ func (library *ReleaseStoreLibrary) SaveAll() {
 }
 
 // ChunkStore implements the StoreLibrary interface.
-func (library *ReleaseStoreLibrary) ChunkStore(name string) (chunkStore chunk.Store, err error) {
+func (library *ReleaseStoreLibrary) ChunkStore(name string) (chunkStore *DynamicChunkStore, err error) {
 	chunkStore, exists := library.chunkStores[name]
 
 	if !exists {
@@ -72,7 +73,7 @@ func (library *ReleaseStoreLibrary) ChunkStore(name string) (chunkStore chunk.St
 		} else if library.source.HasResource(name) {
 			chunkStore, err = library.openChunkStoreFrom(library.source, name)
 		} else {
-			chunkStore = library.createSavingChunkStore(chunk.NullProvider(), "", name, func() {})
+			chunkStore = library.createSavingChunkStore(chunk.NullProvider(), "", name)
 		}
 		if err == nil {
 			library.chunkStores[name] = chunkStore
@@ -122,20 +123,26 @@ func (library *ReleaseStoreLibrary) TextpropStore(name string) (textpropStore te
 	return
 }
 
-func (library *ReleaseStoreLibrary) openChunkStoreFrom(rel release.Release, name string) (chunkStore chunk.Store, err error) {
+func (library *ReleaseStoreLibrary) openChunkStoreFrom(rel release.Release, name string) (chunkStore *DynamicChunkStore, err error) {
 	resource, err := rel.GetResource(name)
 
-	if err == nil {
-		var reader serial.SeekingReadCloser
-		reader, err = resource.AsSource()
-		if err == nil {
-			var provider chunk.Provider
-			provider, err = dosChunk.NewChunkProvider(reader)
-			if err == nil {
-				chunkStore = library.createSavingChunkStore(provider, resource.Path(), name, func() { reader.Close() })
-			}
-		}
+	if err != nil {
+		return
 	}
+	reader, err := resource.AsSource()
+	if err != nil {
+		return
+	}
+	data, err := ioutil.ReadAll(reader)
+	_ = reader.Close()
+	if err != nil {
+		return
+	}
+	provider, err := resfile.ReaderFrom(bytes.NewReader(data))
+	if err != nil {
+		return
+	}
+	chunkStore = library.createSavingChunkStore(provider, resource.Path(), name)
 
 	return
 }
@@ -150,7 +157,7 @@ func (library *ReleaseStoreLibrary) openObjpropStoreFrom(rel release.Release, na
 			var provider objprop.Provider
 			provider, err = dosObjprop.NewProvider(reader, library.descriptors)
 			if err == nil {
-				objpropStore = library.createSavingObjpropStore(provider, resource.Path(), name, func() { reader.Close() })
+				objpropStore = library.createSavingObjpropStore(provider, resource.Path(), name, func() { _ = reader.Close() })
 			}
 		}
 	}
@@ -168,7 +175,7 @@ func (library *ReleaseStoreLibrary) openTextpropStoreFrom(rel release.Release, n
 			var provider textprop.Provider
 			provider, err = dosTextprop.NewProvider(reader)
 			if err == nil {
-				textpropStore = library.createSavingTextpropStore(provider, resource.Path(), name, func() { reader.Close() })
+				textpropStore = library.createSavingTextpropStore(provider, resource.Path(), name, func() { _ = reader.Close() })
 			}
 		}
 	}
@@ -176,24 +183,19 @@ func (library *ReleaseStoreLibrary) openTextpropStoreFrom(rel release.Release, n
 	return
 }
 
-func (library *ReleaseStoreLibrary) createSavingChunkStore(provider chunk.Provider, path string, name string, closer func()) chunk.Store {
+func (library *ReleaseStoreLibrary) createSavingChunkStore(provider chunk.Provider, path string, name string) *DynamicChunkStore {
 	storeChanged := make(chan interface{})
 	onStoreChanged := func() { storeChanged <- nil }
-	chunkStore := NewDynamicChunkStore(storeChunk.NewProviderBacked(provider, onStoreChanged))
+	chunkStore := NewDynamicChunkStore(chunk.NewProviderBackedStore(provider), onStoreChanged)
 
-	closeLastReader := closer
 	saveAndSwap := func() {
 		chunkStore.Swap(func(oldStore chunk.Store) chunk.Store {
 			log.Printf("Saving resource <%s>/<%s>\n", path, name)
 			data := library.serializeChunkStore(oldStore)
-			log.Printf("Serialized previous data, closing old reader")
-			closeLastReader()
+			log.Printf("Serialized previous data, recreating new reader for new data")
+			newProvider := library.saveAndReloadChunkData(data, path, name)
 
-			log.Printf("Recreating new reader for new data")
-			newProvider, newReader := library.saveAndReloadChunkData(data, path, name)
-			closeLastReader = func() { newReader.Close() }
-
-			return storeChunk.NewProviderBacked(newProvider, onStoreChanged)
+			return chunk.NewProviderBackedStore(newProvider)
 		})
 	}
 	library.startSaverRoutine(name, storeChanged, saveAndSwap)
@@ -203,34 +205,29 @@ func (library *ReleaseStoreLibrary) createSavingChunkStore(provider chunk.Provid
 
 func (library *ReleaseStoreLibrary) serializeChunkStore(store chunk.Store) []byte {
 	buffer := serial.NewByteStore()
-	consumer := dosChunk.NewChunkConsumer(buffer)
-	ids := store.IDs()
-
-	for _, id := range ids {
-		blockStore := store.Get(id)
-		consumer.Consume(id, blockStore)
-	}
-	consumer.Finish()
+	_ = resfile.Write(buffer, store)
 
 	return buffer.Data()
 }
 
-func (library *ReleaseStoreLibrary) saveAndReloadChunkData(data []byte, path string, name string) (provider chunk.Provider, reader serial.SeekingReadCloser) {
+func (library *ReleaseStoreLibrary) saveAndReloadChunkData(data []byte, path string, name string) (provider chunk.Provider) {
 	newResource, err := library.saveResource(data, path, name)
+	var reader serial.SeekingReadCloser
 
 	if err == nil {
 		reader, err = newResource.AsSource()
 	}
 	if err == nil {
-		provider, err = dosChunk.NewChunkProvider(reader)
-		if err != nil {
-			reader.Close()
+		var newData []byte
+		newData, err = ioutil.ReadAll(reader)
+		_ = reader.Close()
+		if err == nil {
+			provider, err = resfile.ReaderFrom(bytes.NewReader(newData))
 		}
 	}
 	if err != nil {
 		log.Printf("Failed to store in sink, buffering: %v\n", err)
-		reader = serial.NewByteStoreFromData(data, func([]byte) {})
-		provider, _ = dosChunk.NewChunkProvider(reader)
+		provider, _ = resfile.ReaderFrom(bytes.NewReader(data))
 	}
 
 	return
@@ -251,7 +248,7 @@ func (library *ReleaseStoreLibrary) createSavingObjpropStore(provider objprop.Pr
 
 			log.Printf("Recreating new reader for new data")
 			newProvider, newReader := library.saveAndReloadObjpropData(data, path, name)
-			closeLastReader = func() { newReader.Close() }
+			closeLastReader = func() { _ = newReader.Close() }
 
 			return storeObjprop.NewProviderBacked(newProvider, onStoreChanged)
 		})
@@ -288,7 +285,7 @@ func (library *ReleaseStoreLibrary) saveAndReloadObjpropData(data []byte, path s
 	if err == nil {
 		provider, err = dosObjprop.NewProvider(reader, library.descriptors)
 		if err != nil {
-			reader.Close()
+			_ = reader.Close()
 		}
 	}
 	if err != nil {
@@ -315,7 +312,7 @@ func (library *ReleaseStoreLibrary) createSavingTextpropStore(provider textprop.
 
 			log.Printf("Recreating new reader for new data")
 			newProvider, newReader := library.saveAndReloadTextpropData(data, path, name)
-			closeLastReader = func() { newReader.Close() }
+			closeLastReader = func() { _ = newReader.Close() }
 
 			return storeTextprop.NewProviderBacked(newProvider, onStoreChanged)
 		})
@@ -347,7 +344,7 @@ func (library *ReleaseStoreLibrary) saveAndReloadTextpropData(data []byte, path 
 	if err == nil {
 		provider, err = dosTextprop.NewProvider(reader)
 		if err != nil {
-			reader.Close()
+			_ = reader.Close()
 		}
 	}
 	if err != nil {
@@ -364,7 +361,7 @@ func (library *ReleaseStoreLibrary) startSaverRoutine(name string, storeChanged 
 	library.saveChannels[name] = saveNow
 
 	go func() {
-		for true {
+		for {
 			select {
 			case <-saveNow:
 			case <-storeChanged:
@@ -399,8 +396,8 @@ func (library *ReleaseStoreLibrary) saveResource(data []byte, path string, name 
 
 		newSink, err = newResource.AsSink()
 		if err == nil {
-			newSink.Write(data)
-			newSink.Close()
+			_, _ = newSink.Write(data)
+			_ = newSink.Close()
 		}
 	}
 

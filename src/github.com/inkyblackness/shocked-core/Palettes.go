@@ -5,18 +5,17 @@ import (
 	"image/color"
 
 	"github.com/inkyblackness/res"
-	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/image"
 
 	"github.com/inkyblackness/shocked-core/io"
 )
 
 type Palettes struct {
-	gamepal chunk.Store
+	gamepal *io.DynamicChunkStore
 }
 
 func NewPalettes(library io.StoreLibrary) (palettes *Palettes, err error) {
-	var gamepal chunk.Store
+	var gamepal *io.DynamicChunkStore
 
 	gamepal, err = library.ChunkStore("gamepal.res")
 

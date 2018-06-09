@@ -1,28 +1,33 @@
 package core
 
 import (
-	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/chunk"
 
-	check "gopkg.in/check.v1"
+	"gopkg.in/check.v1"
 )
 
 type ResourceDataNodeSuite struct {
-	parentNode  DataNode
-	chunkHolder *TestingChunkProvider
-	node        DataNode
+	parentNode DataNode
+	store      chunk.Store
+	node       DataNode
 }
 
 var _ = check.Suite(&ResourceDataNodeSuite{})
 
 func (suite *ResourceDataNodeSuite) SetUpTest(c *check.C) {
-	suite.chunkHolder = NewTestingChunkProvider()
+	suite.store = chunk.NewProviderBackedStore(chunk.NullProvider())
+}
+
+func (suite *ResourceDataNodeSuite) aChunk() *chunk.Chunk {
+	return &chunk.Chunk{
+		ContentType:   chunk.Palette,
+		BlockProvider: chunk.MemoryBlockProvider([][]byte{})}
 }
 
 func (suite *ResourceDataNodeSuite) TestInfoReturnsListOfAvailableChunkIDs(c *check.C) {
-	suite.chunkHolder.Consume(res.ResourceID(0x0100), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{}))
-	suite.chunkHolder.Consume(res.ResourceID(0x0050), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{}))
-	suite.node = NewResourceDataNode(suite.parentNode, "testFile.res", suite.chunkHolder, nil)
+	suite.store.Put(chunk.ID(0x0100), suite.aChunk())
+	suite.store.Put(chunk.ID(0x0050), suite.aChunk())
+	suite.node = NewResourceDataNode(suite.parentNode, "testFile.res", suite.store, nil)
 
 	result := suite.node.Info()
 
@@ -30,9 +35,9 @@ func (suite *ResourceDataNodeSuite) TestInfoReturnsListOfAvailableChunkIDs(c *ch
 }
 
 func (suite *ResourceDataNodeSuite) TestResolveReturnsDataNodeForKnownID(c *check.C) {
-	suite.chunkHolder.Consume(res.ResourceID(0x0100), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{}))
-	suite.chunkHolder.Consume(res.ResourceID(0x0050), chunk.NewBlockHolder(chunk.BasicChunkType, res.Palette, [][]byte{}))
-	suite.node = NewResourceDataNode(suite.parentNode, "testFile.res", suite.chunkHolder, nil)
+	suite.store.Put(chunk.ID(0x0100), suite.aChunk())
+	suite.store.Put(chunk.ID(0x0050), suite.aChunk())
+	suite.node = NewResourceDataNode(suite.parentNode, "testFile.res", suite.store, nil)
 
 	result := suite.node.Resolve("0050")
 
@@ -41,7 +46,7 @@ func (suite *ResourceDataNodeSuite) TestResolveReturnsDataNodeForKnownID(c *chec
 }
 
 func (suite *ResourceDataNodeSuite) TestIDReturnsFileNameInLowerCase(c *check.C) {
-	suite.node = NewResourceDataNode(suite.parentNode, "TESTFILE.RES", suite.chunkHolder, nil)
+	suite.node = NewResourceDataNode(suite.parentNode, "TESTFILE.RES", suite.store, nil)
 
 	c.Check(suite.node.ID(), check.Equals, "testfile.res")
 }

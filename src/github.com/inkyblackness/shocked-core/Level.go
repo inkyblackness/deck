@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	"github.com/inkyblackness/res"
-	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/data"
 	"github.com/inkyblackness/res/logic"
+	"github.com/inkyblackness/shocked-core/io"
 
 	model "github.com/inkyblackness/shocked-model"
 )
@@ -73,26 +73,26 @@ func slopeControl(modelControl model.SlopeControl) (dataControl data.SlopeContro
 // Level is a structure holding level specific information.
 type Level struct {
 	id    int
-	store chunk.Store
+	store *io.DynamicChunkStore
 
 	mutex sync.Mutex
 
-	tileMapStore chunk.BlockStore
+	tileMapStore *io.DynamicBlockStore
 	tileMap      *logic.TileMap
 
-	objectListStore chunk.BlockStore
+	objectListStore *io.DynamicBlockStore
 	objectList      []data.LevelObjectEntry
 	objectChain     *logic.LevelObjectChain
 
-	crossrefListStore chunk.BlockStore
+	crossrefListStore *io.DynamicBlockStore
 	crossrefList      *logic.CrossReferenceList
 
-	surveillanceSourceStore     chunk.BlockStore
-	surveillanceDeathwatchStore chunk.BlockStore
+	surveillanceSourceStore     *io.DynamicBlockStore
+	surveillanceDeathwatchStore *io.DynamicBlockStore
 }
 
 // NewLevel returns a new instance of a Level structure.
-func NewLevel(store chunk.Store, id int) *Level {
+func NewLevel(store *io.DynamicChunkStore, id int) *Level {
 	baseStoreID := 4000 + id*100
 	level := &Level{
 		id:    id,
@@ -551,7 +551,7 @@ func (level *Level) SetObject(objectIndex int, newProperties *model.LevelObjectP
 	return
 }
 
-func (level *Level) onObjectListChanged(classStore chunk.BlockStore, classTable *logic.LevelObjectClassTable) {
+func (level *Level) onObjectListChanged(classStore *io.DynamicBlockStore, classTable *logic.LevelObjectClassTable) {
 	classStore.SetBlockData(0, classTable.Encode())
 
 	objWriter := bytes.NewBuffer(nil)
@@ -973,7 +973,7 @@ func (level *Level) SetLevelSurveillanceObject(index int, data model.Surveillanc
 			deathwatches[index] = int16(*data.DeathwatchIndex)
 		}
 
-		storeArray := func(store chunk.BlockStore, data []int16) {
+		storeArray := func(store *io.DynamicBlockStore, data []int16) {
 			writer := bytes.NewBuffer(nil)
 			binary.Write(writer, binary.LittleEndian, data)
 			store.SetBlockData(0, writer.Bytes())

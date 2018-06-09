@@ -11,12 +11,11 @@ import (
 	"path"
 	"strconv"
 
-	docopt "github.com/docopt/docopt-go"
+	"github.com/docopt/docopt-go"
 
-	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/audio"
 	"github.com/inkyblackness/res/chunk"
-	"github.com/inkyblackness/res/chunk/dos"
+	"github.com/inkyblackness/res/chunk/resfile"
 	"github.com/inkyblackness/res/compress/rle"
 	"github.com/inkyblackness/res/data"
 	"github.com/inkyblackness/res/image"
@@ -29,7 +28,7 @@ import (
 
 const (
 	// Version contains the current version number
-	Version = "1.0.1"
+	Version = "1.1.0"
 	// Name is the name of the application
 	Name = "InkyBlackness Chunkie"
 	// Title contains a combined string of name and version
@@ -41,7 +40,7 @@ func usage() string {
 
 Usage:
   chunkie export <resource-file> <chunk-id> [--block=<block-id>] [--raw] [--pal=<palette-file>] [--pal-id=<palette-id>] [--fps=<framerate>] [<folder>]
-  chunkie import <resource-file> <chunk-id> [--block=<block-id>] [--data-type=<id>] [--compressed] [--force-transparency] <source-file>
+  chunkie import <resource-file> <chunk-id> [--block=<block-id>] [--compressed] [--force-transparency] <source-file>
   chunkie -h | --help
   chunkie --version
 
@@ -55,7 +54,6 @@ Options:
   --pal=<palette-file>   For handling bitmaps & models, use this palette file to write color information
   --pal-id=<palette-id>  Optional palette chunk identifier. If not provided, uses first palette found in palette-file.
   --fps=<framerate>      The frames per second to emulate when exporting movies. 0 names files after timestamp. [default: 0]
-  --data-type=<id>       The type of the chunk to write.
   <folder>               The path of the folder to use. [default: .]
   <source-file>          The source file to import.
   -h --help              Show this screen.
@@ -69,9 +67,17 @@ func main() {
 
 	if arguments["export"].(bool) {
 		resourceFile := arguments["<resource-file>"].(string)
-		inFile, _ := os.Open(resourceFile)
+		inFile, inFileErr := os.Open(resourceFile)
+		if inFileErr != nil {
+			fmt.Printf("Failed to open file\n")
+			return
+		}
 		defer inFile.Close()
-		provider, _ := dos.NewChunkProvider(inFile)
+		provider, providerErr := resfile.ReaderFrom(inFile)
+		if providerErr != nil {
+			fmt.Printf("Failed to read resource file: %v\n", providerErr)
+			return
+		}
 		chunkText := arguments["<chunk-id>"].(string)
 		chunkSelection := int64(-1)
 		if chunkText != "all" {
@@ -95,26 +101,30 @@ func main() {
 			paletteID, _ = strconv.ParseUint(palIDArgument.(string), 0, 16)
 		}
 		if palArgument != nil {
-			palette = loadPalette(palArgument.(string), res.ResourceID(paletteID))
+			palette = loadPalette(palArgument.(string), chunk.ID(uint16(paletteID)))
 		}
 		if folderArgument != nil {
 			folder = folderArgument.(string)
 		}
 		os.MkdirAll(folder, os.FileMode(0755))
 
-		processBlock := func(chunkID res.ResourceID, holder chunk.BlockHolder, blockID uint16) {
-			outFileName := fmt.Sprintf("%04X_%03d", int(chunkID), blockID)
-			exportFile(provider, holder, blockID, path.Join(folder, outFileName), raw, palette, float32(framesPerSecond))
+		processBlock := func(chunkID chunk.Identifier, selectedChunk *chunk.Chunk, blockID int) {
+			outFileName := fmt.Sprintf("%04X_%03d", chunkID, blockID)
+			exportFile(provider, selectedChunk, blockID, path.Join(folder, outFileName), raw, palette, float32(framesPerSecond))
 		}
-		processChunk := func(chunkID res.ResourceID) {
-			holder := provider.Provide(chunkID)
+		processChunk := func(chunkID chunk.Identifier) {
+			selectedChunk, chunkErr := provider.Chunk(chunkID)
 
+			if chunkErr != nil {
+				fmt.Printf("Failed to read chunk %v: %v\n", chunkID, chunkErr)
+				return
+			}
 			if blockSelection == -1 {
-				for blockID := uint16(0); blockID < holder.BlockCount(); blockID++ {
-					processBlock(chunkID, holder, blockID)
+				for blockID := 0; blockID < selectedChunk.BlockCount(); blockID++ {
+					processBlock(chunkID, selectedChunk, blockID)
 				}
 			} else {
-				processBlock(chunkID, holder, uint16(blockSelection))
+				processBlock(chunkID, selectedChunk, int(blockSelection))
 			}
 		}
 		if chunkSelection == -1 {
@@ -122,7 +132,7 @@ func main() {
 				processChunk(chunkID)
 			}
 		} else {
-			processChunk(res.ResourceID(chunkSelection))
+			processChunk(chunk.ID(uint16(chunkSelection)))
 		}
 
 	} else if arguments["import"].(bool) {
@@ -132,69 +142,80 @@ func main() {
 		sourceFile := arguments["<source-file>"].(string)
 		compressed := arguments["--compressed"].(bool)
 		forceTransparency := arguments["--force-transparency"].(bool)
-		dataType := -1
-		dataTypeArgument := arguments["--data-type"]
-		if dataTypeArgument != nil {
-			result, _ := strconv.ParseUint(dataTypeArgument.(string), 0, 8)
-			dataType = int(result)
-		}
 
-		importData(resourceFile, res.ResourceID(chunkID), uint16(blockID), dataType, sourceFile, compressed, forceTransparency)
+		importData(resourceFile, chunk.ID(uint16(chunkID)), int(blockID), sourceFile, compressed, forceTransparency)
 	}
 }
 
-func exportFile(provider chunk.Provider, holder chunk.BlockHolder, blockID uint16,
+func exportFile(provider chunk.Provider, selectedChunk *chunk.Chunk, blockID int,
 	outFileName string, raw bool, palette color.Palette, framesPerSecond float32) {
-	// Some chunks have zero blocks (gamescr.res)
-	if holder.BlockCount() > 0 {
-		blockData := holder.BlockData(blockID)
-		contentType := holder.ContentType()
-		exportRaw := raw
+	blockReader, blockErr := selectedChunk.Block(blockID)
+	contentType := selectedChunk.ContentType
+	exportRaw := raw
 
-		if !exportRaw {
-			if contentType == res.Sound {
-				soundData, _ := audio.DecodeSoundChunk(blockData)
-				wav.ExportToWav(outFileName+".wav", soundData)
-			} else if contentType == res.Media {
-				exportRaw = exportMedia(blockData, outFileName, framesPerSecond)
-			} else if contentType == res.Bitmap {
-				exportRaw = !convert.ToPng(outFileName+".png", blockData, palette)
-			} else if contentType == res.Geometry {
-				exportRaw = !convert.ToWavefrontObj(outFileName, blockData, palette)
-			} else if contentType == res.VideoClip {
-				exportRaw = exportVideoClip(provider, blockData, outFileName, framesPerSecond, palette)
-			} else if contentType == res.Text {
-				// Don't recreate whole XML for each block since convert.ToTxt merge them into one file
-				if blockID == 0 {
-					exportRaw = !convert.ToTxt(outFileName+".xml", holder)
-				}
-			} else {
-				exportRaw = true
+	if blockErr != nil {
+		fmt.Printf("Failed to access block %d: %v\n", blockID, blockErr)
+		return
+	}
+	blockData, dataErr := ioutil.ReadAll(blockReader)
+	if dataErr != nil {
+		fmt.Printf("Failed to read block %d: %v\n", blockID, dataErr)
+		return
+	}
+	if !exportRaw {
+		if contentType == chunk.Sound {
+			soundData, _ := audio.DecodeSoundChunk(blockData)
+			wav.ExportToWav(outFileName+".wav", soundData)
+		} else if contentType == chunk.Media {
+			exportRaw = exportMedia(blockData, outFileName, framesPerSecond)
+		} else if contentType == chunk.Bitmap {
+			exportRaw = !convert.ToPng(outFileName+".png", blockData, palette)
+		} else if contentType == chunk.Geometry {
+			exportRaw = !convert.ToWavefrontObj(outFileName, blockData, palette)
+		} else if contentType == chunk.VideoClip {
+			exportRaw = exportVideoClip(provider, blockData, outFileName, framesPerSecond, palette)
+		} else if contentType == chunk.Text {
+			// Don't recreate whole XML for each block since convert.ToTxt merge them into one file
+			if blockID == 0 {
+				exportRaw = !convert.ToTxt(outFileName+".xml", selectedChunk)
 			}
+		} else {
+			exportRaw = true
 		}
-		if exportRaw {
-			ioutil.WriteFile(outFileName+".bin", blockData, os.FileMode(0644))
-		}
+	}
+	if exportRaw {
+		ioutil.WriteFile(outFileName+".bin", blockData, os.FileMode(0644))
 	}
 }
 
-func loadPalette(fileName string, paletteID res.ResourceID) (pal color.Palette) {
+func loadPalette(fileName string, paletteID chunk.Identifier) (pal color.Palette) {
 	if len(fileName) > 0 {
 		inFile, _ := os.Open(fileName)
 		defer inFile.Close()
-		provider, _ := dos.NewChunkProvider(inFile)
+		reader, readerErr := resfile.ReaderFrom(inFile)
 
-		tryLoad := func(id res.ResourceID) {
-			blockHolder := provider.Provide(id)
+		if readerErr != nil {
+			fmt.Printf("Failed to load palette: %v\n", readerErr)
+			return
+		}
+		tryLoad := func(id chunk.Identifier) {
+			palChunk, chunkErr := reader.Chunk(id)
 
-			if blockHolder != nil && blockHolder.ContentType() == res.Palette && pal == nil {
-				pal, _ = image.LoadPalette(bytes.NewReader(blockHolder.BlockData(0)))
+			if chunkErr != nil {
+				return
+			}
+			if palChunk != nil && palChunk.ContentType == chunk.Palette && pal == nil {
+				palReader, palErr := palChunk.Block(0)
+				if palErr != nil {
+					return
+				}
+				pal, _ = image.LoadPalette(palReader)
 			}
 		}
 
 		tryLoad(paletteID)
 		if pal == nil {
-			ids := provider.IDs()
+			ids := reader.IDs()
 			for _, id := range ids {
 				tryLoad(id)
 			}
@@ -246,18 +267,26 @@ func exportVideoClip(provider chunk.Provider, blockData []byte, fileBaseName str
 			}
 		}
 
-		framesData := provider.Provide(sequence.FramesID)
+		framesChunk, framesErr := provider.Chunk(chunk.ID(sequence.FramesID))
 
+		if framesErr != nil {
+			fmt.Printf("Failed to access chunk for frames: %v", framesErr)
+			return
+		}
 		imageRect := goImage.Rect(0, 0, int(sequence.Width), int(sequence.Height))
 		img := goImage.NewPaletted(imageRect, clipPalette)
 		handler := newExportingMediaHandler(fileBaseName, mediaDuration, framesPerSecond, 0.0)
-		for frameID := uint16(0); frameID < framesData.BlockCount() && err == nil; frameID++ {
-			frameReader := bytes.NewReader(framesData.BlockData(frameID))
+		for frameID := 0; frameID < framesChunk.BlockCount() && err == nil; frameID++ {
+			frameReader, frameErr := framesChunk.Block(frameID)
 			var header image.BitmapHeader
 
-			binary.Read(frameReader, binary.LittleEndian, &header)
-			err = rle.Decompress(frameReader, img.Pix)
-			handler.OnVideo(times[int(frameID)], img)
+			if frameErr != nil {
+				fmt.Printf("Failed to load frame %v.%d: %v\n", chunk.ID(sequence.FramesID), frameID, frameErr)
+			} else {
+				binary.Read(frameReader, binary.LittleEndian, &header)
+				err = rle.Decompress(frameReader, img.Pix)
+				handler.OnVideo(times[int(frameID)], img)
+			}
 		}
 		handler.finish()
 	}
@@ -269,63 +298,70 @@ func exportVideoClip(provider chunk.Provider, blockData []byte, fileBaseName str
 	return
 }
 
-func importData(resourceFile string, chunkID res.ResourceID, blockID uint16, dataType int, sourceFile string,
+func importData(resourceFile string, chunkID chunk.Identifier, blockID int, sourceFile string,
 	compressed, forceTransparency bool) {
-	buffer := serial.NewByteStore()
-	writer := dos.NewChunkConsumer(buffer)
-
-	{
-		inFile, _ := os.Open(resourceFile)
-		defer inFile.Close()
-		provider, _ := dos.NewChunkProvider(inFile)
-
-		ids := provider.IDs()
-		for _, id := range ids {
-			sourceChunk := provider.Provide(id)
-			blockCount := sourceChunk.BlockCount()
-			blocks := make([][]byte, blockCount)
-			for block := uint16(0); block < blockCount; block++ {
-				if id == chunkID && block == blockID {
-					blocks[block] = importFile(sourceFile, sourceChunk.ContentType(), compressed, forceTransparency)
-				} else {
-					blocks[block] = sourceChunk.BlockData(block)
-				}
-			}
-
-			destChunk := chunk.NewBlockHolder(sourceChunk.ChunkType(), sourceChunk.ContentType(), blocks)
-			writer.Consume(id, destChunk)
-		}
+	inFile, inFileErr := os.Open(resourceFile)
+	if inFileErr != nil {
+		fmt.Printf("Failed to open input file: %v\n", inFileErr)
+		return
 	}
-	writer.Finish()
+	defer inFile.Close()
+	reader, readerErr := resfile.ReaderFrom(inFile)
+	if readerErr != nil {
+		fmt.Printf("Failed to read resources from input file: %v\n", readerErr)
+		return
+	}
+	store := chunk.NewProviderBackedStore(reader)
 
+	modChunk, chunkErr := store.Chunk(chunkID)
+	if chunkErr != nil {
+		fmt.Printf("Failed to access chunk to modify: %v\n", chunkErr)
+		return
+	}
+	modChunk.SetBlock(blockID, importFile(sourceFile, modChunk.ContentType, compressed, forceTransparency))
+
+	buffer := serial.NewByteStore()
+	writeErr := resfile.Write(buffer, store)
+	if writeErr != nil {
+		fmt.Printf("Failed to re-encode data: %v\n", writeErr)
+		return
+	}
 	err := ioutil.WriteFile(resourceFile, buffer.Data(), os.FileMode(0644))
 	if err != nil {
-		panic(err)
+		fmt.Printf("Failed to save file: %v\n", err)
+		return
 	}
 }
 
-func importFile(sourceFile string, dataType res.DataTypeID, compressed, forceTransparency bool) (data []byte) {
+func importFile(sourceFile string, contentType chunk.ContentType, compressed, forceTransparency bool) (data []byte) {
 	extension := path.Ext(sourceFile)
 	switch extension {
 	case ".wav":
 		{
 			soundData := wav.ImportFromWav(sourceFile)
-			if dataType == res.Sound {
+			if contentType == chunk.Sound {
 				data = audio.EncodeSoundChunk(soundData)
-			} else if dataType == res.Media {
+			} else if contentType == chunk.Media {
 				data = movi.ContainSoundData(soundData)
 			}
 		}
 	case ".png":
 		{
-			if dataType == res.Bitmap {
+			if contentType == chunk.Bitmap {
 				data = convert.FromPng(sourceFile, false, compressed, forceTransparency)
 			}
 		}
 	default:
 		{
-			data, _ = ioutil.ReadFile(sourceFile)
+			var dataErr error
+			data, dataErr = ioutil.ReadFile(sourceFile)
+			if dataErr != nil {
+				fmt.Printf("Failed to read from source file: %v\n", dataErr)
+			}
 		}
+	}
+	if data == nil {
+		fmt.Printf("No data produced from source file - Is the target chunk compatible with input file?\n")
 	}
 
 	return

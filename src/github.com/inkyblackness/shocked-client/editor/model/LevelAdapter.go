@@ -295,11 +295,26 @@ func (adapter *LevelAdapter) onLevelObjects(objects *model.LevelObjects) {
 }
 
 // RequestNewObject requests to add a new object at the given coordinate.
-func (adapter *LevelAdapter) RequestNewObject(worldX, worldY float32, objectID ObjectID) {
+func (adapter *LevelAdapter) RequestNewObject(worldX, worldY float32, objectID ObjectID, atGrid bool) {
 	levelID := adapter.ID()
 	integerX, integerY := int(worldX), int(worldY)
 	tileX, fineX := integerX>>8, integerX&0xFF
 	tileY, fineY := integerY>>8, integerY&0xFF
+
+	if atGrid {
+		clipToGrid := func(value int) int {
+			if value < 0x40 {
+				value = 0x00
+			} else if value >= 0xC0 {
+				value = 0xFF
+			} else {
+				value = 0x80
+			}
+			return value
+		}
+		fineX = clipToGrid(fineX)
+		fineY = clipToGrid(fineY)
+	}
 
 	if (tileX >= 0) && (tileX < 64) && (tileY >= 0) && (tileY < 64) && (levelID >= 0) {
 		tile := adapter.tileMap.Tile(TileCoordinateOf(tileX, tileY))

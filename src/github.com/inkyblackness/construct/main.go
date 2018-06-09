@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"os"
 
-	docopt "github.com/docopt/docopt-go"
-
-	"github.com/inkyblackness/res/chunk/dos"
+	"github.com/docopt/docopt-go"
 
 	"github.com/inkyblackness/construct/chunks"
+	"github.com/inkyblackness/res/chunk"
+	"github.com/inkyblackness/res/chunk/resfile"
 )
 
 const (
 	// Version contains the current version number
-	Version = "1.0.0"
+	Version = "1.1.0"
 	// Name is the name of the application
 	Name = "InkyBlackness Construct"
 	// Title contains a combined string of name and version
@@ -39,39 +39,35 @@ Options:
 }
 
 func main() {
-	arguments, _ := docopt.Parse(usage(), nil, true, Title, false)
+	arguments, argErr := docopt.Parse(usage(), nil, true, Title, false)
+	if argErr != nil {
+		fmt.Printf("Failed to parse arguments: %v\n", argErr)
+		return
+	}
 
 	if arguments["archive"].(bool) {
 		outFileName := orElse(arguments["--file"], "archive.dat").(string)
 		levels := arguments["--levels"].(string)
 		solid := arguments["--solid"].(bool)
-		writer, errOut := os.Create(outFileName)
-		if errOut != nil {
-			fmt.Printf("Error creating destination: %v\n", errOut)
-		}
 
-		chunkConsumer := dos.NewChunkConsumer(writer)
+		store := chunk.NewProviderBackedStore(chunk.NullProvider())
 
-		chunks.AddArchiveName(chunkConsumer, "Starting Game")
-		chunks.AddGameState(chunkConsumer)
+		chunks.AddArchiveName(store, "Starting Game")
+		chunks.AddGameState(store)
 		for levelID, levelType := range levels {
 			isRealWorld := levelType == 'r'
 			isCyberspace := levelType == 'c'
 
 			if isRealWorld || isCyberspace {
-				chunks.AddLevel(chunkConsumer, levelID, solid, isCyberspace)
+				chunks.AddLevel(store, levelID, solid, isCyberspace)
 			}
 		}
 
-		chunkConsumer.Finish()
+		writeResourceFile(outFileName, store)
 	} else if arguments["resource"].(bool) {
 		outFileName := orElse(arguments["--file"], "empty.res").(string)
-		writer, errOut := os.Create(outFileName)
 
-		if errOut != nil {
-			fmt.Printf("Error creating destination: %v\n", errOut)
-		}
-		dos.NewChunkConsumer(writer).Finish()
+		writeResourceFile(outFileName, chunk.NullProvider())
 	}
 }
 
@@ -81,4 +77,23 @@ func orElse(optional, defaultValue interface{}) (result interface{}) {
 		result = defaultValue
 	}
 	return
+}
+
+func writeResourceFile(fileName string, provider chunk.Provider) {
+	writer, errOut := os.Create(fileName)
+	if errOut != nil {
+		fmt.Printf("Error creating file: %v\n", errOut)
+		return
+	}
+	defer func() {
+		errOut = writer.Close()
+		if errOut != nil {
+			fmt.Printf("Error closing file: %v\n", errOut)
+		}
+	}()
+
+	err := resfile.Write(writer, provider)
+	if err != nil {
+		fmt.Printf("Error writing resource: %v\n", err)
+	}
 }

@@ -30,8 +30,9 @@ type Slider struct {
 	sliderChangeHandler SliderChangeHandler
 	formatter           SliderValueFormatter
 
-	valueMin int64
-	valueMax int64
+	valueMin       int64
+	valueMax       int64
+	invertedScroll bool
 
 	valueUndefined bool
 	value          int64
@@ -137,6 +138,11 @@ func (slider *Slider) onMouseScroll(area *ui.Area, event events.Event) bool {
 	if !slider.valueUndefined {
 		_, dy := mouseEvent.Deltas()
 
+		if !slider.invertedScroll {
+			// somehow, scrolling is already "inverted" in our chain,
+			// so correct always except requested to be inverted.
+			dy = -dy
+		}
 		if (dy < 0) && (slider.value > slider.valueMin) {
 			slider.onValueChange(slider.value - 1)
 		} else if (dy > 0) && (slider.value < slider.valueMax) {

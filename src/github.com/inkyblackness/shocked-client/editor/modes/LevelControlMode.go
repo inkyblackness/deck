@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/inkyblackness/res/data"
+	"github.com/inkyblackness/shocked-client/editor/cmd"
 	"github.com/inkyblackness/shocked-client/editor/display"
 	"github.com/inkyblackness/shocked-client/editor/model"
 	"github.com/inkyblackness/shocked-client/graphics"
@@ -14,18 +15,41 @@ import (
 	dataModel "github.com/inkyblackness/shocked-model"
 )
 
-type levelPropertyItem struct {
-	displayString string
-	modifier      func(properties *dataModel.LevelProperties)
-	formatter     controls.SliderValueFormatter
-}
-
-func (item *levelPropertyItem) String() string {
-	return item.displayString
-}
-
 func lbpValueFormatter(value int64) string {
 	return fmt.Sprintf("%v.%v LBP", value/2, (value%2)*5)
+}
+
+type ceilingEffect uint32
+
+const (
+	ceilingEffectNone      = 0
+	ceilingEffectRadiation = 1
+)
+
+func (effect ceilingEffect) formatter() (f func(int64) string) {
+	f = controls.DefaultSliderValueFormatter
+	if effect == ceilingEffectRadiation {
+		f = lbpValueFormatter
+	}
+	return
+}
+
+type floorEffect uint32
+
+const (
+	floorEffectNone      = 0
+	floorEffectGravity   = 1
+	floorEffectBiohazard = 2
+)
+
+func (effect floorEffect) formatter() (f func(int64) string) {
+	f = controls.DefaultSliderValueFormatter
+	if effect == floorEffectGravity {
+		f = func(value int64) string { return fmt.Sprintf("%v%%", value*25) }
+	} else if effect == floorEffectBiohazard {
+		f = lbpValueFormatter
+	}
+	return
 }
 
 // LevelControlMode is a mode for archive level control.
@@ -42,20 +66,24 @@ type LevelControlMode struct {
 
 	heightShiftLabel *controls.Label
 	heightShiftBox   *controls.ComboBox
+	heightShiftItems enumItems
 
 	realWorldProperties *ui.Area
 
-	levelTexturesLabel       *controls.Label
-	levelTexturesSelector    *controls.TextureSelector
-	currentLevelTextureIndex int
-	worldTexturesLabel       *controls.Label
-	worldTexturesSelector    *controls.TextureSelector
-	worldTexturesIDLabel     *controls.Label
-	worldTexturesIDSlider    *controls.Slider
+	levelGenericTexturesLabel    *controls.Label
+	levelGenericTexturesSelector *controls.TextureSelector
+	levelWallTexturesLabel       *controls.Label
+	levelWallTexturesSelector    *controls.TextureSelector
+	currentLevelTextureIndex     int
+	worldTexturesLabel           *controls.Label
+	worldTexturesSelector        *controls.TextureSelector
+	worldTexturesIDLabel         *controls.Label
+	worldTexturesIDSlider        *controls.Slider
 
 	selectedSurveillanceIndex    int
 	surveillanceIndexLabel       *controls.Label
 	surveillanceIndexBox         *controls.ComboBox
+	surveillanceIndexItems       enumItems
 	surveillanceSourceLabel      *controls.Label
 	surveillanceSourceSlider     *controls.Slider
 	surveillanceDeathwatchLabel  *controls.Label
@@ -63,17 +91,20 @@ type LevelControlMode struct {
 
 	ceilingEffectLabel       *controls.Label
 	ceilingEffectBox         *controls.ComboBox
+	ceilingEffectItems       enumItems
 	ceilingEffectLevelLabel  *controls.Label
 	ceilingEffectLevelSlider *controls.Slider
 
 	floorEffectLabel       *controls.Label
 	floorEffectBox         *controls.ComboBox
+	floorEffectItems       enumItems
 	floorEffectLevelLabel  *controls.Label
 	floorEffectLevelSlider *controls.Slider
 
 	selectedAnimationGroupIndex int
 	animationGroupIndexLabel    *controls.Label
 	animationGroupIndexBox      *controls.ComboBox
+	animationGroupItems         enumItems
 	animationGroupTimeLabel     *controls.Label
 	animationGroupTimeSlider    *controls.Slider
 	animationGroupFramesLabel   *controls.Label
@@ -90,8 +121,7 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 		levelAdapter:                context.ModelAdapter().ActiveLevel(),
 		mapDisplay:                  mapDisplay,
 		currentLevelTextureIndex:    -1,
-		selectedSurveillanceIndex:   -1,
-		selectedAnimationGroupIndex: -1}
+		selectedAnimationGroupIndex: 1}
 
 	{
 		builder := ui.NewAreaBuilder()
@@ -118,13 +148,27 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 
 		{
 			mode.activeLevelLabel, mode.activeLevelBox = panelBuilder.addComboProperty("Active Level", func(item controls.ComboBoxItem) {
-				context.ModelAdapter().RequestActiveLevel(item.(int))
+				selectedLevelID := item.(int)
+				context.Perform(&cmd.SetActiveLevelCommand{
+					Setter: func(levelID int) error {
+						context.ModelAdapter().RequestActiveLevel(levelID)
+						return nil
+					},
+					OldValue: context.ModelAdapter().ActiveLevel().ID(),
+					NewValue: selectedLevelID})
 			})
 
 			adapter := context.ModelAdapter()
 			activeLevelAdapter := adapter.ActiveLevel()
 			activeLevelAdapter.OnIDChanged(func() {
-				mode.activeLevelBox.SetSelectedItem(activeLevelAdapter.ID())
+				levelID := mode.levelAdapter.ID()
+				isProperLevel := levelID >= 0
+
+				if isProperLevel {
+					mode.activeLevelBox.SetSelectedItem(levelID)
+				} else {
+					mode.activeLevelBox.SetSelectedItem(nil)
+				}
 			})
 			adapter.OnAvailableLevelsChanged(func() {
 				ids := adapter.AvailableLevelIDs()
@@ -137,21 +181,20 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 		}
 		{
 			mode.heightShiftLabel, mode.heightShiftBox = panelBuilder.addComboProperty("Tile Height", mode.onHeightShiftChanged)
-			heightShiftItems := make([]controls.ComboBoxItem, 8)
-
-			heightShiftItems[0] = &enumItem{0, "32 Tiles"}
-			heightShiftItems[1] = &enumItem{1, "16 Tiles"}
-			heightShiftItems[2] = &enumItem{2, "8 Tiles"}
-			heightShiftItems[3] = &enumItem{3, "4 Tiles"}
-			heightShiftItems[4] = &enumItem{4, "2 Tiles"}
-			heightShiftItems[5] = &enumItem{5, "1 Tile"}
-			heightShiftItems[6] = &enumItem{6, "1/2 Tile"}
-			heightShiftItems[7] = &enumItem{7, "1/4 Tile"}
-			mode.heightShiftBox.SetItems(heightShiftItems)
+			mode.heightShiftItems = []*enumItem{
+				{0, "32 Tiles"},
+				{1, "16 Tiles"},
+				{2, "8 Tiles"},
+				{3, "4 Tiles"},
+				{4, "2 Tiles"},
+				{5, "1 Tile"},
+				{6, "1/2 Tile"},
+				{7, "1/4 Tile"}}
+			mode.heightShiftBox.SetItems(mode.heightShiftItems.forComboBox())
 			mode.levelAdapter.OnLevelPropertiesChanged(func() {
 				heightShift := mode.levelAdapter.HeightShift()
-				if (heightShift >= 0) && (heightShift < len(heightShiftItems)) {
-					mode.heightShiftBox.SetSelectedItem(heightShiftItems[heightShift])
+				if (heightShift >= 0) && (heightShift < len(mode.heightShiftItems)) {
+					mode.heightShiftBox.SetSelectedItem(mode.heightShiftItems[heightShift])
 				} else {
 					mode.heightShiftBox.SetSelectedItem(nil)
 				}
@@ -163,8 +206,10 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 			mode.realWorldProperties, realWorldBuilder = panelBuilder.addSection(false)
 
 			{
-				mode.levelTexturesLabel, mode.levelTexturesSelector = realWorldBuilder.addTextureProperty("Level Textures",
-					mode.levelTextures, mode.onSelectedLevelTextureChanged)
+				mode.levelGenericTexturesLabel, mode.levelGenericTexturesSelector = realWorldBuilder.addTextureProperty("Level Textures (floors, ceilings, walls)",
+					mode.genericLevelTextures, mode.onSelectedGenericLevelTextureChanged)
+				mode.levelWallTexturesLabel, mode.levelWallTexturesSelector = realWorldBuilder.addTextureProperty("Level Textures (walls only)",
+					mode.wallLevelTextures, mode.onSelectedWallLevelTextureChanged)
 				mode.worldTexturesLabel, mode.worldTexturesSelector = realWorldBuilder.addTextureProperty("World Textures",
 					mode.worldTextures, mode.onSelectedWorldTextureChanged)
 				mode.worldTexturesIDLabel, mode.worldTexturesIDSlider = realWorldBuilder.addSliderProperty("World Texture ID",
@@ -193,27 +238,22 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 				mode.ceilingEffectLevelLabel, mode.ceilingEffectLevelSlider =
 					realWorldBuilder.addSliderProperty("Ceiling Effect Level", mode.onCeilingEffectLevelChanged)
 
-				noEffectItem := &levelPropertyItem{"None",
-					func(properties *dataModel.LevelProperties) { properties.CeilingHasRadiation = boolAsPointer(false) },
-					controls.DefaultSliderValueFormatter}
-				radiationEffectItem := &levelPropertyItem{"Radiation",
-					func(properties *dataModel.LevelProperties) { properties.CeilingHasRadiation = boolAsPointer(true) },
-					lbpValueFormatter}
-				ceilingItems := []controls.ComboBoxItem{noEffectItem, radiationEffectItem}
-
-				mode.ceilingEffectBox.SetItems(ceilingItems)
+				mode.ceilingEffectItems = []*enumItem{
+					{ceilingEffectNone, "None"},
+					{ceilingEffectRadiation, "Radiation"}}
+				mode.ceilingEffectBox.SetItems(mode.ceilingEffectItems.forComboBox())
 				mode.ceilingEffectLevelSlider.SetRange(0, 255)
 
 				mode.levelAdapter.OnLevelPropertiesChanged(func() {
 					radiation, level := mode.levelAdapter.CeilingEffect()
-					item := noEffectItem
+					effect := ceilingEffect(ceilingEffectNone)
 
 					if radiation {
-						item = radiationEffectItem
+						effect = ceilingEffectRadiation
 					}
-					mode.ceilingEffectBox.SetSelectedItem(item)
+					mode.ceilingEffectBox.SetSelectedItem(mode.ceilingEffectItems[effect])
 					mode.ceilingEffectLevelSlider.SetValue(int64(level))
-					mode.ceilingEffectLevelSlider.SetValueFormatter(item.formatter)
+					mode.ceilingEffectLevelSlider.SetValueFormatter(effect.formatter())
 				})
 			}
 			{
@@ -222,35 +262,18 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 				mode.floorEffectLevelLabel, mode.floorEffectLevelSlider =
 					realWorldBuilder.addSliderProperty("Floor Effect Level", mode.onFloorEffectLevelChanged)
 
-				noEffectItem := &levelPropertyItem{"None", func(properties *dataModel.LevelProperties) {
-					properties.FloorHasBiohazard = boolAsPointer(false)
-					properties.FloorHasGravity = boolAsPointer(false)
-				}, controls.DefaultSliderValueFormatter}
-				gravityEffectItem := &levelPropertyItem{"Gravity", func(properties *dataModel.LevelProperties) {
-					properties.FloorHasBiohazard = boolAsPointer(false)
-					properties.FloorHasGravity = boolAsPointer(true)
-				}, func(value int64) string { return fmt.Sprintf("%v%%", value*25) }}
-				biohazardEffectItem := &levelPropertyItem{"Biohazard", func(properties *dataModel.LevelProperties) {
-					properties.FloorHasBiohazard = boolAsPointer(true)
-					properties.FloorHasGravity = boolAsPointer(false)
-				}, lbpValueFormatter}
-				floorItems := []controls.ComboBoxItem{noEffectItem, gravityEffectItem, biohazardEffectItem}
-
-				mode.floorEffectBox.SetItems(floorItems)
+				mode.floorEffectItems = []*enumItem{
+					{floorEffectNone, "None"},
+					{floorEffectGravity, "Gravity"},
+					{floorEffectBiohazard, "Biohazard"}}
+				mode.floorEffectBox.SetItems(mode.floorEffectItems.forComboBox())
 				mode.floorEffectLevelSlider.SetRange(0, 255)
 
 				mode.levelAdapter.OnLevelPropertiesChanged(func() {
-					biohazard, gravity, level := mode.levelAdapter.FloorEffect()
-					item := noEffectItem
-
-					if gravity {
-						item = gravityEffectItem
-					} else if biohazard {
-						item = biohazardEffectItem
-					}
-					mode.floorEffectBox.SetSelectedItem(item)
+					effect, level := mode.currentFloorEffect()
+					mode.floorEffectBox.SetSelectedItem(mode.floorEffectItems[effect])
 					mode.floorEffectLevelSlider.SetValue(int64(level))
-					mode.floorEffectLevelSlider.SetValueFormatter(item.formatter)
+					mode.floorEffectLevelSlider.SetValueFormatter(effect.formatter())
 				})
 			}
 			{
@@ -282,7 +305,9 @@ func NewLevelControlMode(context Context, parent *ui.Area, mapDisplay *display.M
 			}
 		}
 		mode.levelAdapter.OnLevelPropertiesChanged(func() {
-			mode.realWorldProperties.SetVisible(!mode.levelAdapter.IsCyberspace())
+			isProperLevel := mode.levelAdapter.ID() >= 0
+			isRealWorld := !mode.levelAdapter.IsCyberspace()
+			mode.realWorldProperties.SetVisible(isProperLevel && isRealWorld)
 		})
 	}
 
@@ -295,6 +320,17 @@ func (mode *LevelControlMode) SetActive(active bool) {
 	mode.mapDisplay.SetVisible(active)
 }
 
+func (mode *LevelControlMode) currentFloorEffect() (floorEffect, int) {
+	biohazard, gravity, level := mode.levelAdapter.FloorEffect()
+	effect := floorEffect(floorEffectNone)
+	if gravity {
+		effect = floorEffectGravity
+	} else if biohazard {
+		effect = floorEffectBiohazard
+	}
+	return effect, level
+}
+
 func (mode *LevelControlMode) levelTextures() []*graphics.BitmapTexture {
 	ids := mode.context.ModelAdapter().ActiveLevel().LevelTextureIDs()
 	textures := make([]*graphics.BitmapTexture, len(ids))
@@ -305,6 +341,22 @@ func (mode *LevelControlMode) levelTextures() []*graphics.BitmapTexture {
 	}
 
 	return textures
+}
+
+func (mode *LevelControlMode) genericLevelTextures() []*graphics.BitmapTexture {
+	textures := mode.levelTextures()
+	if len(textures) > 32 {
+		return textures[:32]
+	}
+	return textures
+}
+
+func (mode *LevelControlMode) wallLevelTextures() []*graphics.BitmapTexture {
+	textures := mode.levelTextures()
+	if len(textures) > 32 {
+		return textures[32:]
+	}
+	return nil
 }
 
 func (mode *LevelControlMode) worldTextures() []*graphics.BitmapTexture {
@@ -321,9 +373,27 @@ func (mode *LevelControlMode) worldTextures() []*graphics.BitmapTexture {
 
 func (mode *LevelControlMode) onHeightShiftChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
-	mode.levelAdapter.RequestLevelPropertiesChange(func(properties *dataModel.LevelProperties) {
-		properties.HeightShift = intAsPointer(int(item.value))
-	})
+	newValue := int(item.value)
+
+	mode.context.Perform(&cmd.SetIntPropertyCommand{
+		Setter: func(value int) error {
+			mode.levelAdapter.RequestLevelPropertiesChange(func(properties *dataModel.LevelProperties) {
+				properties.HeightShift = intAsPointer(value)
+			})
+			return nil
+		},
+		NewValue: newValue,
+		OldValue: mode.levelAdapter.HeightShift()})
+}
+
+func (mode *LevelControlMode) onSelectedGenericLevelTextureChanged(index int) {
+	mode.levelWallTexturesSelector.SetSelectedIndex(-1)
+	mode.onSelectedLevelTextureChanged(index)
+}
+
+func (mode *LevelControlMode) onSelectedWallLevelTextureChanged(index int) {
+	mode.levelGenericTexturesSelector.SetSelectedIndex(-1)
+	mode.onSelectedLevelTextureChanged(32 + index)
 }
 
 func (mode *LevelControlMode) onSelectedLevelTextureChanged(index int) {
@@ -354,138 +424,233 @@ func (mode *LevelControlMode) onSelectedWorldTextureIDChanged(newValue int64) {
 
 func (mode *LevelControlMode) setLevelTextureID(id int) {
 	levelAdapter := mode.context.ModelAdapter().ActiveLevel()
-	ids := levelAdapter.LevelTextureIDs()
+	oldIDs := levelAdapter.LevelTextureIDs()
 
-	if (mode.currentLevelTextureIndex >= 0) && (mode.currentLevelTextureIndex < len(ids)) {
-		newIDs := make([]int, len(ids))
-		copy(newIDs, ids)
+	if (mode.currentLevelTextureIndex >= 0) && (mode.currentLevelTextureIndex < len(oldIDs)) {
+		newIDs := make([]int, len(oldIDs))
+		copy(newIDs, oldIDs)
 		newIDs[mode.currentLevelTextureIndex] = id
-		levelAdapter.RequestLevelTexturesChange(newIDs)
+
+		mode.context.Perform(&cmd.SetLevelTexturesCommand{
+			Setter: func(textureIDs []int) error {
+				mode.worldTexturesSelector.SetSelectedIndex(textureIDs[mode.currentLevelTextureIndex])
+				mode.worldTexturesIDSlider.SetValue(int64(textureIDs[mode.currentLevelTextureIndex]))
+				if mode.currentLevelTextureIndex < 32 {
+					mode.levelGenericTexturesSelector.SetSelectedIndex(mode.currentLevelTextureIndex)
+				} else {
+					mode.levelGenericTexturesSelector.SetSelectedIndex(-1)
+				}
+				if mode.currentLevelTextureIndex >= 32 {
+					mode.levelWallTexturesSelector.SetSelectedIndex(mode.currentLevelTextureIndex - 32)
+				} else {
+					mode.levelWallTexturesSelector.SetSelectedIndex(-1)
+				}
+
+				levelAdapter.RequestLevelTexturesChange(textureIDs)
+				return nil
+			},
+			OldTextureIDs: oldIDs,
+			NewTextureIDs: newIDs})
 	}
 }
 
 func (mode *LevelControlMode) onLevelSurveillanceChanged() {
 	surveillanceCount := mode.levelAdapter.ObjectSurveillanceCount()
-	items := make([]controls.ComboBoxItem, surveillanceCount)
-	var selectedItem controls.ComboBoxItem
 
+	mode.surveillanceIndexItems = make([]*enumItem, surveillanceCount)
 	for index := 0; index < surveillanceCount; index++ {
 		item := &enumItem{uint32(index), fmt.Sprintf("Object %v", index)}
-		items[index] = item
-		if index == mode.selectedSurveillanceIndex {
-			selectedItem = item
-		}
+		mode.surveillanceIndexItems[index] = item
 	}
 
-	mode.surveillanceIndexBox.SetItems(items)
-	mode.surveillanceIndexBox.SetSelectedItem(selectedItem)
-	mode.onSurveillanceIndexChanged(selectedItem)
+	mode.surveillanceIndexBox.SetItems(mode.surveillanceIndexItems.forComboBox())
+	mode.setSurveillanceState(mode.selectedSurveillanceIndex)
 }
 
 func (mode *LevelControlMode) onSurveillanceIndexChanged(boxItem controls.ComboBoxItem) {
 	if boxItem != nil {
 		item := boxItem.(*enumItem)
-		mode.selectedSurveillanceIndex = int(item.value)
+		mode.setSurveillanceState(int(item.value))
+	} else {
+		mode.setSurveillanceState(-1)
+	}
+}
+
+func (mode *LevelControlMode) onSurveillanceSourceChanged(newValue int64) {
+	oldValue, _ := mode.levelAdapter.ObjectSurveillanceInfo(mode.selectedSurveillanceIndex)
+	mode.requestSurveillanceChange(func(value int) error {
+		mode.levelAdapter.RequestObjectSurveillance(mode.selectedSurveillanceIndex, &value, nil)
+		return nil
+	}, int(newValue), oldValue)
+}
+
+func (mode *LevelControlMode) onSurveillanceDeathwatchChanged(newValue int64) {
+	_, oldValue := mode.levelAdapter.ObjectSurveillanceInfo(mode.selectedSurveillanceIndex)
+	mode.requestSurveillanceChange(func(value int) error {
+		mode.levelAdapter.RequestObjectSurveillance(mode.selectedSurveillanceIndex, nil, &value)
+		return nil
+	}, int(newValue), oldValue)
+}
+
+func (mode *LevelControlMode) requestSurveillanceChange(executor func(value int) error, newValue, oldValue int) {
+	currentSurveillanceIndex := mode.selectedSurveillanceIndex
+
+	if currentSurveillanceIndex >= 0 {
+		mode.context.Perform(&cmd.SetIntPropertyCommand{
+			Setter: func(value int) error {
+				mode.setSurveillanceState(currentSurveillanceIndex)
+				return executor(value)
+			},
+			NewValue: newValue,
+			OldValue: oldValue})
+	}
+}
+
+func (mode *LevelControlMode) setSurveillanceState(objectIndex int) {
+	mode.selectedSurveillanceIndex = objectIndex
+	if (mode.selectedSurveillanceIndex >= 0) && (mode.selectedSurveillanceIndex < len(mode.surveillanceIndexItems)) {
+		mode.surveillanceIndexBox.SetSelectedItem(mode.surveillanceIndexItems[mode.selectedSurveillanceIndex])
 		sourceIndex, deathwatchIndex := mode.levelAdapter.ObjectSurveillanceInfo(mode.selectedSurveillanceIndex)
 		mode.surveillanceSourceSlider.SetValue(int64(sourceIndex))
 		mode.surveillanceDeathwatchSlider.SetValue(int64(deathwatchIndex))
 	} else {
+		mode.surveillanceIndexBox.SetSelectedItem(nil)
 		mode.surveillanceSourceSlider.SetValueUndefined()
 		mode.surveillanceDeathwatchSlider.SetValueUndefined()
 	}
 }
 
-func (mode *LevelControlMode) onSurveillanceSourceChanged(newValue int64) {
-	newIndex := int(newValue)
-	mode.levelAdapter.RequestObjectSurveillance(mode.selectedSurveillanceIndex, &newIndex, nil)
-}
-
-func (mode *LevelControlMode) onSurveillanceDeathwatchChanged(newValue int64) {
-	newIndex := int(newValue)
-	mode.levelAdapter.RequestObjectSurveillance(mode.selectedSurveillanceIndex, nil, &newIndex)
-}
-
 func (mode *LevelControlMode) onLevelFloorPropertyBoxChanged(boxItem controls.ComboBoxItem) {
-	item := boxItem.(*levelPropertyItem)
-	mode.levelAdapter.RequestLevelPropertiesChange(item.modifier)
-	mode.floorEffectLevelSlider.SetValueFormatter(item.formatter)
+	item := boxItem.(*enumItem)
+	oldValue, _ := mode.currentFloorEffect()
+
+	mode.context.Perform(&cmd.SetIntPropertyCommand{
+		Setter: func(value int) error {
+			mode.levelAdapter.RequestLevelPropertiesChange(func(properties *dataModel.LevelProperties) {
+				biohazard := value == floorEffectBiohazard
+				gravity := value == floorEffectGravity
+
+				properties.FloorHasBiohazard = &biohazard
+				properties.FloorHasGravity = &gravity
+			})
+			return nil
+		},
+		NewValue: int(item.value),
+		OldValue: int(oldValue)})
 }
 
 func (mode *LevelControlMode) onLevelCeilingPropertyBoxChanged(boxItem controls.ComboBoxItem) {
-	item := boxItem.(*levelPropertyItem)
-	mode.levelAdapter.RequestLevelPropertiesChange(item.modifier)
-	mode.ceilingEffectLevelSlider.SetValueFormatter(item.formatter)
+	item := boxItem.(*enumItem)
+	oldValue, _ := mode.levelAdapter.CeilingEffect()
+
+	mode.context.Perform(&cmd.SetBooleanPropertyCommand{
+		Setter: func(value bool) error {
+			mode.levelAdapter.RequestLevelPropertiesChange(func(properties *dataModel.LevelProperties) {
+				properties.CeilingHasRadiation = &value
+			})
+			return nil
+		},
+		NewValue: item.value == ceilingEffectRadiation,
+		OldValue: oldValue})
 }
 
 func (mode *LevelControlMode) onCeilingEffectLevelChanged(newValue int64) {
-	mode.levelAdapter.RequestLevelPropertiesChange(func(properties *dataModel.LevelProperties) {
-		properties.CeilingEffectLevel = intAsPointer(int(newValue))
-	})
+	_, oldValue := mode.levelAdapter.CeilingEffect()
+	mode.context.Perform(&cmd.SetIntPropertyCommand{
+		Setter: func(value int) error {
+			mode.levelAdapter.RequestLevelPropertiesChange(func(properties *dataModel.LevelProperties) {
+				properties.CeilingEffectLevel = &value
+			})
+			return nil
+		},
+		NewValue: int(newValue),
+		OldValue: oldValue})
 }
 
 func (mode *LevelControlMode) onFloorEffectLevelChanged(newValue int64) {
-	mode.levelAdapter.RequestLevelPropertiesChange(func(properties *dataModel.LevelProperties) {
-		properties.FloorEffectLevel = intAsPointer(int(newValue))
-	})
+	_, _, oldValue := mode.levelAdapter.FloorEffect()
+	mode.context.Perform(&cmd.SetIntPropertyCommand{
+		Setter: func(value int) error {
+			mode.levelAdapter.RequestLevelPropertiesChange(func(properties *dataModel.LevelProperties) {
+				properties.FloorEffectLevel = &value
+			})
+			return nil
+		},
+		NewValue: int(newValue),
+		OldValue: oldValue})
 }
 
 func (mode *LevelControlMode) onLevelTextureAnimationsChanged() {
 	groupCount := mode.levelAdapter.TextureAnimationGroupCount()
-	items := []controls.ComboBoxItem{}
-	var selectedItem controls.ComboBoxItem
-
-	for index := 1; index < groupCount; index++ {
-		item := &enumItem{uint32(index), fmt.Sprintf("Group %v", index)}
-		items = append(items, item)
-		if index == mode.selectedAnimationGroupIndex {
-			selectedItem = item
+	mode.animationGroupItems = nil
+	if groupCount > 0 {
+		mode.animationGroupItems = make([]*enumItem, 0, groupCount-1)
+		for index := 1; index < groupCount; index++ {
+			item := &enumItem{uint32(index), fmt.Sprintf("Group %v", index)}
+			mode.animationGroupItems = append(mode.animationGroupItems, item)
 		}
 	}
-	mode.animationGroupIndexBox.SetItems(items)
-	mode.animationGroupIndexBox.SetSelectedItem(selectedItem)
-	mode.onAnimationGroupIndexChanged(selectedItem)
+	mode.animationGroupIndexBox.SetItems(mode.animationGroupItems.forComboBox())
+	mode.setAnimationGroupState(mode.selectedAnimationGroupIndex)
 }
 
 func (mode *LevelControlMode) onAnimationGroupIndexChanged(boxItem controls.ComboBoxItem) {
 	if boxItem != nil {
 		item := boxItem.(*enumItem)
-		group := mode.levelAdapter.TextureAnimationGroup(int(item.value))
-		mode.selectedAnimationGroupIndex = int(item.value)
-
-		mode.animationGroupFramesSlider.SetValue(int64(group.FrameCount()))
-		mode.animationGroupTimeSlider.SetValue(int64(group.FrameTime()))
-		mode.animationGroupTypeBox.SetSelectedItem(mode.animationGroupTypeItems[group.LoopType()])
+		mode.setAnimationGroupState(int(item.value))
 	} else {
-		mode.animationGroupFramesSlider.SetValueUndefined()
-		mode.animationGroupTimeSlider.SetValueUndefined()
-		mode.animationGroupTypeBox.SetSelectedItem(nil)
-	}
-}
-
-func (mode *LevelControlMode) requestAnimationGroupChange(modifier func(*dataModel.TextureAnimation)) {
-	if mode.selectedAnimationGroupIndex > 0 {
-		var properties dataModel.TextureAnimation
-
-		modifier(&properties)
-		mode.levelAdapter.RequestLevelTextureAnimationGroupChange(mode.selectedAnimationGroupIndex, properties)
+		mode.setAnimationGroupState(-1)
 	}
 }
 
 func (mode *LevelControlMode) onAnimationGroupTimeChanged(newValue int64) {
-	mode.requestAnimationGroupChange(func(properties *dataModel.TextureAnimation) {
-		properties.FrameTime = intAsPointer(int(newValue))
-	})
+	mode.requestAnimationGroupChange(func(properties *dataModel.TextureAnimation, value *int) {
+		properties.FrameTime = value
+	}, int(newValue), mode.levelAdapter.TextureAnimationGroup(mode.selectedAnimationGroupIndex).FrameTime())
 }
 
 func (mode *LevelControlMode) onAnimationGroupFramesChanged(newValue int64) {
-	mode.requestAnimationGroupChange(func(properties *dataModel.TextureAnimation) {
-		properties.FrameCount = intAsPointer(int(newValue))
-	})
+	mode.requestAnimationGroupChange(func(properties *dataModel.TextureAnimation, value *int) {
+		properties.FrameCount = value
+	}, int(newValue), mode.levelAdapter.TextureAnimationGroup(mode.selectedAnimationGroupIndex).FrameCount())
 }
 
 func (mode *LevelControlMode) onAnimationGroupTypeChanged(boxItem controls.ComboBoxItem) {
 	item := boxItem.(*enumItem)
-	mode.requestAnimationGroupChange(func(properties *dataModel.TextureAnimation) {
-		properties.LoopType = intAsPointer(int(item.value))
-	})
+	mode.requestAnimationGroupChange(func(properties *dataModel.TextureAnimation, value *int) {
+		properties.LoopType = value
+	}, int(item.value), mode.levelAdapter.TextureAnimationGroup(mode.selectedAnimationGroupIndex).LoopType())
+}
+
+func (mode *LevelControlMode) requestAnimationGroupChange(modifier func(*dataModel.TextureAnimation, *int), newValue, oldValue int) {
+	currentAnimationGroupIndex := mode.selectedAnimationGroupIndex
+
+	if currentAnimationGroupIndex >= 0 {
+		mode.context.Perform(&cmd.SetIntPropertyCommand{
+			Setter: func(value int) error {
+				var properties dataModel.TextureAnimation
+				mode.setAnimationGroupState(currentAnimationGroupIndex)
+				modifier(&properties, &value)
+				mode.levelAdapter.RequestLevelTextureAnimationGroupChange(mode.selectedAnimationGroupIndex, properties)
+				return nil
+			},
+			NewValue: newValue,
+			OldValue: oldValue})
+	}
+}
+
+func (mode *LevelControlMode) setAnimationGroupState(groupIndex int) {
+	mode.selectedAnimationGroupIndex = groupIndex
+	if (mode.selectedAnimationGroupIndex >= 1) && (mode.selectedAnimationGroupIndex < mode.levelAdapter.TextureAnimationGroupCount()) {
+		group := mode.levelAdapter.TextureAnimationGroup(mode.selectedAnimationGroupIndex)
+		mode.animationGroupIndexBox.SetSelectedItem(mode.animationGroupItems[mode.selectedAnimationGroupIndex-1])
+		mode.animationGroupFramesSlider.SetValue(int64(group.FrameCount()))
+		mode.animationGroupTimeSlider.SetValue(int64(group.FrameTime()))
+		mode.animationGroupTypeBox.SetSelectedItem(mode.animationGroupTypeItems[group.LoopType()])
+	} else {
+		mode.animationGroupIndexBox.SetSelectedItem(nil)
+		mode.animationGroupFramesSlider.SetValueUndefined()
+		mode.animationGroupTimeSlider.SetValueUndefined()
+		mode.animationGroupTypeBox.SetSelectedItem(nil)
+	}
 }

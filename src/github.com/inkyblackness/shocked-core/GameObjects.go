@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/inkyblackness/res"
-	"github.com/inkyblackness/res/chunk"
 	"github.com/inkyblackness/res/data"
 	"github.com/inkyblackness/res/image"
 	"github.com/inkyblackness/res/objprop"
@@ -17,12 +16,12 @@ import (
 
 // GameObjects provides access to game-global information about objects.
 type GameObjects struct {
-	cybstrng [model.LanguageCount]chunk.Store
+	cybstrng [model.LanguageCount]*io.DynamicChunkStore
 	cp       text.Codepage
 
 	desc          []objprop.ClassDescriptor
 	objProperties objprop.Store
-	objart        chunk.Store
+	objart        *io.DynamicChunkStore
 
 	objIconOffsets map[res.ObjectID]int
 	mapIconOffsets map[res.ObjectID]int
@@ -30,8 +29,8 @@ type GameObjects struct {
 
 // NewGameObjects returns a new instance of GameObjects.
 func NewGameObjects(library io.StoreLibrary) (gameObjects *GameObjects, err error) {
-	var cybstrng [model.LanguageCount]chunk.Store
-	var objart chunk.Store
+	var cybstrng [model.LanguageCount]*io.DynamicChunkStore
+	var objart *io.DynamicChunkStore
 	var objProperties objprop.Store
 
 	if err == nil {

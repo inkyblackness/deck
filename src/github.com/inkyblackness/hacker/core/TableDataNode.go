@@ -33,7 +33,7 @@ func newTableDataNode(parentNode DataNode, id string, data []byte, table Table) 
 
 		decoder.Code(entry)
 		endOffset := int(decoder.CurPos())
-		node.addChild(newBlockDataNode(node, uint16(i), data[startOffset:endOffset], entry))
+		node.addChild(newBlockDataNode(node, i, data[startOffset:endOffset], entry))
 		startOffset = endOffset
 	}
 

@@ -96,7 +96,7 @@ func (handler *exportingMediaHandler) finishSubtitle(entry *subtitleEntry, endTi
 		fmt.Fprintf(entry.file, "%d\n", entry.counter)
 		fmt.Fprintf(entry.file, "%s --> %s\n", handler.formatTimestamp(entry.timestamp), handler.formatTimestamp(endTime))
 		fmt.Fprintf(entry.file, "%s\n", entry.text)
-		fmt.Fprintf(entry.file, "\n")
+		fmt.Fprint(entry.file, "\n")
 	}
 }
 

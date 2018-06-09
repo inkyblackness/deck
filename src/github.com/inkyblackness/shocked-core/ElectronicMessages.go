@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	goIo "io"
 
 	"github.com/inkyblackness/res"
 	"github.com/inkyblackness/res/audio"
@@ -17,9 +18,9 @@ import (
 
 // ElectronicMessages handles all data related to electronic messages.
 type ElectronicMessages struct {
-	cybstrng [model.LanguageCount]chunk.Store
+	cybstrng [model.LanguageCount]*io.DynamicChunkStore
 	cp       text.Codepage
-	citalog  [model.LanguageCount]chunk.Store
+	citalog  [model.LanguageCount]*io.DynamicChunkStore
 }
 
 type messageRange struct {
@@ -38,8 +39,8 @@ var electronicMessageBases = map[model.ElectronicMessageType]messageRange{
 
 // NewElectronicMessages returns a new instance of ElectronicMessages.
 func NewElectronicMessages(library io.StoreLibrary) (messages *ElectronicMessages, err error) {
-	var cybstrng [model.LanguageCount]chunk.Store
-	var citalog [model.LanguageCount]chunk.Store
+	var cybstrng [model.LanguageCount]*io.DynamicChunkStore
+	var citalog [model.LanguageCount]*io.DynamicChunkStore
 
 	for i := 0; i < model.LanguageCount && err == nil; i++ {
 		cybstrng[i], err = library.ChunkStore(localized[i].cybstrng)
@@ -100,7 +101,7 @@ func (messages *ElectronicMessages) Message(messageType model.ElectronicMessageT
 
 		if holder != nil {
 			var dataMessage *data.ElectronicMessage
-			dataMessage, err = data.DecodeElectronicMessage(messages.cp, holder)
+			dataMessage, err = messages.decodeMessage(holder)
 
 			if err == nil {
 				message.NextMessage = intAsPointer(dataMessage.NextMessage())
@@ -114,7 +115,7 @@ func (messages *ElectronicMessages) Message(messageType model.ElectronicMessageT
 
 			for language := 1; (err == nil) && (language < len(messages.cybstrng)); language++ {
 				holder = messages.cybstrng[language].Get(chunkID)
-				dataMessage, err = data.DecodeElectronicMessage(messages.cp, holder)
+				dataMessage, err = messages.decodeMessage(holder)
 
 				if err == nil {
 					setMessageText(language, dataMessage)
@@ -174,7 +175,7 @@ func (messages *ElectronicMessages) SetMessage(messageType model.ElectronicMessa
 			var langErr error
 
 			if holder != nil {
-				dataMessage, langErr = data.DecodeElectronicMessage(messages.cp, holder)
+				dataMessage, langErr = messages.decodeMessage(holder)
 			}
 			if (dataMessage == nil) || (langErr != nil) {
 				dataMessage = data.NewElectronicMessage()
@@ -188,6 +189,23 @@ func (messages *ElectronicMessages) SetMessage(messageType model.ElectronicMessa
 	}
 
 	return
+}
+
+type blockProviderStore struct {
+	provider *io.DynamicBlockStore
+}
+
+func (store blockProviderStore) BlockCount() int {
+	return int(store.provider.BlockCount())
+}
+
+func (store blockProviderStore) Block(index int) (goIo.Reader, error) {
+	return bytes.NewReader(store.provider.BlockData(uint16(index))), nil
+}
+
+func (messages *ElectronicMessages) decodeMessage(blockStore *io.DynamicBlockStore) (message *data.ElectronicMessage, err error) {
+	wrapper := blockProviderStore{blockStore}
+	return data.DecodeElectronicMessage(messages.cp, wrapper)
 }
 
 // MessageAudio tries to retrieve the audio data for given key.
@@ -219,13 +237,20 @@ func (messages *ElectronicMessages) MessageAudio(messageType model.ElectronicMes
 
 // SetMessageAudio tries to set the audio data for given key.
 func (messages *ElectronicMessages) SetMessageAudio(messageType model.ElectronicMessageType, id int, language model.ResourceLanguage,
-	data audio.SoundData) (err error) {
+	soundData audio.SoundData) (err error) {
 	msgRange := electronicMessageBases[messageType]
 	if ((messageType == model.ElectronicMessageTypeLog) || (messageType == model.ElectronicMessageTypeMail)) && msgRange.isRelativeIDValid(id) {
 		store := messages.citalog[language.ToIndex()]
-		data := movi.ContainSoundData(data)
-
-		store.Put(res.ResourceID(msgRange.start+id+300), chunk.NewBlockHolder(chunk.BasicChunkType, res.Media, [][]byte{data}))
+		resourceID := res.ResourceID(msgRange.start + id + 300)
+		if soundData != nil {
+			encodedData := movi.ContainSoundData(soundData)
+			store.Put(resourceID,
+				&chunk.Chunk{
+					ContentType:   chunk.Media,
+					BlockProvider: chunk.MemoryBlockProvider([][]byte{encodedData})})
+		} else {
+			store.Del(resourceID)
+		}
 	} else {
 		err = fmt.Errorf("Wrong message type/range: %v", messageType)
 	}
