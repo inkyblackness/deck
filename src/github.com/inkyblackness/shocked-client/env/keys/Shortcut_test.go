@@ -15,6 +15,13 @@ func (suite *ShortcutSuite) TestResolveShorcutReturnsValuesOfKnownCombo(c *check
 	c.Check(key, check.Equals, KeyCopy)
 }
 
+func (suite *ShortcutSuite) TestResolveShorcutReturnsValuesOfKnownComboIfUppercase(c *check.C) {
+	key, knownKey := ResolveShortcut("C", ModControl)
+
+	c.Check(knownKey, check.Equals, true)
+	c.Check(key, check.Equals, KeyCopy)
+}
+
 func (suite *ShortcutSuite) TestResolveShorcutReturnsFalseForUnknownCombo(c *check.C) {
 	_, knownKey := ResolveShortcut("l", ModControl.With(ModShift))
 
