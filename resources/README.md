@@ -1,5 +1,7 @@
 # InkyBlackness - Deck
 
+**Obsolescence Notice: Due to the release of [InkyBlackness - HackEd](https://github.com/inkyblackness/hacked), this package here has become obsolete: HackEd is the new editor to be used and is fully self-contained. Furthermore, this package is based on pre-source-release information and will no longer be maintained. Use it at your own risk.**
+
 This package project contains the public distribution of the [InkyBlackness](https://inkyblackness.github.io) binaries.
 
 The executables are modding tools for the DOS game [System Shock (1994)](http://en.wikipedia.org/wiki/System_Shock).
