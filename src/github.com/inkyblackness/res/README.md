@@ -3,6 +3,9 @@
 
 # Resource File Access
 
+**Obsolescence Notice: Due to the release of [InkyBlackness - HackEd](https://github.com/inkyblackness/hacked), this project here has become obsolete: HackEd provides its own means to read/write resources. Furthermore, this project is based on pre-source-release information. Use it at your own risk.**
+
+
 This is a library as part of the [InkyBlackness](https://inkyblackness.github.io) project, written in [Go](http://golang.org/), to provide basic (binary) access to the resource files of System Shock.
 
 It supports both reading and writing of the files, in a bit-transparent manner.
